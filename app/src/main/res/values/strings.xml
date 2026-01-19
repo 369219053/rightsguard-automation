@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 应用名称 -->
+    <string name="app_name">权利卫士自动化</string>
+    
+    <!-- 主界面 -->
+    <string name="main_title">权利卫士自动化</string>
+    <string name="status_idle">空闲</string>
+    <string name="status_running">运行中</string>
+    <string name="status_recording">录屏中</string>
+    <string name="status_error">错误</string>
+    <string name="btn_start">开始自动化</string>
+    <string name="btn_stop">停止自动化</string>
+    <string name="btn_view_log">查看日志</string>
+    <string name="btn_settings">设置</string>
+    <string name="current_status">当前状态:</string>
+    
+    <!-- 设置界面 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_permissions">权限配置</string>
+    <string name="settings_accessibility">无障碍服务</string>
+    <string name="settings_overlay">悬浮窗权限</string>
+    <string name="settings_automation">自动化参数</string>
+    <string name="settings_retry_count">重试次数</string>
+    <string name="settings_wait_time">等待时间(秒)</string>
+    <string name="settings_auto_retry">失败自动重试</string>
+    <string name="settings_show_float">显示悬浮窗</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_version">版本</string>
+    <string name="permission_granted">已授予</string>
+    <string name="permission_denied">未授予</string>
+    <string name="btn_open_settings">打开设置</string>
+    
+    <!-- 日志界面 -->
+    <string name="log_title">运行日志</string>
+    <string name="btn_clear_log">清除日志</string>
+    <string name="btn_export_log">导出日志</string>
+    <string name="log_empty">暂无日志</string>
+    
+    <!-- 悬浮窗 -->
+    <string name="float_start">开始</string>
+    <string name="float_stop">停止</string>
+    <string name="float_hide">隐藏</string>
+    
+    <!-- 提示信息 -->
+    <string name="toast_started">自动化已启动</string>
+    <string name="toast_stopped">自动化已停止</string>
+    <string name="toast_permission_required">请先授予必要权限</string>
+    <string name="toast_accessibility_required">请先开启无障碍服务</string>
+    <string name="toast_log_cleared">日志已清除</string>
+    <string name="toast_log_exported">日志已导出</string>
+    
+    <!-- 对话框 -->
+    <string name="dialog_confirm">确认</string>
+    <string name="dialog_cancel">取消</string>
+    <string name="dialog_clear_log_title">清除日志</string>
+    <string name="dialog_clear_log_message">确定要清除所有日志吗?</string>
+    
+    <!-- 关于信息 -->
+    <string name="about_version">版本 1.0.0</string>
+    <string name="about_developer">开发者: 小牛马</string>
+    <string name="about_description">权利卫士取证自动化系统,基于Android无障碍服务实现自动化控制。</string>
+
+    <!-- 无障碍服务 -->
+    <string name="accessibility_service_description">权利卫士自动化服务,用于自动化控制权利卫士应用进行取证操作。</string>
+</resources>
+

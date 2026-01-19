@@ -1,0 +1,284 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/background_white">
+
+    <!-- 标题栏 -->
+    <RelativeLayout
+        style="@style/TitleBarStyle">
+        
+        <ImageView
+            android:id="@+id/iv_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:padding="12dp"
+            android:src="@android:drawable/ic_menu_revert"
+            android:tint="@color/text_white"
+            android:contentDescription="返回" />
+        
+        <TextView
+            android:id="@+id/tv_title"
+            style="@style/TitleTextStyle"
+            android:layout_centerInParent="true"
+            android:text="@string/settings_title" />
+    </RelativeLayout>
+
+    <!-- 设置内容 -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- 权限配置卡片 -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                style="@style/CardViewStyle"
+                android:layout_marginBottom="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        style="@style/ContentTextStyle"
+                        android:text="@string/settings_permissions"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- 无障碍服务 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            style="@style/ContentTextStyle"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/settings_accessibility" />
+
+                        <TextView
+                            android:id="@+id/tv_accessibility_status"
+                            style="@style/LabelTextStyle"
+                            android:text="@string/permission_denied"
+                            android:textColor="@color/status_error"
+                            android:layout_marginEnd="8dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_accessibility"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="@string/btn_open_settings"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_white"
+                            app:backgroundTint="@color/primary_blue"
+                            app:cornerRadius="6dp"
+                            android:textAllCaps="false" />
+                    </LinearLayout>
+
+                    <View style="@style/DividerStyle"
+                        android:layout_marginBottom="12dp" />
+
+                    <!-- 悬浮窗权限 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            style="@style/ContentTextStyle"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/settings_overlay" />
+
+                        <TextView
+                            android:id="@+id/tv_overlay_status"
+                            style="@style/LabelTextStyle"
+                            android:text="@string/permission_denied"
+                            android:textColor="@color/status_error"
+                            android:layout_marginEnd="8dp" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_overlay"
+                            android:layout_width="wrap_content"
+                            android:layout_height="36dp"
+                            android:text="@string/btn_open_settings"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_white"
+                            app:backgroundTint="@color/primary_blue"
+                            app:cornerRadius="6dp"
+                            android:textAllCaps="false" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 自动化参数卡片 -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                style="@style/CardViewStyle"
+                android:layout_marginBottom="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        style="@style/ContentTextStyle"
+                        android:text="@string/settings_automation"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- 重试次数 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="16dp">
+
+                        <TextView
+                            style="@style/ContentTextStyle"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/settings_retry_count" />
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_retry_count"
+                            android:layout_width="80dp"
+                            android:layout_height="48dp"
+                            android:text="3"
+                            android:inputType="number"
+                            android:gravity="center"
+                            android:textSize="16sp" />
+                    </LinearLayout>
+
+                    <!-- 等待时间 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="16dp">
+
+                        <TextView
+                            style="@style/ContentTextStyle"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/settings_wait_time" />
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/et_wait_time"
+                            android:layout_width="80dp"
+                            android:layout_height="48dp"
+                            android:text="5"
+                            android:inputType="number"
+                            android:gravity="center"
+                            android:textSize="16sp" />
+                    </LinearLayout>
+
+                    <!-- 自动重试开关 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            style="@style/ContentTextStyle"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/settings_auto_retry" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switch_auto_retry"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true"
+                            app:thumbTint="@color/text_white"
+                            app:trackTint="@color/primary_blue" />
+                    </LinearLayout>
+
+                    <!-- 显示悬浮窗开关 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            style="@style/ContentTextStyle"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
+                            android:text="@string/settings_show_float" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switch_show_float"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="true"
+                            app:thumbTint="@color/text_white"
+                            app:trackTint="@color/primary_blue" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- 关于信息卡片 -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                style="@style/CardViewStyle"
+                app:cardBackgroundColor="@color/background_light_gray">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        style="@style/ContentTextStyle"
+                        android:text="@string/settings_about"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="12dp" />
+
+                    <TextView
+                        style="@style/LabelTextStyle"
+                        android:text="@string/about_version"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        style="@style/LabelTextStyle"
+                        android:text="@string/about_developer"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        style="@style/LabelTextStyle"
+                        android:text="@string/about_description" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+    </ScrollView>
+
+</LinearLayout>

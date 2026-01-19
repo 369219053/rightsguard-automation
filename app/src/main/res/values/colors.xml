@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主色调 - 淡蓝色 -->
+    <color name="primary_blue">#64B5F6</color>
+    <color name="primary_blue_dark">#42A5F5</color>
+    <color name="primary_blue_light">#90CAF9</color>
+    
+    <!-- 背景色 -->
+    <color name="background_white">#FFFFFF</color>
+    <color name="background_light_gray">#F5F5F5</color>
+    
+    <!-- 文字颜色 -->
+    <color name="text_primary">#333333</color>
+    <color name="text_secondary">#666666</color>
+    <color name="text_hint">#999999</color>
+    <color name="text_white">#FFFFFF</color>
+    
+    <!-- 状态颜色 -->
+    <color name="status_success">#4CAF50</color>
+    <color name="status_warning">#FF9800</color>
+    <color name="status_error">#F44336</color>
+    <color name="status_info">#2196F3</color>
+    
+    <!-- 分割线 -->
+    <color name="divider">#E0E0E0</color>
+    
+    <!-- 阴影 -->
+    <color name="shadow">#1A000000</color>
+    
+    <!-- 按钮按下状态 -->
+    <color name="button_pressed">#42A5F5</color>
+    
+    <!-- 卡片背景 -->
+    <color name="card_background">#FFFFFF</color>
+</resources>
+

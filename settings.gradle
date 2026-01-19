@@ -1,0 +1,3 @@
+rootProject.name = "权利卫士自动化"
+include ':app'
+

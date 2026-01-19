@@ -1,0 +1,32 @@
+# Android Build Files
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# App Build
+app/build/
+
+# Gradle
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# IDE
+*.swp
+*~
+.project
+.settings
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+

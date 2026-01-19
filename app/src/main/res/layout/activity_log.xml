@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/background_white">
+
+    <!-- 标题栏 -->
+    <RelativeLayout
+        style="@style/TitleBarStyle">
+        
+        <ImageView
+            android:id="@+id/iv_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:padding="12dp"
+            android:src="@android:drawable/ic_menu_revert"
+            android:tint="@color/text_white"
+            android:contentDescription="返回" />
+        
+        <TextView
+            android:id="@+id/tv_title"
+            style="@style/TitleTextStyle"
+            android:layout_centerInParent="true"
+            android:text="@string/log_title" />
+        
+        <ImageView
+            android:id="@+id/iv_export"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:padding="12dp"
+            android:src="@android:drawable/ic_menu_save"
+            android:tint="@color/text_white"
+            android:contentDescription="@string/btn_export_log" />
+    </RelativeLayout>
+
+    <!-- 日志内容区域 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- 日志显示卡片 -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            style="@style/CardViewStyle"
+            app:cardBackgroundColor="@color/background_light_gray">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:padding="12dp">
+
+                <TextView
+                    android:id="@+id/tv_log_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/log_empty"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="4dp" />
+            </ScrollView>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- 底部按钮区域 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="16dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_clear_log"
+                style="@style/SecondaryButtonStyle"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="@string/btn_clear_log" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_export_log"
+                style="@style/PrimaryButtonStyle"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="@string/btn_export_log" />
+        </LinearLayout>
+    </LinearLayout>
+
+</LinearLayout>
+
