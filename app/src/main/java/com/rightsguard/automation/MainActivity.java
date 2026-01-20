@@ -26,9 +26,11 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton btnStop;
     private MaterialButton btnViewLog;
     private ImageView ivSettings;
+    private ImageView ivToggleFloat;
     private TextInputEditText etRemark;
 
     private boolean isRunning = false;
+    private boolean isFloatingWindowVisible = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,21 +41,11 @@ public class MainActivity extends AppCompatActivity {
         setupListeners();
         updateStatus(STATUS_IDLE);
 
+        // 请求存储权限
+        requestStoragePermission();
+
         // 启动悬浮窗服务
         startFloatingWindowService();
-    }
-
-    /**
-     * 启动悬浮窗服务
-     */
-    private void startFloatingWindowService() {
-        // 检查悬浮窗权限
-        if (android.provider.Settings.canDrawOverlays(this)) {
-            Intent intent = new Intent(this, FloatingWindowService.class);
-            startService(intent);
-        } else {
-            Toast.makeText(this, "请先授予悬浮窗权限", Toast.LENGTH_SHORT).show();
-        }
     }
 
     /**
@@ -67,6 +59,7 @@ public class MainActivity extends AppCompatActivity {
         btnStop = findViewById(R.id.btn_stop);
         btnViewLog = findViewById(R.id.btn_view_log);
         ivSettings = findViewById(R.id.iv_settings);
+        ivToggleFloat = findViewById(R.id.iv_toggle_float);
         etRemark = findViewById(R.id.et_remark);
     }
 
@@ -170,6 +163,61 @@ public class MainActivity extends AppCompatActivity {
             viewStatusIndicator.setBackgroundColor(getResources().getColor(R.color.status_error, null));
             btnStart.setEnabled(true);
             btnStop.setEnabled(false);
+        }
+    }
+
+    /**
+     * 请求存储权限
+     */
+    private void requestStoragePermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                    android.Manifest.permission.READ_EXTERNAL_STORAGE
+                }, 100);
+            }
+        }
+    }
+
+    /**
+     * 启动悬浮窗服务
+     */
+    private void startFloatingWindowService() {
+        // 检查悬浮窗权限
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (android.provider.Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(this, FloatingWindowService.class);
+                startService(intent);
+            } else {
+                // 请求悬浮窗权限
+                Toast.makeText(this, "请授予悬浮窗权限", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            }
+        } else {
+            Intent intent = new Intent(this, FloatingWindowService.class);
+            startService(intent);
+        }
+    }
+
+    /**
+     * 切换悬浮窗显示/隐藏
+     */
+    private void toggleFloatingWindow() {
+        isFloatingWindowVisible = !isFloatingWindowVisible;
+
+        if (isFloatingWindowVisible) {
+            // 显示悬浮窗
+            startFloatingWindowService();
+            Toast.makeText(this, "✅ 悬浮窗已显示", Toast.LENGTH_SHORT).show();
+        } else {
+            // 隐藏悬浮窗
+            Intent intent = new Intent(this, FloatingWindowService.class);
+            stopService(intent);
+            Toast.makeText(this, "❌ 悬浮窗已隐藏", Toast.LENGTH_SHORT).show();
         }
     }
 

@@ -14,25 +14,28 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.android.material.button.MaterialButton;
-
 /**
  * 悬浮窗服务
  */
 public class FloatingWindowService extends Service {
-    
+
     private WindowManager windowManager;
     private View floatingView;
     private WindowManager.LayoutParams params;
-    
-    private MaterialButton btnStart;
-    private MaterialButton btnStop;
-    private MaterialButton btnHide;
-    private MaterialButton btnDump; // ⚠️ 开发专用,正式版将移除
+
+    private Button btnStart;
+    private Button btnStop;
+    private Button btnMinimize;
+    private Button btnDump; // ⚠️ 开发专用,正式版将移除
+    private Button btnMinimizedDump; // 最小化状态的Dump按钮
     private TextView tvStatus;
     private View statusIndicator;
-    
+
+    private View layoutFull; // 完整状态布局
+    private View layoutMinimized; // 最小化状态布局
+
     private boolean isRunning = false;
+    private boolean isMinimized = false;
     
     @Override
     public void onCreate() {
@@ -77,20 +80,30 @@ public class FloatingWindowService extends Service {
     }
     
     private void initViews() {
+        // 获取布局
+        layoutFull = floatingView.findViewById(R.id.layout_full);
+        layoutMinimized = floatingView.findViewById(R.id.layout_minimized);
+
+        // 完整状态的控件
         btnStart = floatingView.findViewById(R.id.btn_float_start);
         btnStop = floatingView.findViewById(R.id.btn_float_stop);
-        btnHide = floatingView.findViewById(R.id.btn_float_hide);
+        btnMinimize = floatingView.findViewById(R.id.btn_float_minimize);
         btnDump = floatingView.findViewById(R.id.btn_float_dump); // ⚠️ 开发专用
         tvStatus = floatingView.findViewById(R.id.tv_float_status);
         statusIndicator = floatingView.findViewById(R.id.view_float_status_indicator);
 
+        // 最小化状态的控件
+        btnMinimizedDump = floatingView.findViewById(R.id.btn_minimized_dump);
+
         // 设置监听器
         btnStart.setOnClickListener(v -> startAutomation());
         btnStop.setOnClickListener(v -> stopAutomation());
-        btnHide.setOnClickListener(v -> hideFloatingWindow());
-
-        // ⚠️ Dump按钮监听器 (开发专用,正式版将移除)
+        btnMinimize.setOnClickListener(v -> toggleMinimize());
         btnDump.setOnClickListener(v -> dumpCurrentUI());
+
+        // 最小化状态的Dump按钮
+        btnMinimizedDump.setOnClickListener(v -> dumpCurrentUI());
+        // 注意: layoutMinimized的点击和拖动在setupDrag()中处理
     }
 
     /**
@@ -107,14 +120,14 @@ public class FloatingWindowService extends Service {
     }
     
     private void setupDrag() {
-        View dragHandle = floatingView.findViewById(R.id.view_drag_handle);
-        
-        dragHandle.setOnTouchListener(new View.OnTouchListener() {
+        // 完整状态:整个布局可拖动,但按钮不拦截
+        layoutFull.setOnTouchListener(new View.OnTouchListener() {
             private int initialX;
             private int initialY;
             private float initialTouchX;
             private float initialTouchY;
-            
+            private boolean isDragging = false;
+
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 switch (event.getAction()) {
@@ -123,12 +136,70 @@ public class FloatingWindowService extends Service {
                         initialY = params.y;
                         initialTouchX = event.getRawX();
                         initialTouchY = event.getRawY();
-                        return true;
-                        
+                        isDragging = false;
+                        return false; // 不拦截,让按钮可以响应
+
                     case MotionEvent.ACTION_MOVE:
-                        params.x = initialX + (int) (event.getRawX() - initialTouchX);
-                        params.y = initialY + (int) (event.getRawY() - initialTouchY);
-                        windowManager.updateViewLayout(floatingView, params);
+                        float deltaX = event.getRawX() - initialTouchX;
+                        float deltaY = event.getRawY() - initialTouchY;
+
+                        // 如果移动距离超过10像素,认为是拖动
+                        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+                            isDragging = true;
+                            params.x = initialX + (int) deltaX;
+                            params.y = initialY + (int) deltaY;
+                            windowManager.updateViewLayout(floatingView, params);
+                            return true; // 拦截拖动事件
+                        }
+                        return false;
+
+                    case MotionEvent.ACTION_UP:
+                        if (isDragging) {
+                            return true; // 拖动结束,拦截事件
+                        }
+                        return false; // 不是拖动,让按钮响应点击
+                }
+                return false;
+            }
+        });
+
+        // 最小化状态下,整个圆点可拖动(但点击时恢复)
+        layoutMinimized.setOnTouchListener(new View.OnTouchListener() {
+            private int initialX;
+            private int initialY;
+            private float initialTouchX;
+            private float initialTouchY;
+            private boolean isDragging = false;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        initialX = params.x;
+                        initialY = params.y;
+                        initialTouchX = event.getRawX();
+                        initialTouchY = event.getRawY();
+                        isDragging = false;
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE:
+                        float deltaX = event.getRawX() - initialTouchX;
+                        float deltaY = event.getRawY() - initialTouchY;
+
+                        // 如果移动距离超过10像素,认为是拖动
+                        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+                            isDragging = true;
+                            params.x = initialX + (int) deltaX;
+                            params.y = initialY + (int) deltaY;
+                            windowManager.updateViewLayout(floatingView, params);
+                        }
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                        // 如果没有拖动,认为是点击,恢复悬浮窗
+                        if (!isDragging) {
+                            toggleMinimize();
+                        }
                         return true;
                 }
                 return false;
@@ -150,8 +221,38 @@ public class FloatingWindowService extends Service {
         Toast.makeText(this, "自动化已停止", Toast.LENGTH_SHORT).show();
     }
     
-    private void hideFloatingWindow() {
-        stopSelf();
+    /**
+     * 切换最小化/恢复状态
+     */
+    private void toggleMinimize() {
+        isMinimized = !isMinimized;
+
+        if (isMinimized) {
+            // 最小化
+            layoutFull.setVisibility(View.GONE);
+            layoutMinimized.setVisibility(View.VISIBLE);
+            Toast.makeText(this, "已最小化,点击圆点恢复", Toast.LENGTH_SHORT).show();
+        } else {
+            // 恢复
+            layoutFull.setVisibility(View.VISIBLE);
+            layoutMinimized.setVisibility(View.GONE);
+        }
+    }
+
+    /**
+     * 显示悬浮窗
+     */
+    public static void show(Service context) {
+        Intent intent = new Intent(context, FloatingWindowService.class);
+        context.startService(intent);
+    }
+
+    /**
+     * 隐藏悬浮窗
+     */
+    public static void hide(Service context) {
+        Intent intent = new Intent(context, FloatingWindowService.class);
+        context.stopService(intent);
     }
     
     private void updateStatus() {

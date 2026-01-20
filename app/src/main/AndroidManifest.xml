@@ -68,6 +68,17 @@
             android:name=".FloatingWindowService"
             android:exported="false" />
 
+        <!-- FileProvider用于分享文件 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.rightsguard.automation.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
     </application>
 
 </manifest>

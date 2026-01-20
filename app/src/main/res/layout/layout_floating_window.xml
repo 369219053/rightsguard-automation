@@ -1,18 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
-    app:cardCornerRadius="24dp"
-    app:cardElevation="8dp"
-    app:cardBackgroundColor="@color/card_background">
+    android:layout_height="wrap_content">
 
+    <!-- 完整状态的悬浮窗 -->
     <LinearLayout
+        android:id="@+id/layout_full"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp"
-        android:background="@color/background_white">
+        android:padding="16dp"
+        android:background="@drawable/floating_window_background"
+        android:elevation="8dp"
+        android:visibility="visible">
 
         <!-- 拖动手柄 -->
         <View
@@ -54,71 +55,77 @@
             android:orientation="horizontal">
 
             <!-- 开始按钮 -->
-            <com.google.android.material.button.MaterialButton
+            <Button
                 android:id="@+id/btn_float_start"
                 android:layout_width="80dp"
                 android:layout_height="40dp"
                 android:text="@string/float_start"
                 android:textSize="12sp"
                 android:textColor="@color/text_white"
-                app:backgroundTint="@color/primary_blue"
-                app:cornerRadius="8dp"
+                android:background="@drawable/button_primary"
                 android:layout_marginEnd="8dp"
-                android:textAllCaps="false"
-                app:iconSize="16dp" />
+                android:textAllCaps="false" />
 
             <!-- 停止按钮 -->
-            <com.google.android.material.button.MaterialButton
+            <Button
                 android:id="@+id/btn_float_stop"
                 android:layout_width="80dp"
                 android:layout_height="40dp"
                 android:text="@string/float_stop"
                 android:textSize="12sp"
                 android:textColor="@color/primary_blue"
-                app:strokeColor="@color/primary_blue"
-                app:strokeWidth="1dp"
-                app:cornerRadius="8dp"
+                android:background="@drawable/button_outlined"
                 android:layout_marginEnd="8dp"
                 android:textAllCaps="false"
-                android:enabled="false"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+                android:enabled="false" />
 
             <!-- Dump按钮 (⚠️ 开发专用,正式版将移除) -->
-            <com.google.android.material.button.MaterialButton
+            <Button
                 android:id="@+id/btn_float_dump"
                 android:layout_width="60dp"
                 android:layout_height="40dp"
                 android:text="Dump"
                 android:textSize="11sp"
                 android:textColor="@android:color/holo_red_dark"
-                app:strokeColor="@android:color/holo_red_dark"
-                app:strokeWidth="1dp"
-                app:cornerRadius="8dp"
+                android:background="@drawable/button_dump"
                 android:layout_marginEnd="8dp"
-                android:textAllCaps="false"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+                android:textAllCaps="false" />
 
-            <!-- 隐藏按钮 -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btn_float_hide"
+            <!-- 最小化按钮 -->
+            <Button
+                android:id="@+id/btn_float_minimize"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:padding="0dp"
-                android:insetLeft="0dp"
-                android:insetTop="0dp"
-                android:insetRight="0dp"
-                android:insetBottom="0dp"
-                app:icon="@android:drawable/ic_menu_close_clear_cancel"
-                app:iconTint="@color/text_secondary"
-                app:iconSize="20dp"
-                app:iconPadding="0dp"
-                app:iconGravity="textStart"
-                app:cornerRadius="8dp"
-                app:strokeColor="@color/divider"
-                app:strokeWidth="1dp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+                android:text="—"
+                android:textSize="18sp"
+                android:textColor="@color/text_secondary"
+                android:background="@drawable/button_outlined"
+                android:textAllCaps="false" />
         </LinearLayout>
+
     </LinearLayout>
 
-</com.google.android.material.card.MaterialCardView>
+    <!-- 最小化状态的悬浮窗 (小圆点) -->
+    <LinearLayout
+        android:id="@+id/layout_minimized"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:background="@drawable/floating_window_minimized"
+        android:elevation="8dp"
+        android:visibility="gone">
 
+        <Button
+            android:id="@+id/btn_minimized_dump"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="Dump"
+            android:textSize="10sp"
+            android:textColor="@color/text_white"
+            android:background="@android:color/transparent"
+            android:textAllCaps="false" />
+
+    </LinearLayout>
+
+</FrameLayout>

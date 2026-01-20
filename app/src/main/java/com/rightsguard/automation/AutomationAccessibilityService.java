@@ -1356,16 +1356,98 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
-     * 显示dump结果
+     * 显示dump结果 - 保存为.md文件并分享
      */
     private void showDumpResult(String dumpText) {
         try {
-            android.content.Intent intent = new android.content.Intent(this, DumpResultActivity.class);
-            intent.putExtra("dump_text", dumpText);
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
+            // 保存为.md文件
+            java.io.File file = saveDumpToFile(dumpText);
+            if (file == null) {
+                logE("保存Dump文件失败");
+                return;
+            }
+
+            logD("✅ Dump文件已保存: " + file.getAbsolutePath());
+
+            // 分享文件
+            shareDumpFile(file);
+
         } catch (Exception e) {
             logE("显示dump结果失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 保存Dump到文件
+     */
+    private java.io.File saveDumpToFile(String dumpText) {
+        try {
+            // 获取外部存储的Documents目录
+            java.io.File documentsDir = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOCUMENTS);
+
+            // 创建RightsGuard目录
+            java.io.File appDir = new java.io.File(documentsDir, "RightsGuard");
+            if (!appDir.exists()) {
+                appDir.mkdirs();
+            }
+
+            // 生成文件名(带时间戳)
+            String timestamp = new java.text.SimpleDateFormat("yyyyMMdd_HHmmss",
+                java.util.Locale.CHINA).format(new java.util.Date());
+            String fileName = "UI_Dump_" + timestamp + ".md";
+
+            java.io.File file = new java.io.File(appDir, fileName);
+
+            // 写入文件
+            java.io.FileWriter writer = new java.io.FileWriter(file);
+            writer.write("# UI结构 Dump\n\n");
+            writer.write(dumpText);
+            writer.close();
+
+            logD("📄 文件已保存: " + file.getAbsolutePath());
+
+            return file;
+
+        } catch (Exception e) {
+            logE("保存文件失败: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * 分享Dump文件
+     */
+    private void shareDumpFile(java.io.File file) {
+        try {
+            // 使用FileProvider获取URI
+            android.net.Uri fileUri = androidx.core.content.FileProvider.getUriForFile(
+                this,
+                "com.rightsguard.automation.fileprovider",
+                file);
+
+            // 创建分享Intent
+            android.content.Intent shareIntent = new android.content.Intent(android.content.Intent.ACTION_SEND);
+            shareIntent.setType("text/markdown");
+            shareIntent.putExtra(android.content.Intent.EXTRA_STREAM, fileUri);
+            shareIntent.putExtra(android.content.Intent.EXTRA_SUBJECT, "UI结构Dump");
+            shareIntent.putExtra(android.content.Intent.EXTRA_TEXT, "权利卫士UI结构分析文件");
+            shareIntent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            shareIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            // 创建选择器
+            android.content.Intent chooser = android.content.Intent.createChooser(shareIntent, "分享Dump文件");
+            chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            startActivity(chooser);
+
+            logD("📤 已打开分享对话框");
+
+        } catch (Exception e) {
+            logE("分享文件失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

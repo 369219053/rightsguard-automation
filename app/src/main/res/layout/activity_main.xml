@@ -9,13 +9,25 @@
     <!-- 标题栏 -->
     <RelativeLayout
         style="@style/TitleBarStyle">
-        
+
         <TextView
             android:id="@+id/tv_title"
             style="@style/TitleTextStyle"
             android:layout_centerInParent="true"
             android:text="@string/main_title" />
-        
+
+        <!-- 悬浮窗开关 -->
+        <ImageView
+            android:id="@+id/iv_toggle_float"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:padding="12dp"
+            android:src="@android:drawable/ic_menu_view"
+            android:tint="@color/text_white"
+            android:contentDescription="显示/隐藏悬浮窗" />
+
         <ImageView
             android:id="@+id/iv_settings"
             android:layout_width="48dp"
