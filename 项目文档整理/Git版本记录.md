@@ -12,6 +12,227 @@
 
 ## 🚀 版本历史
 
+### V1.4 (2026-01-20)
+
+**系统录屏权限弹窗自动化完善 - 通过按钮ID识别**
+
+#### ✅ 完成内容
+
+**1. 核心问题修复**
+- ✅ 修复点击"单个应用"后立即执行后续代码导致误点击"继续"按钮的问题
+- ✅ 修复点击"整个屏幕"后按钮文本未更新导致无法识别"立即开始"的问题
+- ✅ 实现通过按钮ID(`button1`)直接识别并点击系统对话框确认按钮
+- ✅ 完善等待时间策略,确保下拉菜单完全展开后再进行下一步操作
+
+**2. 日志优化**
+- ✅ 减少冗余日志输出,只扫描系统对话框中的关键控件
+- ✅ 优化日志格式,只输出Button和Spinner等关键控件信息
+- ✅ 增加详细的按钮识别日志,包含文本、描述、ID三个维度
+
+**3. 智能识别策略**
+- ✅ 策略1(最优先): 直接通过ID识别`button1`(系统对话框标准确认按钮)
+- ✅ 策略2: 通过文本/描述包含"开始"、"Start"关键词识别
+- ✅ 策略3: 通过ID包含"start"、"confirm"、"ok"、"positive"等关键词识别
+
+#### 📝 技术细节
+
+**问题分析**:
+1. **问题1**: 点击"单个应用"后,代码继续执行,立即调用`findAndClickStartButton()`,导致点击了"继续"按钮
+   - **解决**: 点击"单个应用"成功后立即`return`,不再执行后续代码
+
+2. **问题2**: 点击"整个屏幕"后,按钮文本从"继续"变成"立即开始",但是通过`getText()`和`getContentDescription()`都获取不到"立即开始"文本
+   - **原因**: 按钮文本可能显示在子节点上,或者通过其他方式渲染
+   - **解决**: 直接通过按钮ID(`button1`)识别,这是Android系统对话框的标准确认按钮ID
+
+**优化后的流程**:
+```
+1. 检测到系统录屏对话框
+2. 查找"单个应用"文本
+3. ✅ 找到 → 点击 → return (不再执行后续代码!)
+4. [1500ms后] 点击"整个屏幕"
+5. [再等1000ms] 扫描按钮
+6. 发现ID为button1的按钮 → 直接点击
+7. 🎉 录屏开始!
+```
+
+**等待时间优化**:
+- 点击"单个应用"后: 1500ms (让下拉菜单完全展开)
+- 点击"整个屏幕"后: 1000ms (让界面完全更新)
+- 检测重试间隔: 800ms
+- 检测次数: 3次
+
+#### 🎯 关键代码
+
+**通过ID识别按钮**:
+```java
+// 策略1: 直接点击ID为button1的按钮(系统对话框的确认按钮)
+if (viewId != null && viewId.endsWith("button1")) {
+    logD("🎯 找到系统对话框确认按钮");
+    boolean clicked = node.performAction(ACTION_CLICK);
+    if (clicked) {
+        logD("🎉 成功点击确认按钮,录屏即将开始!");
+        return;
+    }
+}
+```
+
+**点击后立即返回**:
+```java
+if (clicked) {
+    logD("✅ 成功点击'单个应用'下拉框,等待下拉菜单展开...");
+    new Thread(() -> {
+        Thread.sleep(1500);
+        clickWholeScreenOption();
+    }).start();
+
+    // 重要: 点击成功后立即返回,不要继续执行后面的代码
+    rootNode.recycle();
+    return;
+}
+```
+
+---
+
+### V1.3 (2026-01-19)
+
+**系统录屏权限弹窗自动化处理 + 玻璃质感UI优化**
+
+#### ✅ 完成内容
+
+**1. 系统录屏权限弹窗自动化**
+- ✅ 实现监听`com.android.systemui`包的事件
+- ✅ 自动检测并点击"单个应用"下拉框
+- ✅ 智能父节点查找,自动点击"整个屏幕"选项
+- ✅ 自动检测并点击"立即开始"按钮
+- ✅ 完成从点击录屏到真正开始录屏的完整自动化
+
+**2. UI界面优化**
+- ✅ 简化界面文字,去除所有emoji和多余提示
+- ✅ 实现玻璃质感卡片效果(淡蓝色背景+描边)
+- ✅ 添加立体悬浮效果(elevation + translationZ)
+- ✅ 统一圆角设计(16-20dp)
+- ✅ 优化按钮和卡片的视觉层次
+
+**3. 问题修复**
+- 🐛 修复下拉菜单选项不可点击问题(智能父节点查找)
+- 🐛 修复按钮状态检测逻辑("继续" → "立即开始")
+- 🐛 修复玻璃背景渐变参数错误(百分比改为dp)
+
+#### 📝 技术细节
+
+**系统录屏权限弹窗处理流程**:
+```
+系统弹窗出现
+    ↓
+检测按钮文字
+    ↓
+是"立即开始"? ──Yes──→ 点击按钮 ──→ 录屏开始 ✅
+    ↓ No
+检测下拉框文字
+    ↓
+是"单个应用"? ──Yes──→ 点击下拉框
+    ↓                      ↓
+    No                 等待500ms
+    ↓                      ↓
+  跳过              查找"整个屏幕"
+                           ↓
+                    智能父节点查找
+                           ↓
+                    点击"整个屏幕"
+                           ↓
+                    按钮变为"立即开始"
+                           ↓
+                    下次事件触发时点击 ✅
+```
+
+**关键技术实现**:
+
+1. **监听系统UI事件**
+```java
+// 处理系统UI的录屏权限弹窗
+if (SYSTEM_UI_PACKAGE.equals(packageName)) {
+    if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+        eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+        handleSystemScreenShareDialog();
+    }
+    return;
+}
+```
+
+2. **智能父节点查找**
+```java
+// 如果节点不可点击,尝试点击父节点
+if (!node.isClickable()) {
+    AccessibilityNodeInfo parent = node.getParent();
+    if (parent != null && parent.isClickable()) {
+        parent.performAction(ACTION_CLICK);
+    }
+}
+```
+
+3. **状态检测**
+```java
+// 通过按钮文字判断状态
+if (buttonText.contains("立即开始")) {
+    // 已选择"整个屏幕",直接开始
+    buttonNode.performAction(ACTION_CLICK);
+} else if (spinnerText.contains("单个应用")) {
+    // 需要选择"整个屏幕"
+    spinnerNode.performAction(ACTION_CLICK);
+}
+```
+
+**UI优化细节**:
+
+1. **玻璃质感卡片**
+```xml
+<shape>
+    <solid android:color="#F5FAFF" />
+    <corners android:radius="20dp" />
+    <stroke
+        android:width="1.5dp"
+        android:color="#D0E4FF" />
+</shape>
+```
+
+2. **立体悬浮效果**
+```xml
+<androidx.cardview.widget.CardView
+    android:elevation="12dp"
+    app:cardCornerRadius="20dp">
+```
+
+3. **按钮悬浮效果**
+```xml
+<Button
+    android:elevation="8dp"
+    android:translationZ="4dp"
+    android:stateListAnimator="@null">
+```
+
+#### 🎯 完整自动化流程
+
+```
+用户输入备注 → 点击开始 → 最小化应用 → 打开权利卫士
+→ 点击"录屏取证" → 填充备注 → 点击"开始录屏取证"
+→ 系统弹窗出现 → 点击"单个应用"下拉框 → 点击"整个屏幕"
+→ 点击"立即开始" → 开始录屏 ✅
+```
+
+#### 📊 测试结果
+
+- ✅ 系统录屏权限弹窗自动处理成功
+- ✅ 智能父节点查找正常工作
+- ✅ 按钮状态检测准确
+- ✅ UI界面美观简洁
+- ✅ 玻璃质感效果良好
+
+#### 📸 界面截图
+
+- `玻璃质感界面截图.png` - 优化后的UI界面
+
+---
+
 ### V1.2 (2026-01-19)
 
 **备注输入与自动填充功能**

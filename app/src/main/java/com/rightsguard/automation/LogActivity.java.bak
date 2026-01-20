@@ -37,7 +37,7 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
     private MaterialButton btnExportLog;
 
     private Handler handler;
-    private boolean isRunning = false;
+    private Runnable updateLogRunnable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,7 +45,7 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
         setContentView(R.layout.activity_log);
 
         handler = new Handler(Looper.getMainLooper());
-
+        
         initViews();
         setupListeners();
         loadLogs();
@@ -95,23 +95,20 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
     }
 
     private void startAutoUpdate() {
-        isRunning = true;
-        scheduleNextUpdate();
+        updateLogRunnable = new Runnable() {
+            @Override
+            public void run() {
+                updateLogDisplay();
+                handler.postDelayed(updateLogRunnable, 1000);
+            }
+        };
+        handler.post(updateLogRunnable);
     }
 
     private void stopAutoUpdate() {
-        isRunning = false;
-        handler.removeCallbacksAndMessages(null);
-    }
-
-    private void scheduleNextUpdate() {
-        if (!isRunning) return;
-        handler.postDelayed(() -> {
-            if (isRunning) {
-                updateLogDisplay();
-                scheduleNextUpdate();
-            }
-        }, 1000);
+        if (updateLogRunnable != null && handler != null) {
+            handler.removeCallbacks(updateLogRunnable);
+        }
     }
 
     private void updateLogDisplay() {
@@ -123,7 +120,12 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
         } else {
             tvLogContent.setText(logs);
             tvLogContent.setTextColor(getResources().getColor(R.color.text_secondary, null));
-            scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+            scrollView.post(new Runnable() {
+                @Override
+                public void run() {
+                    scrollView.fullScroll(View.FOCUS_DOWN);
+                }
+            });
         }
     }
 
@@ -131,7 +133,12 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle(R.string.dialog_clear_log_title);
         builder.setMessage(R.string.dialog_clear_log_message);
-        builder.setPositiveButton(R.string.dialog_confirm, (dialog, which) -> clearLog());
+        builder.setPositiveButton(R.string.dialog_confirm, new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                clearLog();
+            }
+        });
         builder.setNegativeButton(R.string.dialog_cancel, null);
         builder.show();
     }
@@ -186,6 +193,4 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
                     Toast.LENGTH_SHORT).show();
         }
     }
-
 }
-
