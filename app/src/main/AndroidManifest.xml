@@ -43,6 +43,13 @@
             android:screenOrientation="portrait"
             android:parentActivityName=".MainActivity" />
 
+        <!-- Dump结果界面 (开发专用,正式版将移除) -->
+        <activity
+            android:name=".DumpResultActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:label="UI Dump" />
+
         <!-- 无障碍服务 -->
         <service
             android:name=".AutomationAccessibilityService"

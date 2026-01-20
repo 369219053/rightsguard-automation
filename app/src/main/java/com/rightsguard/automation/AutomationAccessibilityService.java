@@ -1256,5 +1256,118 @@ public class AutomationAccessibilityService extends AccessibilityService {
         }
     }
 
+    /**
+     * Dump当前UI结构
+     * ⚠️ 此功能仅用于开发调试,正式发布版本将移除!
+     */
+    public void dumpCurrentUI() {
+        try {
+            logD("🔍 开始Dump UI结构...");
+
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logE("❌ 无法获取UI结构: rootNode为null");
+                return;
+            }
+
+            // 构建dump文本
+            StringBuilder sb = new StringBuilder();
+            sb.append("=== UI结构 Dump ===\n");
+            sb.append("包名: ").append(rootNode.getPackageName()).append("\n");
+            sb.append("时间: ").append(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss",
+                                      java.util.Locale.CHINA).format(new java.util.Date())).append("\n\n");
+
+            // 递归遍历UI树
+            dumpNode(rootNode, sb, 0);
+
+            // 释放资源
+            rootNode.recycle();
+
+            // 显示dump结果
+            showDumpResult(sb.toString());
+
+            logD("✅ Dump完成");
+
+        } catch (Exception e) {
+            logE("❌ Dump UI结构失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 递归遍历节点
+     */
+    private void dumpNode(android.view.accessibility.AccessibilityNodeInfo node,
+                         StringBuilder sb, int depth) {
+        if (node == null) return;
+
+        try {
+            // 缩进
+            for (int i = 0; i < depth; i++) {
+                sb.append(i == depth - 1 ? "├─ " : "│   ");
+            }
+
+            // 节点类名
+            CharSequence className = node.getClassName();
+            sb.append("[").append(className != null ? className : "Unknown").append("]");
+            sb.append(" (clickable=").append(node.isClickable()).append(")\n");
+
+            // Resource ID
+            String viewId = node.getViewIdResourceName();
+            if (viewId != null && !viewId.isEmpty()) {
+                for (int i = 0; i < depth; i++) sb.append("│   ");
+                sb.append("  ID: ").append(viewId).append("\n");
+            }
+
+            // 文本内容
+            CharSequence text = node.getText();
+            if (text != null && text.length() > 0) {
+                for (int i = 0; i < depth; i++) sb.append("│   ");
+                sb.append("  Text: \"").append(text).append("\"\n");
+            }
+
+            // 内容描述
+            CharSequence desc = node.getContentDescription();
+            if (desc != null && desc.length() > 0) {
+                for (int i = 0; i < depth; i++) sb.append("│   ");
+                sb.append("  Desc: \"").append(desc).append("\"\n");
+            }
+
+            // 位置和大小
+            android.graphics.Rect bounds = new android.graphics.Rect();
+            node.getBoundsInScreen(bounds);
+            for (int i = 0; i < depth; i++) sb.append("│   ");
+            sb.append("  Bounds: [").append(bounds.left).append(",").append(bounds.top)
+              .append("][").append(bounds.right).append(",").append(bounds.bottom).append("]\n");
+
+            // 遍历子节点
+            int childCount = node.getChildCount();
+            for (int i = 0; i < childCount; i++) {
+                android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+                if (child != null) {
+                    dumpNode(child, sb, depth + 1);
+                    child.recycle();
+                }
+            }
+
+        } catch (Exception e) {
+            logE("遍历节点异常: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 显示dump结果
+     */
+    private void showDumpResult(String dumpText) {
+        try {
+            android.content.Intent intent = new android.content.Intent(this, DumpResultActivity.class);
+            intent.putExtra("dump_text", dumpText);
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {
+            logE("显示dump结果失败: " + e.getMessage());
+        }
+    }
+
 }
 

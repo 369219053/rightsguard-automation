@@ -38,6 +38,22 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         setupListeners();
         updateStatus(STATUS_IDLE);
+
+        // 启动悬浮窗服务
+        startFloatingWindowService();
+    }
+
+    /**
+     * 启动悬浮窗服务
+     */
+    private void startFloatingWindowService() {
+        // 检查悬浮窗权限
+        if (android.provider.Settings.canDrawOverlays(this)) {
+            Intent intent = new Intent(this, FloatingWindowService.class);
+            startService(intent);
+        } else {
+            Toast.makeText(this, "请先授予悬浮窗权限", Toast.LENGTH_SHORT).show();
+        }
     }
 
     /**
@@ -64,10 +80,11 @@ public class MainActivity extends AppCompatActivity {
         // 停止按钮
         btnStop.setOnClickListener(v -> stopAutomation());
 
-        // 查看日志按钮
+        // 查看日志按钮 - 暂时禁用,等待修复D8编译器bug
         btnViewLog.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, LogActivity.class);
-            startActivity(intent);
+            Toast.makeText(this, "日志功能暂时不可用,请使用logcat查看日志", Toast.LENGTH_SHORT).show();
+            // Intent intent = new Intent(MainActivity.this, LogActivity.class);
+            // startActivity(intent);
         });
 
         // 设置按钮
