@@ -23,6 +23,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private static final String START_BUTTON_ID = "com.unitrust.tsa:id/rl_btn";
     private static final String CONFIRM_BUTTON_ID = "com.unitrust.tsa:id/confirm_button";
 
+    // 应用验真界面相关
+    private static final String VERIFY_BUTTON_TEXT = "立即验证";
+    private static final String DOUYIN_APP_TEXT = "抖音";
+
     // 系统录屏权限弹窗相关
     private static final String SYSTEM_UI_PACKAGE = "com.android.systemui";
     private static final String SCREEN_SHARE_MODE_SPINNER_ID = "com.android.systemui:id/real_screen_share_mode_spinner";
@@ -31,6 +35,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private static AutomationAccessibilityService instance;
     private boolean isRunning = false;
     private boolean hasClickedScreenRecord = false;
+    private boolean hasSelectedDouyin = false; // 是否已勾选抖音
     private String remark = "";
 
     // 日志收集
@@ -78,6 +83,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
         // 处理窗口内容变化事件
         if (eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             handleWindowContentChanged();
+
+            // 检查是否是应用验真界面
+            handleAppVerificationDialog();
         }
     }
 
@@ -122,6 +130,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
         logD("🚀 启动自动化");
         isRunning = true;
         hasClickedScreenRecord = false;
+        hasSelectedDouyin = false;
 
         // 最小化当前应用(返回桌面)
         minimizeCurrentApp();
@@ -695,6 +704,11 @@ public class AutomationAccessibilityService extends AccessibilityService {
             return;
         }
 
+        // 如果已经选择了抖音,不再自动点击"立即验证"按钮
+        if (hasSelectedDouyin) {
+            return;
+        }
+
         try {
             String className = node.getClassName() != null ? node.getClassName().toString() : "";
 
@@ -869,6 +883,376 @@ public class AutomationAccessibilityService extends AccessibilityService {
     public static void clearLogs() {
         synchronized (logBuilder) {
             logBuilder.setLength(0);
+        }
+    }
+
+    /**
+     * 处理应用验真对话框
+     */
+    private void handleAppVerificationDialog() {
+        if (hasSelectedDouyin) {
+            return; // 已经处理过了
+        }
+
+        try {
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                return;
+            }
+
+            // 查找"应用验真"文本,确认是应用验真界面
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> titleNodes =
+                rootNode.findAccessibilityNodeInfosByText("应用验真");
+
+            if (titleNodes == null || titleNodes.isEmpty()) {
+                rootNode.recycle();
+                return;
+            }
+
+            logD("🎯 检测到应用验真界面");
+
+            // 最简单的方案: 直接查找ID为rl_douyin的容器并点击
+            android.view.accessibility.AccessibilityNodeInfo douyinIcon = null;
+
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> douyinContainerNodes =
+                rootNode.findAccessibilityNodeInfosByViewId("com.unitrust.tsa:id/rl_douyin");
+
+            if (douyinContainerNodes != null && !douyinContainerNodes.isEmpty()) {
+                douyinIcon = douyinContainerNodes.get(0);
+                logD("✅ 找到抖音容器(ID: rl_douyin)");
+            } else {
+                logE("未找到抖音容器(ID: rl_douyin)");
+            }
+
+            if (douyinIcon != null) {
+
+                // 直接点击容器
+                logD("🔧 点击抖音容器");
+
+                boolean clicked = douyinIcon.performAction(
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                );
+
+                logD("  点击结果: " + (clicked ? "成功" : "失败"));
+
+                // 等待一下,让界面更新
+                try { Thread.sleep(500); } catch (Exception e) {}
+
+                if (clicked) {
+                    logD("✅ 成功点击抖音容器");
+                    hasSelectedDouyin = true;
+
+                    // 随机延迟1-3秒,然后点击"立即验证"
+                    new Thread(() -> {
+                        try {
+                            // 生成1000-3000ms的随机延迟
+                            int randomDelay = 1000 + new java.util.Random().nextInt(2000);
+                            logD("⏳ 等待 " + (randomDelay / 1000.0) + " 秒后点击'立即验证'...");
+                            Thread.sleep(randomDelay);
+                            clickVerifyButton();
+                        } catch (Exception e) {
+                            logE("点击立即验证失败: " + e.getMessage());
+                        }
+                    }).start();
+                } else {
+                    logE("❌ 点击抖音容器失败");
+                }
+
+                douyinIcon.recycle();
+            } else {
+                logE("未找到抖音容器");
+            }
+
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("处理应用验真对话框异常: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 在节点中查找抖音的ImageButton
+     */
+    private android.view.accessibility.AccessibilityNodeInfo findDouyinImageButton(
+        android.view.accessibility.AccessibilityNodeInfo node) {
+
+        if (node == null) {
+            return null;
+        }
+
+        try {
+            String className = node.getClassName() != null ? node.getClassName().toString() : "";
+            String viewId = node.getViewIdResourceName();
+
+            // 只查找ID包含"douyin"的ImageButton(但不是btn_douyin这个圆圈)
+            if ((className.contains("ImageView") || className.contains("ImageButton")) &&
+                viewId != null && viewId.toLowerCase().contains("douyin")) {
+
+                logD("  找到抖音图标: ClassName=" + className + ", ViewID=" + viewId);
+                return node;
+            }
+
+            // 递归查找子节点
+            int childCount = node.getChildCount();
+            for (int i = 0; i < childCount; i++) {
+                android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+                if (child != null) {
+                    android.view.accessibility.AccessibilityNodeInfo result = findDouyinImageButton(child);
+                    if (result != null) {
+                        return result;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logE("查找抖音ImageButton异常: " + e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * 点击"立即验证"按钮
+     */
+    private void clickVerifyButton() {
+        try {
+            // 先截屏保存应用验真页面
+            logD("📸 准备截屏保存应用验真页面...");
+
+            // 使用CountDownLatch等待截屏完成
+            final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            final boolean[] screenshotSuccess = {false};
+
+            takeScreenshotBeforeVerify(new ScreenshotCallback() {
+                @Override
+                public void onSuccess() {
+                    screenshotSuccess[0] = true;
+                    latch.countDown();
+                }
+
+                @Override
+                public void onFailure() {
+                    screenshotSuccess[0] = false;
+                    latch.countDown();
+                }
+            });
+
+            // 等待截屏完成,最多等待3秒
+            try {
+                boolean completed = latch.await(3, java.util.concurrent.TimeUnit.SECONDS);
+                if (completed) {
+                    if (screenshotSuccess[0]) {
+                        logD("✅ 截屏完成,准备点击'立即验证'");
+                    } else {
+                        logE("⚠️ 截屏失败,继续点击'立即验证'");
+                    }
+                } else {
+                    logE("⚠️ 截屏超时,继续点击'立即验证'");
+                }
+            } catch (InterruptedException e) {
+                logE("等待截屏被中断: " + e.getMessage());
+            }
+
+            // 再等待500ms确保界面稳定
+            Thread.sleep(500);
+
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logE("无法获取根节点");
+                return;
+            }
+
+            // 直接通过ID查找"立即验证"按钮
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> buttonNodes =
+                rootNode.findAccessibilityNodeInfosByViewId("com.unitrust.tsa:id/confirm_button");
+
+            if (buttonNodes != null && !buttonNodes.isEmpty()) {
+                logD("🎯 找到'立即验证'按钮,准备点击...");
+
+                android.view.accessibility.AccessibilityNodeInfo button = buttonNodes.get(0);
+
+                boolean clicked = button.performAction(
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                );
+
+                if (clicked) {
+                    logD("🎉 成功点击'立即验证'按钮!");
+                } else {
+                    logE("❌ 点击'立即验证'失败");
+                }
+
+                button.recycle();
+            } else {
+                logE("未找到'立即验证'按钮(ID: confirm_button)");
+            }
+
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("点击立即验证按钮异常: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 截屏回调接口
+     */
+    private interface ScreenshotCallback {
+        void onSuccess();
+        void onFailure();
+    }
+
+    /**
+     * 截屏保存应用验真页面
+     */
+    private void takeScreenshotBeforeVerify(final ScreenshotCallback callback) {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                // Android 11 (API 30) 及以上使用新的截屏API
+                logD("📱 当前Android版本: " + android.os.Build.VERSION.SDK_INT + " (支持截屏API)");
+                logD("🔧 开始执行截屏...");
+
+                takeScreenshot(
+                    android.view.Display.DEFAULT_DISPLAY,
+                    getMainExecutor(),
+                    new android.accessibilityservice.AccessibilityService.TakeScreenshotCallback() {
+                        @Override
+                        public void onSuccess(android.accessibilityservice.AccessibilityService.ScreenshotResult screenshotResult) {
+                            try {
+                                logD("✅ 截屏API调用成功!");
+
+                                // 获取截图的Bitmap
+                                android.graphics.Bitmap bitmap = android.graphics.Bitmap.wrapHardwareBuffer(
+                                    screenshotResult.getHardwareBuffer(),
+                                    screenshotResult.getColorSpace()
+                                );
+
+                                if (bitmap != null) {
+                                    logD("📐 截图尺寸: " + bitmap.getWidth() + "x" + bitmap.getHeight());
+                                    // 保存截图
+                                    saveScreenshot(bitmap);
+                                    bitmap.recycle();
+
+                                    if (callback != null) {
+                                        callback.onSuccess();
+                                    }
+                                } else {
+                                    logE("❌ 获取Bitmap失败");
+                                    if (callback != null) {
+                                        callback.onFailure();
+                                    }
+                                }
+
+                                screenshotResult.getHardwareBuffer().close();
+
+                            } catch (Exception e) {
+                                logE("❌ 保存截图失败: " + e.getMessage());
+                                e.printStackTrace();
+                                if (callback != null) {
+                                    callback.onFailure();
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(int errorCode) {
+                            logE("❌ 截屏API失败,错误码: " + errorCode);
+                            if (callback != null) {
+                                callback.onFailure();
+                            }
+                        }
+                    }
+                );
+            } else {
+                logE("⚠️ 当前Android版本: " + android.os.Build.VERSION.SDK_INT + " (不支持截屏API,需要Android 11+ / API 30+)");
+                if (callback != null) {
+                    callback.onFailure();
+                }
+            }
+
+        } catch (Exception e) {
+            logE("❌ 截屏异常: " + e.getMessage());
+            e.printStackTrace();
+            if (callback != null) {
+                callback.onFailure();
+            }
+        }
+    }
+
+    /**
+     * 保存截图到文件
+     */
+    private void saveScreenshot(android.graphics.Bitmap bitmap) {
+        try {
+            // 使用备注作为文件名的一部分
+            String fileName = "应用验真_" + remark.replace(":", "_") + "_" +
+                            new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.CHINA)
+                                .format(new java.util.Date()) + ".png";
+
+            // Android 10+ 使用MediaStore保存到公共相册
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                logD("📱 使用MediaStore保存到公共相册 (Android 10+)");
+
+                android.content.ContentValues values = new android.content.ContentValues();
+                values.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, fileName);
+                values.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png");
+                values.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH,
+                          android.os.Environment.DIRECTORY_PICTURES + "/权利卫士取证");
+
+                android.content.ContentResolver resolver = getContentResolver();
+                android.net.Uri imageUri = resolver.insert(
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    values
+                );
+
+                if (imageUri != null) {
+                    java.io.OutputStream os = resolver.openOutputStream(imageUri);
+                    if (os != null) {
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, os);
+                        os.flush();
+                        os.close();
+
+                        logD("✅ 截图已保存到相册: Pictures/权利卫士取证/" + fileName);
+                        logD("📂 可以在相册中查看");
+                    }
+                } else {
+                    logE("❌ 创建MediaStore URI失败");
+                }
+
+            } else {
+                // Android 9及以下,保存到公共Pictures目录
+                logD("📱 保存到公共Pictures目录 (Android 9及以下)");
+
+                java.io.File picturesDir = new java.io.File(
+                    android.os.Environment.getExternalStoragePublicDirectory(
+                        android.os.Environment.DIRECTORY_PICTURES
+                    ),
+                    "权利卫士取证"
+                );
+
+                if (!picturesDir.exists()) {
+                    picturesDir.mkdirs();
+                }
+
+                java.io.File file = new java.io.File(picturesDir, fileName);
+
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(file);
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fos);
+                fos.flush();
+                fos.close();
+
+                // 通知系统扫描新文件,让相册能看到
+                android.content.Intent mediaScanIntent = new android.content.Intent(
+                    android.content.Intent.ACTION_MEDIA_SCANNER_SCAN_FILE
+                );
+                mediaScanIntent.setData(android.net.Uri.fromFile(file));
+                sendBroadcast(mediaScanIntent);
+
+                logD("✅ 截图已保存: " + file.getAbsolutePath());
+                logD("📂 可以在相册中查看");
+            }
+
+        } catch (Exception e) {
+            logE("❌ 保存截图文件失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

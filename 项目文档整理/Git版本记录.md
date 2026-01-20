@@ -12,7 +12,150 @@
 
 ## 🚀 版本历史
 
-### V1.4 (2026-01-20)
+### V1.5 (2025-01-20)
+
+**应用验真界面自动化 + 截屏保存到相册**
+
+#### ✅ 完成内容
+
+**1. 应用验真界面自动化**
+- ✅ 自动检测"应用验真"界面
+- ✅ 自动查找并点击抖音容器(ID: `rl_douyin`)
+- ✅ 实现随机延迟1-3秒,模拟真实用户操作
+- ✅ 自动截屏保存应用验真页面
+- ✅ 同步等待截屏完成后再点击"立即验证"
+- ✅ 阻止主循环重复点击,避免误操作
+
+**2. 截屏功能实现**
+- ✅ 使用Android 11+ 的`takeScreenshot()` API
+- ✅ 在`accessibility_service_config.xml`中添加`android:canTakeScreenshot="true"`权限
+- ✅ 实现截屏回调接口,支持成功/失败处理
+- ✅ 使用`CountDownLatch`同步等待截屏完成
+
+**3. 截图保存到公共相册**
+- ✅ Android 10+: 使用MediaStore API保存到公共相册
+- ✅ Android 9及以下: 保存到公共Pictures目录并通知系统扫描
+- ✅ 自动创建"权利卫士取证"相册文件夹
+- ✅ 文件名包含备注信息和时间戳
+- ✅ 添加存储权限: `READ_MEDIA_IMAGES` (Android 13+)
+
+**4. 防重复点击机制**
+- ✅ 使用`hasSelectedDouyin`标志位
+- ✅ 点击抖音后立即设置标志,阻止主循环重复点击
+- ✅ 只有延迟线程会执行截屏和点击"立即验证"
+
+#### 📝 技术细节
+
+**应用验真流程**:
+```
+1. 检测"应用验真"标题
+2. 查找抖音容器(ID: rl_douyin)
+3. 点击抖音容器
+4. 设置hasSelectedDouyin=true
+5. 启动延迟线程
+6. 随机延迟1-3秒
+7. 截屏保存
+8. 等待截屏完成(最多3秒)
+9. 再等待500ms
+10. 点击"立即验证"
+```
+
+**截屏保存路径**:
+```
+相册 / Pictures / 权利卫士取证 / 应用验真_袁丹-抖音_海赫Hayhoe服饰_20250120_200530.png
+```
+
+**关键代码**:
+
+```java
+// 1. 点击抖音容器
+List<AccessibilityNodeInfo> douyinContainerNodes =
+    rootNode.findAccessibilityNodeInfosByViewId("com.unitrust.tsa:id/rl_douyin");
+
+if (douyinContainerNodes != null && !douyinContainerNodes.isEmpty()) {
+    AccessibilityNodeInfo douyinIcon = douyinContainerNodes.get(0);
+    boolean clicked = douyinIcon.performAction(ACTION_CLICK);
+
+    if (clicked) {
+        hasSelectedDouyin = true; // 阻止主循环重复点击
+
+        // 2. 随机延迟后截屏并点击
+        new Thread(() -> {
+            int randomDelay = 1000 + new Random().nextInt(2000);
+            Thread.sleep(randomDelay);
+            clickVerifyButton();
+        }).start();
+    }
+}
+
+// 3. 截屏并点击"立即验证"
+private void clickVerifyButton() {
+    CountDownLatch latch = new CountDownLatch(1);
+
+    takeScreenshotBeforeVerify(new ScreenshotCallback() {
+        @Override
+        public void onSuccess() {
+            latch.countDown();
+        }
+    });
+
+    latch.await(3, TimeUnit.SECONDS);
+    Thread.sleep(500);
+
+    // 点击"立即验证"
+    List<AccessibilityNodeInfo> buttonNodes =
+        rootNode.findAccessibilityNodeInfosByViewId("com.unitrust.tsa:id/confirm_button");
+    buttonNodes.get(0).performAction(ACTION_CLICK);
+}
+
+// 4. 保存到公共相册
+private void saveScreenshot(Bitmap bitmap) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
+        values.put(MediaStore.Images.Media.RELATIVE_PATH,
+                  Environment.DIRECTORY_PICTURES + "/权利卫士取证");
+
+        Uri imageUri = resolver.insert(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+        );
+
+        OutputStream os = resolver.openOutputStream(imageUri);
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, os);
+    }
+}
+```
+
+#### 🎯 新增Resource ID
+
+```java
+private static final String DOUYIN_CONTAINER_ID = "com.unitrust.tsa:id/rl_douyin";
+private static final String VERIFY_BUTTON_ID = "com.unitrust.tsa:id/confirm_button";
+```
+
+#### 📱 权限配置
+
+**AndroidManifest.xml**:
+```xml
+<!-- 存储权限 -->
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+```
+
+**accessibility_service_config.xml**:
+```xml
+<accessibility-service
+    ...
+    android:canTakeScreenshot="true"
+    ... />
+```
+
+---
+
+### V1.4 (2025-01-20)
 
 **系统录屏权限弹窗自动化完善 - 通过按钮ID识别**
 
@@ -93,7 +236,7 @@ if (clicked) {
 
 ---
 
-### V1.3 (2026-01-19)
+### V1.3 (2025-01-19)
 
 **系统录屏权限弹窗自动化处理 + 玻璃质感UI优化**
 
@@ -233,7 +376,7 @@ if (buttonText.contains("立即开始")) {
 
 ---
 
-### V1.2 (2026-01-19)
+### V1.2 (2025-01-19)
 
 **备注输入与自动填充功能**
 
@@ -311,7 +454,7 @@ if (buttonText.contains("立即开始")) {
 
 ---
 
-### V1.0.0 (2026-01-19)
+### V1.0.0 (2025-01-19)
 
 **项目初始化**
 
@@ -499,7 +642,7 @@ if (buttonText.contains("立即开始")) {
 
 | 版本 | 状态 | 完成度 | 开始日期 | 完成日期 |
 |------|------|--------|---------|---------|
-| V1.0.0 | ✅ 已完成 | 100% | 2026-01-19 | 2026-01-19 |
+| V1.0.0 | ✅ 已完成 | 100% | 2025-01-19 | 2025-01-19 |
 | V1.1.0 | 📋 计划中 | 0% | - | - |
 | V1.2.0 | 📋 计划中 | 0% | - | - |
 | V1.3.0 | 📋 计划中 | 0% | - | - |
@@ -549,5 +692,5 @@ if (buttonText.contains("立即开始")) {
 
 [← 返回README](../README.md)
 
-**最后更新**: 2026-01-19
+**最后更新**: 2025-01-20
 
