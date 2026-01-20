@@ -73,11 +73,10 @@ public class MainActivity extends AppCompatActivity {
         // 停止按钮
         btnStop.setOnClickListener(v -> stopAutomation());
 
-        // 查看日志按钮 - 暂时禁用,等待修复D8编译器bug
+        // 查看日志按钮
         btnViewLog.setOnClickListener(v -> {
-            Toast.makeText(this, "日志功能暂时不可用,请使用logcat查看日志", Toast.LENGTH_SHORT).show();
-            // Intent intent = new Intent(MainActivity.this, LogActivity.class);
-            // startActivity(intent);
+            Intent intent = new Intent(MainActivity.this, LogActivity.class);
+            startActivity(intent);
         });
 
         // 设置按钮
@@ -200,24 +199,6 @@ public class MainActivity extends AppCompatActivity {
         } else {
             Intent intent = new Intent(this, FloatingWindowService.class);
             startService(intent);
-        }
-    }
-
-    /**
-     * 切换悬浮窗显示/隐藏
-     */
-    private void toggleFloatingWindow() {
-        isFloatingWindowVisible = !isFloatingWindowVisible;
-
-        if (isFloatingWindowVisible) {
-            // 显示悬浮窗
-            startFloatingWindowService();
-            Toast.makeText(this, "✅ 悬浮窗已显示", Toast.LENGTH_SHORT).show();
-        } else {
-            // 隐藏悬浮窗
-            Intent intent = new Intent(this, FloatingWindowService.class);
-            stopService(intent);
-            Toast.makeText(this, "❌ 悬浮窗已隐藏", Toast.LENGTH_SHORT).show();
         }
     }
 

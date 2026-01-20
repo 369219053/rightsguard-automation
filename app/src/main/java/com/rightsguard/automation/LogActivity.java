@@ -5,6 +5,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -166,23 +167,65 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
         }
 
         try {
+            // 1. 生成Markdown格式的日志内容
+            StringBuilder markdown = new StringBuilder();
+            markdown.append("# 权利卫士取证自动化 - 运行日志\n\n");
+            markdown.append("**导出时间**: ").append(
+                new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                    .format(new Date())
+            ).append("\n\n");
+            markdown.append("---\n\n");
+            markdown.append("## 📋 日志内容\n\n");
+            markdown.append("```\n");
+            markdown.append(logs);
+            markdown.append("\n```\n\n");
+            markdown.append("---\n\n");
+            markdown.append("*由权利卫士取证自动化系统自动生成*\n");
+
+            // 2. 保存到Documents/RightsGuard/目录
             String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
                     .format(new Date());
-            String fileName = "automation_log_" + timestamp + ".txt";
+            String fileName = "Automation_Log_" + timestamp + ".md";
 
-            File downloadsDir = Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOWNLOADS);
-            File logFile = new File(downloadsDir, fileName);
+            File documentsDir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOCUMENTS);
+            File rightsGuardDir = new File(documentsDir, "RightsGuard");
+
+            // 确保目录存在
+            if (!rightsGuardDir.exists()) {
+                rightsGuardDir.mkdirs();
+            }
+
+            File logFile = new File(rightsGuardDir, fileName);
 
             FileWriter writer = new FileWriter(logFile);
-            writer.write(logs);
+            writer.write(markdown.toString());
             writer.close();
 
-            Toast.makeText(this, "日志已导出到: " + logFile.getAbsolutePath(),
-                    Toast.LENGTH_LONG).show();
+            // 3. 创建分享Intent
+            Intent shareIntent = new Intent(Intent.ACTION_SEND);
+            shareIntent.setType("text/markdown");
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            // 使用FileProvider获取URI
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(
+                this,
+                "com.rightsguard.automation.fileprovider",
+                logFile
+            );
+
+            shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
+            shareIntent.putExtra(Intent.EXTRA_SUBJECT, "权利卫士取证自动化 - 运行日志");
+            shareIntent.putExtra(Intent.EXTRA_TEXT, "运行日志已导出,请查看附件");
+
+            // 4. 弹出分享对话框
+            startActivity(Intent.createChooser(shareIntent, "分享日志"));
+
+            Toast.makeText(this, "✅ 日志已保存并准备分享", Toast.LENGTH_SHORT).show();
+
         } catch (IOException e) {
             e.printStackTrace();
-            Toast.makeText(this, "导出失败: " + e.getMessage(),
+            Toast.makeText(this, "❌ 导出失败: " + e.getMessage(),
                     Toast.LENGTH_SHORT).show();
         }
     }

@@ -12,6 +12,226 @@
 
 ## 🚀 版本历史
 
+### V1.7 (2025-01-20)
+
+**日志分享功能 + 悬浮窗修复 + 编译优化**
+
+#### ✅ 完成内容
+
+**1. 日志分享功能**
+- ✅ 实现日志导出为Markdown格式
+- ✅ 点击"导出日志"按钮自动生成.md文件
+- ✅ 保存到`Documents/RightsGuard/`目录
+- ✅ 文件名格式:`Automation_Log_yyyyMMdd_HHmmss.md`
+- ✅ 自动弹出系统分享对话框
+- ✅ 可直接分享到微信、QQ等应用
+
+**2. 日志界面优化**
+- ✅ 添加右上角导出图标按钮(💾)
+- ✅ 添加底部"导出日志"按钮
+- ✅ 两个按钮功能相同,提供多种操作方式
+- ✅ 优化日志显示格式
+
+**3. 悬浮窗显示修复**
+- ✅ 修复MainActivity中缺少`startFloatingWindowService()`调用
+- ✅ 修复缺少成员变量`ivToggleFloat`和`isFloatingWindowVisible`
+- ✅ 重新添加`requestStoragePermission()`方法
+- ✅ 重新添加`startFloatingWindowService()`方法
+- ✅ 应用启动时自动显示悬浮窗
+
+**4. 编译缓存问题修复**
+- ✅ 发现Gradle缓存导致旧代码被使用的问题
+- ✅ 使用`./gradlew clean`清理缓存
+- ✅ 确保每次编译都使用最新代码
+- ✅ 避免修改未生效的问题
+
+#### 📝 技术细节
+
+**日志导出流程**:
+```
+1. 用户点击"导出日志"按钮
+2. 获取当前日志内容
+3. 生成Markdown格式文本
+4. 创建文件保存到Documents/RightsGuard/
+5. 创建分享Intent (ACTION_SEND)
+6. 设置MIME类型为text/markdown
+7. 弹出系统分享对话框
+8. 用户选择分享目标(微信/QQ等)
+```
+
+**Markdown日志格式**:
+```markdown
+# 权利卫士取证自动化 - 运行日志
+
+**导出时间**: 2025-01-20 15:30:45
+
+---
+
+## 日志内容
+
+\`\`\`
+[2025-01-20 15:25:10] 应用启动
+[2025-01-20 15:25:12] 无障碍服务已启动
+[2025-01-20 15:25:15] 开始自动化任务
+...
+\`\`\`
+
+---
+
+*本日志由权利卫士取证自动化系统自动生成*
+```
+
+**关键代码**:
+
+```java
+// 1. 导出日志按钮点击事件
+private void exportLog() {
+    String logContent = tvLog.getText().toString();
+
+    // 生成Markdown格式
+    String markdown = generateMarkdown(logContent);
+
+    // 保存文件
+    File file = saveToFile(markdown);
+
+    // 分享文件
+    shareFile(file);
+}
+
+// 2. 生成Markdown格式
+private String generateMarkdown(String logContent) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("# 权利卫士取证自动化 - 运行日志\n\n");
+    sb.append("**导出时间**: ").append(getCurrentTime()).append("\n\n");
+    sb.append("---\n\n");
+    sb.append("## 日志内容\n\n");
+    sb.append("```\n");
+    sb.append(logContent);
+    sb.append("\n```\n\n");
+    sb.append("---\n\n");
+    sb.append("*本日志由权利卫士取证自动化系统自动生成*\n");
+    return sb.toString();
+}
+
+// 3. 分享文件
+private void shareFile(File file) {
+    Uri fileUri = FileProvider.getUriForFile(this,
+        "com.rightsguard.automation.fileprovider", file);
+
+    Intent shareIntent = new Intent(Intent.ACTION_SEND);
+    shareIntent.setType("text/markdown");
+    shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+    shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+    startActivity(Intent.createChooser(shareIntent, "分享日志"));
+}
+```
+
+**悬浮窗修复**:
+
+问题原因: 之前的代码修改没有正确保存,导致以下代码缺失:
+1. `onCreate()`中缺少`startFloatingWindowService()`调用
+2. 缺少成员变量`ivToggleFloat`和`isFloatingWindowVisible`
+3. 缺少`requestStoragePermission()`和`startFloatingWindowService()`方法
+
+解决方案:
+```java
+// MainActivity.java
+
+// 1. 添加成员变量
+private ImageView ivToggleFloat;
+private boolean isFloatingWindowVisible = true;
+
+// 2. onCreate中添加调用
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    setContentView(R.layout.activity_main);
+
+    initViews();
+    setupListeners();
+    updateStatus(STATUS_IDLE);
+
+    // 请求存储权限
+    requestStoragePermission();
+
+    // 启动悬浮窗服务
+    startFloatingWindowService();
+}
+
+// 3. 添加方法
+private void requestStoragePermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            }, 100);
+        }
+    }
+}
+
+private void startFloatingWindowService() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (Settings.canDrawOverlays(this)) {
+            Intent intent = new Intent(this, FloatingWindowService.class);
+            startService(intent);
+        } else {
+            Toast.makeText(this, "请授予悬浮窗权限", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+        }
+    } else {
+        Intent intent = new Intent(this, FloatingWindowService.class);
+        startService(intent);
+    }
+}
+```
+
+**编译优化**:
+
+问题: Gradle缓存导致修改的代码没有生效
+
+解决方案:
+```bash
+# 使用clean命令清理缓存
+export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
+./gradlew clean assembleDebug
+adb install -r -g app/build/outputs/apk/debug/app-debug.apk
+```
+
+#### 🐛 Bug修复
+
+1. **日志功能被禁用** - 重新启用日志按钮点击事件
+2. **悬浮窗不显示** - 重新添加启动悬浮窗的代码
+3. **编译缓存问题** - 使用clean命令清理缓存
+4. **成员变量缺失** - 重新添加ivToggleFloat和isFloatingWindowVisible
+
+#### 📦 文件变更
+
+**修改的文件**:
+- `app/src/main/java/com/rightsguard/automation/MainActivity.java`
+  - 重新启用日志功能
+  - 添加成员变量
+  - 添加启动悬浮窗代码
+- `app/src/main/java/com/rightsguard/automation/LogActivity.java`
+  - 添加导出日志功能
+  - 添加分享功能
+  - 优化日志格式
+
+**更新的文档**:
+- `项目文档整理/常见问题.md` - 添加日志分享和编译缓存相关FAQ
+- `项目文档整理/Git版本记录.md` - 记录V1.7版本更新
+
+#### 📂 文件保存位置
+
+- **日志文件**: `/storage/emulated/0/Documents/RightsGuard/Automation_Log_yyyyMMdd_HHmmss.md`
+- **UI Dump**: `/storage/emulated/0/Documents/RightsGuard/UI_Dump_yyyyMMdd_HHmmss.md`
+
+---
+
 ### V1.6 (2025-01-20)
 
 **悬浮窗拖动功能修复 + UI Dump分享功能**
