@@ -115,7 +115,7 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 备注输入卡片 -->
+            <!-- 取证信息输入卡片 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -134,17 +134,25 @@
 
                     <TextView
                         style="@style/LabelTextStyle"
-                        android:text="录屏备注"
+                        android:text="取证信息"
                         android:textSize="16sp"
                         android:textStyle="bold"
                         android:textColor="@color/text_primary"
-                        android:layout_marginBottom="16dp" />
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="格式: 原创名称-抖音:侵权人-原创链接+侵权链接"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary"
+                        android:layout_marginBottom="12dp" />
 
                     <!-- 输入框 -->
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="请输入备注内容"
+                        android:hint="粘贴取证信息"
                         app:boxBackgroundMode="outline"
                         app:boxStrokeColor="@color/primary_blue"
                         app:boxStrokeWidth="2dp"
@@ -160,13 +168,14 @@
                             android:id="@+id/et_remark"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:minHeight="56dp"
-                            android:maxLines="3"
-                            android:maxLength="100"
-                            android:inputType="text"
-                            android:textSize="15sp"
+                            android:minHeight="80dp"
+                            android:maxLines="5"
+                            android:maxLength="500"
+                            android:inputType="textMultiLine"
+                            android:textSize="13sp"
                             android:textColor="@color/text_primary"
-                            android:padding="16dp" />
+                            android:padding="16dp"
+                            android:gravity="top" />
                     </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

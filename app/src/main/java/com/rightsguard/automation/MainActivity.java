@@ -26,11 +26,9 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton btnStop;
     private MaterialButton btnViewLog;
     private ImageView ivSettings;
-    private ImageView ivToggleFloat;
     private TextInputEditText etRemark;
 
     private boolean isRunning = false;
-    private boolean isFloatingWindowVisible = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,12 +38,6 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         setupListeners();
         updateStatus(STATUS_IDLE);
-
-        // 请求存储权限
-        requestStoragePermission();
-
-        // 启动悬浮窗服务
-        startFloatingWindowService();
     }
 
     /**
@@ -59,7 +51,6 @@ public class MainActivity extends AppCompatActivity {
         btnStop = findViewById(R.id.btn_stop);
         btnViewLog = findViewById(R.id.btn_view_log);
         ivSettings = findViewById(R.id.iv_settings);
-        ivToggleFloat = findViewById(R.id.iv_toggle_float);
         etRemark = findViewById(R.id.et_remark);
     }
 
@@ -73,10 +64,11 @@ public class MainActivity extends AppCompatActivity {
         // 停止按钮
         btnStop.setOnClickListener(v -> stopAutomation());
 
-        // 查看日志按钮
+        // 查看日志按钮 - 暂时禁用,等待修复D8编译器bug
         btnViewLog.setOnClickListener(v -> {
-            Intent intent = new Intent(MainActivity.this, LogActivity.class);
-            startActivity(intent);
+            Toast.makeText(this, "日志功能暂时不可用,请使用logcat查看日志", Toast.LENGTH_SHORT).show();
+            // Intent intent = new Intent(MainActivity.this, LogActivity.class);
+            // startActivity(intent);
         });
 
         // 设置按钮
@@ -96,16 +88,43 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // 获取备注内容
-        String remark = "";
+        // 获取取证信息
+        String evidenceInfo = "";
         if (etRemark != null && etRemark.getText() != null) {
-            remark = etRemark.getText().toString().trim();
+            evidenceInfo = etRemark.getText().toString().trim();
         }
+
+        // 如果输入为空,直接返回
+        if (evidenceInfo.isEmpty()) {
+            Toast.makeText(this, "请输入取证信息", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 解析取证信息
+        EvidenceData data = parseEvidenceInfo(evidenceInfo);
+        if (data == null) {
+            Toast.makeText(this, "取证信息格式错误\n正确格式: 原创名称-抖音:侵权人-原创链接+侵权链接", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // 显示解析结果
+        String message = String.format("✅ 解析成功!\n原创: %s\n侵权人: %s\n原创链接: %s\n侵权链接: %s",
+                data.originalName, data.infringerName,
+                data.originalUrl.length() > 30 ? data.originalUrl.substring(0, 30) + "..." : data.originalUrl,
+                data.infringementUrl.length() > 30 ? data.infringementUrl.substring(0, 30) + "..." : data.infringementUrl);
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
 
         // 启动自动化
         AutomationAccessibilityService service = AutomationAccessibilityService.getInstance();
         if (service != null) {
+            // 只传递 "原创名称-抖音:侵权人名称",不包含链接
+            String remark = data.originalName + "-抖音:" + data.infringerName;
             service.setRemark(remark);
+
+            // TODO: 将原创链接和侵权链接传递给服务,供智能截图使用
+            // service.setOriginalUrl(data.originalUrl);
+            // service.setInfringementUrl(data.infringementUrl);
+
             service.startAutomation();
             isRunning = true;
             updateStatus(STATUS_RUNNING);
@@ -165,47 +184,145 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * 请求存储权限
-     */
-    private void requestStoragePermission() {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            if (checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{
-                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                    android.Manifest.permission.READ_EXTERNAL_STORAGE
-                }, 100);
-            }
-        }
-    }
-
-    /**
-     * 启动悬浮窗服务
-     */
-    private void startFloatingWindowService() {
-        // 检查悬浮窗权限
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            if (android.provider.Settings.canDrawOverlays(this)) {
-                Intent intent = new Intent(this, FloatingWindowService.class);
-                startService(intent);
-            } else {
-                // 请求悬浮窗权限
-                Toast.makeText(this, "请授予悬浮窗权限", Toast.LENGTH_SHORT).show();
-                Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        android.net.Uri.parse("package:" + getPackageName()));
-                startActivity(intent);
-            }
-        } else {
-            Intent intent = new Intent(this, FloatingWindowService.class);
-            startService(intent);
-        }
-    }
-
     // 状态常量
     private static final int STATUS_IDLE = 0;
     private static final int STATUS_RUNNING = 1;
     private static final int STATUS_RECORDING = 2;
     private static final int STATUS_ERROR = 3;
+
+    /**
+     * 解析取证信息
+     * 格式: 原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接
+     * 示例: 张三-抖音:李四-https://www.douyin.com/xxx+https://www.douyin.com/yyy
+     *
+     * 智能解析: 能够自动提取URL,忽略分享链接中的描述文字
+     */
+    private EvidenceData parseEvidenceInfo(String info) {
+        if (info == null || info.isEmpty()) {
+            return null;
+        }
+
+        try {
+            // 1. 找到 "-抖音:" 的位置
+            int douyinIndex = info.indexOf("-抖音:");
+            if (douyinIndex == -1) {
+                return null;
+            }
+
+            // 2. 提取原创名称
+            String originalName = info.substring(0, douyinIndex).trim();
+
+            // 3. 从 "-抖音:" 后面开始查找下一个 "-"
+            int nextDashIndex = info.indexOf("-", douyinIndex + 4);
+            if (nextDashIndex == -1) {
+                return null;
+            }
+
+            // 4. 提取侵权人账号名称
+            String infringerName = info.substring(douyinIndex + 4, nextDashIndex).trim();
+
+            // 5. 剩余部分包含两个链接,用 "+" 分割
+            String urlsPart = info.substring(nextDashIndex + 1);
+            int plusIndex = urlsPart.indexOf("+");
+            if (plusIndex == -1) {
+                return null;
+            }
+
+            // 6. 智能提取第一个URL (原创链接)
+            String firstPart = urlsPart.substring(0, plusIndex);
+            String originalUrl = extractUrl(firstPart);
+            if (originalUrl == null) {
+                return null;
+            }
+
+            // 7. 智能提取第二个URL (侵权链接)
+            String secondPart = urlsPart.substring(plusIndex + 1);
+            String infringementUrl = extractUrl(secondPart);
+            if (infringementUrl == null) {
+                return null;
+            }
+
+            return new EvidenceData(originalName, infringerName, originalUrl, infringementUrl);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * 从文本中智能提取URL
+     * 支持提取 http:// 或 https:// 开头的URL
+     * 会自动忽略URL前后的描述文字
+     */
+    private String extractUrl(String text) {
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+
+        try {
+            // 查找 http:// 或 https:// 的位置
+            int httpIndex = text.indexOf("http://");
+            int httpsIndex = text.indexOf("https://");
+
+            int startIndex = -1;
+            if (httpIndex != -1 && httpsIndex != -1) {
+                // 两个都存在,取最前面的
+                startIndex = Math.min(httpIndex, httpsIndex);
+            } else if (httpIndex != -1) {
+                startIndex = httpIndex;
+            } else if (httpsIndex != -1) {
+                startIndex = httpsIndex;
+            }
+
+            if (startIndex == -1) {
+                return null;
+            }
+
+            // 从 http 开始,找到URL的结束位置
+            // URL结束的标志: 空格、换行、制表符等空白字符
+            String urlPart = text.substring(startIndex);
+            int endIndex = urlPart.length();
+
+            // 查找第一个空白字符
+            for (int i = 0; i < urlPart.length(); i++) {
+                char c = urlPart.charAt(i);
+                if (Character.isWhitespace(c)) {
+                    endIndex = i;
+                    break;
+                }
+            }
+
+            String url = urlPart.substring(0, endIndex).trim();
+
+            // 验证URL格式
+            if (url.startsWith("http://") || url.startsWith("https://")) {
+                return url;
+            }
+
+            return null;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /**
+     * 取证数据类
+     */
+    private static class EvidenceData {
+        String originalName;      // 原创名称
+        String infringerName;     // 侵权人账号名称
+        String originalUrl;       // 原创分享链接
+        String infringementUrl;   // 侵权人分享链接
+
+        EvidenceData(String originalName, String infringerName, String originalUrl, String infringementUrl) {
+            this.originalName = originalName;
+            this.infringerName = infringerName;
+            this.originalUrl = originalUrl;
+            this.infringementUrl = infringementUrl;
+        }
+    }
 }
 
