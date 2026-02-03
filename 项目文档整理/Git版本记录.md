@@ -12,6 +12,149 @@
 
 ## 🚀 版本历史
 
+### V2.0 (2026-02-03) ⭐️ 重要更新!
+
+**清空剪贴板机制 - 避免录屏中出现"打开看看"弹窗**
+
+#### ✅ 完成内容
+
+**1. 问题背景**
+- 录屏开始后,需要先录制律师的取证资质
+- 打开抖音后需要进入"我"-"设置"-"资质证照"
+- 但是剪贴板里有取证信息(包含抖音链接)
+- 打开抖音时会自动弹出"打开看看"页面
+- 这个弹窗会被录制进去,不符合取证流程!
+
+**2. 解决方案**
+- ✅ 在开始录屏前自动清空剪贴板
+- ✅ 避免打开抖音时弹出"打开看看"页面
+- ✅ 确保录屏过程中不会出现口令打开弹窗
+- ✅ 符合取证流程要求
+
+**3. 代码实现**
+- ✅ 添加`clearClipboard()`方法
+- ✅ 在`startAutomation()`中调用清空剪贴板
+- ✅ 复制空文本到剪贴板,避免抖音检测到链接
+
+**4. 移除V1.9功能**
+- ❌ 移除抖音"打开看看"自动点击逻辑
+- ❌ 移除`handleDouyinOpenDialog()`方法
+- ❌ 移除抖音相关常量(`DOUYIN_PACKAGE`, `DOUYIN_OPEN_BUTTON_ID`等)
+- ❌ 移除随机延迟机制(`randomDelay()`方法)
+- ❌ 移除`Random`类导入
+- ❌ 移除`hasClickedDouyinOpen`标志位
+
+**5. 文档更新**
+- ✅ 更新README.md(V2.0更新日志)
+- ✅ 更新自动化文档.md(清空剪贴板机制说明)
+- ✅ 更新常见问题.md(添加Q14: 打开抖音时弹出"打开看看"怎么办)
+- ✅ 移除抖音自动化和随机延迟相关文档
+
+#### 📝 技术细节
+
+**清空剪贴板实现**:
+```java
+/**
+ * 清空剪贴板
+ * 避免打开抖音时弹出"打开看看"页面
+ */
+private void clearClipboard() {
+    try {
+        ClipboardManager clipboard =
+            (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+
+        if (clipboard != null) {
+            // 复制一个空文本到剪贴板
+            ClipData clip = ClipData.newPlainText("", "");
+            clipboard.setPrimaryClip(clip);
+            logD("🧹 已清空剪贴板,避免打开抖音时弹出'打开看看'");
+        }
+    } catch (Exception e) {
+        logE("清空剪贴板失败: " + e.getMessage());
+    }
+}
+```
+
+**调用时机**:
+```java
+public void startAutomation() {
+    logD("🚀 启动自动化");
+    isRunning = true;
+    hasClickedScreenRecord = false;
+    hasSelectedDouyin = false;
+
+    // 🎯 关键: 清空剪贴板,避免打开抖音时弹出"打开看看"
+    clearClipboard();
+
+    // 最小化当前应用(返回桌面)
+    minimizeCurrentApp();
+
+    // 延迟打开应用
+    delayedOpenApp();
+}
+```
+
+#### 🎯 正确的取证流程
+
+```
+1. 用户粘贴取证信息
+  ↓
+2. 解析取证信息
+  ↓
+3. 点击"开始自动化"
+  ↓
+4. 🧹 清空剪贴板 (关键!)
+  ↓
+5. 打开权利卫士
+  ↓
+6. 填充备注
+  ↓
+7. 开始录屏 📹
+  ↓
+8. 录制律师取证资质
+  ├─ 打开抖音 (不会弹出"打开看看")
+  ├─ 点击"我"
+  ├─ 点击"三条杠"
+  ├─ 点击"设置"
+  ├─ 下滑页面
+  ├─ 截屏
+  ├─ 点击"资质证照"
+  ├─ 截屏
+  └─ 点击"营业执照"
+  ↓
+9. 然后录制侵权视频
+  ↓
+结束
+```
+
+#### 📦 编译信息
+
+```
+✅ BUILD SUCCESSFUL in 1s
+✅ APK文件: app/build/outputs/apk/debug/app-debug.apk
+✅ 编译时间: 2026-02-03
+```
+
+#### 🔗 Git提交
+
+```
+Commit: 783dfb1
+Message: V2.0: 清空剪贴板机制 - 避免录屏中出现'打开看看'弹窗
+Files: 3 files changed, 78 insertions(+), 333 deletions(-)
+```
+
+---
+
+### V1.9 (2026-02-03) ❌ 已废弃
+
+**抖音自动化 + 随机延迟机制**
+
+**注意**: 此版本已被V2.0替代,因为发现录屏流程问题:
+- 录屏开始后需要先录制律师资质,不应该出现"打开看看"弹窗
+- V2.0采用清空剪贴板方案,更加简单有效
+
+---
+
 ### V1.8 (2025-02-02)
 
 **智能取证信息解析 + UI优化**
@@ -1095,5 +1238,5 @@ if (buttonText.contains("立即开始")) {
 
 [← 返回README](../README.md)
 
-**最后更新**: 2025-01-20
+**最后更新**: 2026-02-03
 
