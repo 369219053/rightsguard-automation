@@ -221,18 +221,6 @@
                     app:cornerRadius="16dp"
                     android:elevation="8dp"
                     android:stateListAnimator="@null"
-                    android:translationZ="4dp"
-                    android:layout_marginBottom="16dp" />
-
-                <!-- UI Dump按钮 (开发专用) -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_ui_dump"
-                    style="@style/SecondaryButtonStyle"
-                    android:text="UI Dump (开发)"
-                    android:textSize="16sp"
-                    app:cornerRadius="16dp"
-                    android:elevation="8dp"
-                    android:stateListAnimator="@null"
                     android:translationZ="4dp" />
             </LinearLayout>
 
