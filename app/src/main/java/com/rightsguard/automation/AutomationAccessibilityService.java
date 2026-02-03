@@ -8,7 +8,6 @@ import android.view.accessibility.AccessibilityEvent;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-import java.util.Random;
 
 /**
  * 自动化无障碍服务
@@ -29,11 +28,6 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private static final String VERIFY_BUTTON_TEXT = "立即验证";
     private static final String DOUYIN_APP_TEXT = "抖音";
 
-    // 抖音应用相关
-    private static final String DOUYIN_PACKAGE = "com.ss.android.ugc.aweme";
-    private static final String DOUYIN_OPEN_BUTTON_ID = "com.ss.android.ugc.aweme:id/tnn"; // "打开看看"按钮
-    private static final String DOUYIN_OPEN_BUTTON_TEXT = "打开看看";
-
     // 系统录屏权限弹窗相关
     private static final String SYSTEM_UI_PACKAGE = "com.android.systemui";
     private static final String SCREEN_SHARE_MODE_SPINNER_ID = "com.android.systemui:id/real_screen_share_mode_spinner";
@@ -43,18 +37,12 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private boolean isRunning = false;
     private boolean hasClickedScreenRecord = false;
     private boolean hasSelectedDouyin = false; // 是否已勾选抖音
-    private boolean hasClickedDouyinOpen = false; // 是否已点击抖音"打开看看"按钮
     private String remark = "";
 
     // 日志收集
     private static final StringBuilder logBuilder = new StringBuilder();
     private static final int MAX_LOG_LENGTH = 50000; // 最大日志长度
     private static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-
-    // 随机延迟 (模拟真人操作,避免被检测)
-    private static final Random random = new Random();
-    private static final int MIN_DELAY_MS = 1500; // 最小延迟 1.5秒
-    private static final int MAX_DELAY_MS = 3000; // 最大延迟 3秒
 
     @Override
     public void onCreate() {
@@ -77,15 +65,6 @@ public class AutomationAccessibilityService extends AccessibilityService {
             if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
                 eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
                 handleSystemScreenShareDialog();
-            }
-            return;
-        }
-
-        // 处理抖音应用的口令打开页面
-        if (DOUYIN_PACKAGE.equals(packageName)) {
-            if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
-                eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-                handleDouyinOpenDialog();
             }
             return;
         }
@@ -153,7 +132,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
         isRunning = true;
         hasClickedScreenRecord = false;
         hasSelectedDouyin = false;
-        hasClickedDouyinOpen = false; // 重置抖音"打开看看"按钮点击状态
+
+        // 🎯 关键: 清空剪贴板,避免打开抖音时弹出"打开看看"
+        clearClipboard();
 
         // 最小化当前应用(返回桌面)
         minimizeCurrentApp();
@@ -578,106 +559,6 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
         } catch (Exception e) {
             Log.e(TAG, "处理系统录屏权限弹窗异常: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * 处理抖音口令打开页面
-     * 自动点击"打开看看"按钮
-     */
-    private void handleDouyinOpenDialog() {
-        // 如果已经点击过,不再重复点击
-        if (hasClickedDouyinOpen) {
-            return;
-        }
-
-        try {
-            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-            if (rootNode == null) {
-                return;
-            }
-
-            // 方法1: 通过ID查找"打开看看"按钮
-            java.util.List<android.view.accessibility.AccessibilityNodeInfo> buttonNodes =
-                rootNode.findAccessibilityNodeInfosByViewId(DOUYIN_OPEN_BUTTON_ID);
-
-            if (buttonNodes != null && !buttonNodes.isEmpty()) {
-                android.view.accessibility.AccessibilityNodeInfo buttonNode = buttonNodes.get(0);
-
-                logD("找到抖音'打开看看'按钮,准备点击");
-
-                // 在新线程中执行随机延迟和点击操作
-                new Thread(() -> {
-                    try {
-                        // 🎯 关键: 随机延迟 1.5s-3s (模拟真人操作)
-                        randomDelay();
-
-                        // 点击按钮
-                        boolean clicked = buttonNode.performAction(
-                            android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
-                        );
-
-                        if (clicked) {
-                            logD("✅ 成功点击'打开看看'按钮,等待进入视频页面...");
-                            hasClickedDouyinOpen = true;
-                        } else {
-                            logE("❌ 点击'打开看看'按钮失败");
-                        }
-
-                        buttonNode.recycle();
-
-                    } catch (Exception e) {
-                        logE("点击'打开看看'按钮异常: " + e.getMessage());
-                    }
-                }).start();
-
-                rootNode.recycle();
-                return;
-            }
-
-            // 方法2: 通过文本查找"打开看看"按钮
-            java.util.List<android.view.accessibility.AccessibilityNodeInfo> textNodes =
-                rootNode.findAccessibilityNodeInfosByText(DOUYIN_OPEN_BUTTON_TEXT);
-
-            if (textNodes != null && !textNodes.isEmpty()) {
-                for (android.view.accessibility.AccessibilityNodeInfo node : textNodes) {
-                    if (node.isClickable()) {
-                        logD("通过文本找到'打开看看'按钮,准备点击");
-
-                        // 在新线程中执行随机延迟和点击操作
-                        new Thread(() -> {
-                            try {
-                                // 🎯 关键: 随机延迟 1.5s-3s (模拟真人操作)
-                                randomDelay();
-
-                                boolean clicked = node.performAction(
-                                    android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
-                                );
-
-                                if (clicked) {
-                                    logD("✅ 成功点击'打开看看'按钮,等待进入视频页面...");
-                                    hasClickedDouyinOpen = true;
-                                } else {
-                                    logE("❌ 点击'打开看看'按钮失败");
-                                }
-
-                                node.recycle();
-
-                            } catch (Exception e) {
-                                logE("点击'打开看看'按钮异常: " + e.getMessage());
-                            }
-                        }).start();
-
-                        rootNode.recycle();
-                        return;
-                    }
-                }
-            }
-
-            rootNode.recycle();
-
-        } catch (Exception e) {
-            logE("处理抖音口令打开页面异常: " + e.getMessage());
         }
     }
 
@@ -1635,28 +1516,23 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
-     * 随机延迟 (模拟真人操作)
-     * 用于录屏过程中的操作,避免操作过快被检测为机器人
-     *
-     * @param minMs 最小延迟时间(毫秒)
-     * @param maxMs 最大延迟时间(毫秒)
+     * 清空剪贴板
+     * 避免打开抖音时弹出"打开看看"页面
      */
-    private void randomDelay(int minMs, int maxMs) {
+    private void clearClipboard() {
         try {
-            int delayMs = minMs + random.nextInt(maxMs - minMs + 1);
-            logD(String.format("⏱️ 随机延迟 %.2f 秒 (模拟真人操作)", delayMs / 1000.0));
-            Thread.sleep(delayMs);
-        } catch (InterruptedException e) {
-            logE("随机延迟被中断: " + e.getMessage());
-        }
-    }
+            android.content.ClipboardManager clipboard =
+                (android.content.ClipboardManager) getSystemService(android.content.Context.CLIPBOARD_SERVICE);
 
-    /**
-     * 标准随机延迟 (1.5s - 3s)
-     * 用于录屏过程中的所有操作
-     */
-    private void randomDelay() {
-        randomDelay(MIN_DELAY_MS, MAX_DELAY_MS);
+            if (clipboard != null) {
+                // 复制一个空文本到剪贴板
+                android.content.ClipData clip = android.content.ClipData.newPlainText("", "");
+                clipboard.setPrimaryClip(clip);
+                logD("🧹 已清空剪贴板,避免打开抖音时弹出'打开看看'");
+            }
+        } catch (Exception e) {
+            logE("清空剪贴板失败: " + e.getMessage());
+        }
     }
 
 }
