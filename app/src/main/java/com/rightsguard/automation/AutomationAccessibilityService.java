@@ -22,6 +22,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private static final String REMARK_INPUT_ID = "com.unitrust.tsa:id/ed_remark";
     private static final String START_BUTTON_ID = "com.unitrust.tsa:id/rl_btn";
     private static final String CONFIRM_BUTTON_ID = "com.unitrust.tsa:id/confirm_button";
+    private static final String CONFIRM_BUTTON_TWO_ID = "com.unitrust.tsa:id/confirm_button_two"; // 取证环境检测结果页面的"开始取证"按钮
 
     // 应用验真界面相关
     private static final String VERIFY_BUTTON_TEXT = "立即验证";
@@ -248,6 +249,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
             ClickScreenRecordThread thread = new ClickScreenRecordThread();
             thread.start();
         }
+
+        // 检测"取证环境检测结果"页面,点击"开始取证"按钮
+        handleEnvironmentCheckResult();
     }
 
     /**
@@ -883,6 +887,63 @@ public class AutomationAccessibilityService extends AccessibilityService {
     public static void clearLogs() {
         synchronized (logBuilder) {
             logBuilder.setLength(0);
+        }
+    }
+
+    /**
+     * 处理"取证环境检测结果"页面
+     */
+    private void handleEnvironmentCheckResult() {
+        try {
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                return;
+            }
+
+            // 查找"取证环境检测结果"文本,确认是环境检测结果页面
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> titleNodes =
+                rootNode.findAccessibilityNodeInfosByText("取证环境检测结果");
+
+            if (titleNodes == null || titleNodes.isEmpty()) {
+                rootNode.recycle();
+                return;
+            }
+
+            logD("🎯 检测到'取证环境检测结果'页面");
+
+            // 查找"开始取证"按钮 (ID: confirm_button_two)
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> buttonNodes =
+                rootNode.findAccessibilityNodeInfosByViewId(CONFIRM_BUTTON_TWO_ID);
+
+            if (buttonNodes != null && !buttonNodes.isEmpty()) {
+                android.view.accessibility.AccessibilityNodeInfo button = buttonNodes.get(0);
+
+                logD("✅ 找到'开始取证'按钮,准备点击...");
+
+                // 等待一下再点击
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+                boolean clicked = button.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+
+                if (clicked) {
+                    logD("✅ 成功点击'开始取证'按钮");
+                } else {
+                    logE("❌ 点击'开始取证'按钮失败");
+                }
+
+                button.recycle();
+            } else {
+                logE("❌ 未找到'开始取证'按钮 (ID: confirm_button_two)");
+            }
+
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("处理'取证环境检测结果'页面失败: " + e.getMessage());
         }
     }
 
