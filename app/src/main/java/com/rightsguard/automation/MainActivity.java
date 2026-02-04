@@ -64,11 +64,10 @@ public class MainActivity extends AppCompatActivity {
         // 停止按钮
         btnStop.setOnClickListener(v -> stopAutomation());
 
-        // 查看日志按钮 - 暂时禁用,等待修复D8编译器bug
+        // 查看日志按钮
         btnViewLog.setOnClickListener(v -> {
-            Toast.makeText(this, "日志功能暂时不可用,请使用logcat查看日志", Toast.LENGTH_SHORT).show();
-            // Intent intent = new Intent(MainActivity.this, LogActivity.class);
-            // startActivity(intent);
+            Intent intent = new Intent(MainActivity.this, LogActivity.class);
+            startActivity(intent);
         });
 
         // 设置按钮
@@ -88,72 +87,16 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // 获取取证信息
-        String evidenceInfo = "";
-        if (etRemark != null && etRemark.getText() != null) {
-            evidenceInfo = etRemark.getText().toString().trim();
-        }
-
-        // 解析取证信息
+        // 获取备注内容
         String remark = "";
-        String infringementUrl = "";
-
-        if (!evidenceInfo.isEmpty()) {
-            // 解析格式: 原创名称-抖音:侵权人-原创链接+侵权链接
-            try {
-                // 1. 提取备注部分(原创名称-抖音:侵权人)
-                int plusIndex = evidenceInfo.indexOf('+');
-                if (plusIndex > 0) {
-                    String beforePlus = evidenceInfo.substring(0, plusIndex);
-
-                    // 查找最后一个URL的起始位置
-                    int lastHttpIndex = beforePlus.lastIndexOf("http");
-                    if (lastHttpIndex > 0) {
-                        String remarkPart = beforePlus.substring(0, lastHttpIndex).trim();
-
-                        // 提取"原创名称-抖音:侵权人"部分
-                        int douyinIndex = remarkPart.indexOf("-抖音:");
-                        if (douyinIndex > 0) {
-                            int lastDash = remarkPart.lastIndexOf('-', douyinIndex - 1);
-                            if (lastDash >= 0) {
-                                remark = remarkPart.substring(0, lastDash).trim();
-                            } else {
-                                remark = remarkPart.substring(0, douyinIndex).trim();
-                            }
-
-                            String infringer = remarkPart.substring(douyinIndex + 4).trim();
-                            if (!infringer.isEmpty()) {
-                                remark = remark + "-抖音:" + infringer;
-                            }
-                        }
-                    }
-
-                    // 2. 提取侵权链接(+号后面的URL)
-                    String afterPlus = evidenceInfo.substring(plusIndex + 1).trim();
-                    int httpIndex = afterPlus.indexOf("http");
-                    if (httpIndex >= 0) {
-                        infringementUrl = afterPlus.substring(httpIndex).trim();
-                        // 移除URL后面可能的空格和其他字符
-                        int spaceIndex = infringementUrl.indexOf(' ');
-                        if (spaceIndex > 0) {
-                            infringementUrl = infringementUrl.substring(0, spaceIndex);
-                        }
-                    }
-                }
-
-                Toast.makeText(this, "✅ 解析成功\n备注: " + remark + "\n侵权链接: " + infringementUrl, Toast.LENGTH_LONG).show();
-
-            } catch (Exception e) {
-                Toast.makeText(this, "⚠️ 解析取证信息失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                remark = evidenceInfo; // 解析失败时使用原始内容
-            }
+        if (etRemark != null && etRemark.getText() != null) {
+            remark = etRemark.getText().toString().trim();
         }
 
         // 启动自动化
         AutomationAccessibilityService service = AutomationAccessibilityService.getInstance();
         if (service != null) {
             service.setRemark(remark);
-            service.setInfringementUrl(infringementUrl);
             service.startAutomation();
             isRunning = true;
             updateStatus(STATUS_RUNNING);

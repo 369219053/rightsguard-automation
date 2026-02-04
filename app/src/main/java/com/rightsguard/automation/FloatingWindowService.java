@@ -1,5 +1,9 @@
 package com.rightsguard.automation;
 
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.graphics.PixelFormat;
@@ -13,11 +17,15 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
+import androidx.core.app.NotificationCompat;
 
 /**
  * 悬浮窗服务
  */
 public class FloatingWindowService extends Service {
+
+    private static final String CHANNEL_ID = "FloatingWindowService";
+    private static final int NOTIFICATION_ID = 1001;
 
     private WindowManager windowManager;
     private View floatingView;
@@ -36,13 +44,55 @@ public class FloatingWindowService extends Service {
 
     private boolean isRunning = false;
     private boolean isMinimized = false;
-    
+
     @Override
     public void onCreate() {
         super.onCreate();
-        
+
+        // 启动前台服务
+        startForegroundService();
+
         // 创建悬浮窗
         createFloatingWindow();
+    }
+
+    /**
+     * 启动前台服务,防止被系统杀死
+     */
+    private void startForegroundService() {
+        // 创建通知渠道 (Android 8.0+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "悬浮窗服务",
+                NotificationManager.IMPORTANCE_LOW
+            );
+            channel.setDescription("保持悬浮窗持续显示");
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+
+        // 创建通知
+        Intent notificationIntent = new Intent(this, MainActivity.class);
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            notificationIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        );
+
+        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("权利卫士自动化")
+            .setContentText("悬浮窗正在运行")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentIntent(pendingIntent)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build();
+
+        // 启动前台服务
+        startForeground(NOTIFICATION_ID, notification);
     }
     
     private void createFloatingWindow() {

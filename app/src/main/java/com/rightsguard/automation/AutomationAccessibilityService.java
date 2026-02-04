@@ -1709,20 +1709,69 @@ public class AutomationAccessibilityService extends AccessibilityService {
             isWaitingForQuarkButton = true;
             logD("⏳ 等待夸克浏览器页面加载,准备点击'打开抖音看精彩视频'按钮...");
 
-            // 等待页面加载和按钮点击(最多等待15秒)
-            // 流程: 夸克打开(1s) -> 加载页面(2s) -> 点击按钮(1s) -> 跳转抖音(2s) -> 视频加载(3s) -> 观看(5s) = 14秒
-            Thread.sleep(15000);
+            // 等待页面加载(3秒)
+            Thread.sleep(3000);
 
-            // 如果15秒后还没点击到按钮,重置标志位
-            if (isWaitingForQuarkButton) {
-                isWaitingForQuarkButton = false;
-                logD("⚠️ 超时未找到'打开抖音'按钮,继续后续流程");
-            }
+            // 尝试通过坐标点击按钮(备用方案)
+            // 按钮位置大约在屏幕底部中央
+            logD("🎯 尝试通过坐标点击'打开抖音看精彩视频'按钮");
+            clickByCoordinates(540, 1700); // 根据截图估算的坐标
+
+            logD("✅ 已点击按钮,等待跳转到抖音");
+
+            // 重置标志位
+            isWaitingForQuarkButton = false;
+
+            // 等待跳转到抖音并观看视频
+            // 流程: 跳转(2s) + 视频加载(3s) + 观看(5s) = 10秒
+            Thread.sleep(10000);
+
+            logD("⏱️ 观看完成,准备最小化抖音");
+
+            // 最小化抖音(返回桌面)
+            minimizeCurrentApp();
+
+            logD("✅ 侵权视频已观看并最小化,准备继续后续流程");
 
         } catch (Exception e) {
             logE("打开侵权链接失败: " + e.getMessage());
             logE("可能原因: 1.夸克浏览器未安装 2.包名不正确 3.链接格式错误");
             isWaitingForQuarkButton = false;
+        }
+    }
+
+    /**
+     * 通过坐标点击屏幕
+     */
+    private void clickByCoordinates(int x, int y) {
+        try {
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logE("❌ rootNode为null,无法点击坐标");
+                return;
+            }
+
+            // 使用全局手势点击
+            android.graphics.Path path = new android.graphics.Path();
+            path.moveTo(x, y);
+
+            android.accessibilityservice.GestureDescription.Builder builder =
+                new android.accessibilityservice.GestureDescription.Builder();
+            android.accessibilityservice.GestureDescription.StrokeDescription stroke =
+                new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 100);
+            builder.addStroke(stroke);
+
+            boolean result = dispatchGesture(builder.build(), null, null);
+
+            if (result) {
+                logD("✅ 坐标点击成功: (" + x + ", " + y + ")");
+            } else {
+                logE("❌ 坐标点击失败: (" + x + ", " + y + ")");
+            }
+
+        } catch (Exception e) {
+            logE("坐标点击异常: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
