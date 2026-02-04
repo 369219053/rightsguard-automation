@@ -53,6 +53,22 @@ public class AutomationAccessibilityService extends AccessibilityService {
         super.onCreate();
         instance = this;
         logD("无障碍服务已创建");
+
+        // 启动悬浮窗服务
+        startFloatingWindow();
+    }
+
+    /**
+     * 启动悬浮窗服务
+     */
+    private void startFloatingWindow() {
+        try {
+            android.content.Intent intent = new android.content.Intent(this, FloatingWindowService.class);
+            startService(intent);
+            logD("✅ 悬浮窗服务已启动");
+        } catch (Exception e) {
+            logE("启动悬浮窗服务失败: " + e.getMessage());
+        }
     }
 
     @Override
@@ -103,7 +119,24 @@ public class AutomationAccessibilityService extends AccessibilityService {
     public void onDestroy() {
         super.onDestroy();
         instance = null;
+
+        // 停止悬浮窗服务
+        stopFloatingWindow();
+
         Log.d(TAG, "服务已销毁");
+    }
+
+    /**
+     * 停止悬浮窗服务
+     */
+    private void stopFloatingWindow() {
+        try {
+            android.content.Intent intent = new android.content.Intent(this, FloatingWindowService.class);
+            stopService(intent);
+            logD("✅ 悬浮窗服务已停止");
+        } catch (Exception e) {
+            logE("停止悬浮窗服务失败: " + e.getMessage());
+        }
     }
 
     /**
