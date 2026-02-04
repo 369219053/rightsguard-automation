@@ -1742,9 +1742,16 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
     /**
      * 通过坐标点击屏幕
+     * 需要Android 7.0 (API 24)+
      */
     private void clickByCoordinates(int x, int y) {
         try {
+            // 检查Android版本
+            if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.N) {
+                logE("❌ 坐标点击需要Android 7.0+,当前版本不支持");
+                return;
+            }
+
             android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
             if (rootNode == null) {
                 logE("❌ rootNode为null,无法点击坐标");
