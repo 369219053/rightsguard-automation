@@ -276,6 +276,12 @@ public class FloatingWindowService extends Service {
     }
     
     @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        // 返回START_STICKY,确保Service被系统杀死后会自动重启
+        return START_STICKY;
+    }
+
+    @Override
     public IBinder onBind(Intent intent) {
         return null;
     }

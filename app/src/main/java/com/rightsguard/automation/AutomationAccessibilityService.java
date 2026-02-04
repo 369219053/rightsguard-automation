@@ -534,50 +534,71 @@ public class AutomationAccessibilityService extends AccessibilityService {
         try {
             android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
             if (rootNode == null) {
+                logD("⚠️ rootNode为null,等待页面加载");
                 return;
             }
 
-            // 查找"打开抖音"或"看精彩视频"按钮
+            logD("🔍 开始查找'打开抖音看精彩视频'按钮...");
+
+            // 查找"打开抖音看精彩视频"按钮 (完整文字优先)
             java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
-                rootNode.findAccessibilityNodeInfosByText("打开抖音");
+                rootNode.findAccessibilityNodeInfosByText("打开抖音看精彩视频");
 
             if (nodes == null || nodes.isEmpty()) {
-                // 尝试查找"看精彩视频"
+                logD("⚠️ 未找到完整文字,尝试查找'打开抖音'");
+                nodes = rootNode.findAccessibilityNodeInfosByText("打开抖音");
+            }
+
+            if (nodes == null || nodes.isEmpty()) {
+                logD("⚠️ 未找到'打开抖音',尝试查找'看精彩视频'");
                 nodes = rootNode.findAccessibilityNodeInfosByText("看精彩视频");
             }
 
             if (nodes == null || nodes.isEmpty()) {
-                // 尝试查找完整文字"打开抖音看精彩视频"
-                nodes = rootNode.findAccessibilityNodeInfosByText("打开抖音看精彩视频");
+                logD("⚠️ 未找到'看精彩视频',尝试查找'精彩视频'");
+                nodes = rootNode.findAccessibilityNodeInfosByText("精彩视频");
             }
 
             if (nodes != null && !nodes.isEmpty()) {
+                logD("✅ 找到 " + nodes.size() + " 个匹配节点");
+
                 for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
-                    logD("🎯 找到'打开抖音看精彩视频'相关文本");
+                    CharSequence text = node.getText();
+                    CharSequence desc = node.getContentDescription();
+                    logD("📝 节点文本: " + (text != null ? text : "(无)") +
+                         ", 描述: " + (desc != null ? desc : "(无)") +
+                         ", 可点击: " + node.isClickable());
 
                     // 尝试点击节点本身
                     boolean clicked = false;
                     if (node.isClickable()) {
-                        logD("节点本身可点击,准备点击");
+                        logD("✅ 节点本身可点击,准备点击");
                         clicked = node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
                     } else {
+                        logD("⚠️ 节点不可点击,尝试查找父节点");
                         // 尝试点击父节点
                         android.view.accessibility.AccessibilityNodeInfo parent = node.getParent();
-                        if (parent != null && parent.isClickable()) {
-                            logD("父节点可点击,准备点击");
-                            clicked = parent.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
-                        } else if (parent != null) {
-                            // 尝试点击祖父节点
-                            android.view.accessibility.AccessibilityNodeInfo grandParent = parent.getParent();
-                            if (grandParent != null && grandParent.isClickable()) {
-                                logD("祖父节点可点击,准备点击");
-                                clicked = grandParent.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                        if (parent != null) {
+                            logD("📍 父节点可点击: " + parent.isClickable());
+                            if (parent.isClickable()) {
+                                logD("✅ 父节点可点击,准备点击");
+                                clicked = parent.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            } else {
+                                // 尝试点击祖父节点
+                                android.view.accessibility.AccessibilityNodeInfo grandParent = parent.getParent();
+                                if (grandParent != null) {
+                                    logD("📍 祖父节点可点击: " + grandParent.isClickable());
+                                    if (grandParent.isClickable()) {
+                                        logD("✅ 祖父节点可点击,准备点击");
+                                        clicked = grandParent.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                                    }
+                                }
                             }
                         }
                     }
 
                     if (clicked) {
-                        logD("✅ 已点击'打开抖音看精彩视频'按钮");
+                        logD("🎉 成功点击'打开抖音看精彩视频'按钮!");
 
                         // 重置标志位
                         isWaitingForQuarkButton = false;
@@ -602,15 +623,18 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                         break;
                     } else {
-                        logE("❌ 点击'打开抖音看精彩视频'按钮失败");
+                        logE("❌ 点击失败,尝试下一个节点");
                     }
                 }
+            } else {
+                logD("⚠️ 未找到任何匹配的按钮文本,继续等待...");
             }
 
             rootNode.recycle();
 
         } catch (Exception e) {
             logE("处理夸克浏览器按钮失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
