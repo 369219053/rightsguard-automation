@@ -12,6 +12,121 @@
 
 ## 🚀 版本历史
 
+### V2.1 (2026-02-04) 🌐 重要更新!
+
+**打开侵权链接功能 - 通过夸克浏览器观看侵权视频**
+
+#### ✅ 完成内容
+
+**1. 问题背景**
+- 取证流程需要先观看侵权视频
+- 侵权链接只有地址,没有分享链接
+- 无法直接在抖音中打开侵权视频
+- 需要通过浏览器访问链接,然后跳转到抖音
+
+**2. 解决方案**
+- ✅ 在开始录屏前先打开侵权链接
+- ✅ 通过夸克浏览器访问侵权链接
+- ✅ 自动跳转到抖音观看侵权视频
+- ✅ 观看完成后自动最小化抖音
+- ✅ 然后继续执行后续取证流程
+
+**3. 代码实现**
+- ✅ 添加`QUARK_BROWSER_PACKAGE`常量
+- ✅ 添加`infringementUrl`字段
+- ✅ 添加`setInfringementUrl()`方法
+- ✅ 添加`openInfringementUrl()`方法
+- ✅ 修改`startAutomation()`流程
+
+**4. 取证信息解析**
+- ✅ 在MainActivity中添加解析逻辑
+- ✅ 提取备注(原创名称-抖音:侵权人)
+- ✅ 提取侵权链接
+- ✅ 传递侵权链接给Service
+
+**5. 文档更新**
+- ✅ 更新README.md(V2.1更新日志)
+- ✅ 更新自动化文档.md(打开侵权链接功能说明)
+- ✅ 更新核心流程图
+
+#### 📝 技术细节
+
+**打开侵权链接实现**:
+```java
+/**
+ * 打开侵权链接(通过夸克浏览器)
+ */
+private void openInfringementUrl(String url) {
+    // 使用Intent直接打开链接
+    Intent intent = new Intent(Intent.ACTION_VIEW);
+    intent.setData(Uri.parse(url));
+    intent.setPackage(QUARK_BROWSER_PACKAGE); // 夸克浏览器
+    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    startActivity(intent);
+
+    // 等待8秒: 夸克打开(1s) + 加载(2s) + 跳转抖音(2s) + 视频加载(3s)
+    Thread.sleep(8000);
+
+    // 最小化抖音
+    minimizeCurrentApp();
+}
+```
+
+**解析取证信息**:
+```java
+// 格式: 原创名称-抖音:侵权人-原创链接+侵权链接
+// 示例: 张三-抖音:李四-https://v.douyin.com/xxx+https://www.douyin.com/yyy
+
+// 1. 提取备注: 原创名称-抖音:侵权人
+// 2. 提取侵权链接: +号后面的URL
+```
+
+#### 🎯 完整流程
+
+```
+1. 用户粘贴取证信息
+  ↓
+2. 解析取证信息,提取侵权链接
+  ↓
+3. 🆕 打开夸克浏览器访问侵权链接
+  ↓
+4. 🆕 等待跳转到抖音(8秒)
+  ↓
+5. 🆕 观看侵权视频
+  ↓
+6. 🆕 最小化抖音(返回桌面)
+  ↓
+7. 清空剪贴板
+  ↓
+8. 打开权利卫士
+  ↓
+9. 填充备注
+  ↓
+10. 开始录屏
+  ↓
+11. 录制律师资质
+  ↓
+12. 录制侵权视频
+```
+
+#### 📦 编译信息
+
+```
+✅ BUILD SUCCESSFUL in 1s
+✅ APK文件: app/build/outputs/apk/debug/app-debug.apk
+✅ 编译时间: 2026-02-04
+```
+
+#### 🔗 Git提交
+
+```
+Commit: 9704554
+Message: V2.1: 打开侵权链接功能 - 通过夸克浏览器观看侵权视频
+Files: 2 files changed, 119 insertions(+), 187 deletions(-)
+```
+
+---
+
 ### V2.0 (2026-02-03) ⭐️ 重要更新!
 
 **清空剪贴板机制 - 避免录屏中出现"打开看看"弹窗**
@@ -1238,5 +1353,5 @@ if (buttonText.contains("立即开始")) {
 
 [← 返回README](../README.md)
 
-**最后更新**: 2026-02-03
+**最后更新**: 2026-02-04
 
