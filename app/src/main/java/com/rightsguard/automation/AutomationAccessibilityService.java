@@ -40,6 +40,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private boolean isRunning = false;
     private boolean hasClickedScreenRecord = false;
     private boolean hasSelectedDouyin = false; // 是否已勾选抖音
+    private boolean isWaitingForQuarkButton = false; // 是否正在等待夸克浏览器的"打开抖音"按钮
     private String remark = "";
     private String infringementUrl = ""; // 侵权链接
 
@@ -85,6 +86,15 @@ public class AutomationAccessibilityService extends AccessibilityService {
             if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
                 eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
                 handleSystemScreenShareDialog();
+            }
+            return;
+        }
+
+        // 处理夸克浏览器的"打开抖音"按钮
+        if (QUARK_BROWSER_PACKAGE.equals(packageName) && isWaitingForQuarkButton) {
+            if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+                eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+                handleQuarkBrowserButton();
             }
             return;
         }
@@ -514,6 +524,93 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
         } catch (Exception e) {
             Log.e(TAG, "点击确认按钮异常: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 处理夸克浏览器的"打开抖音看精彩视频"按钮
+     */
+    private void handleQuarkBrowserButton() {
+        try {
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                return;
+            }
+
+            // 查找"打开抖音"或"看精彩视频"按钮
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
+                rootNode.findAccessibilityNodeInfosByText("打开抖音");
+
+            if (nodes == null || nodes.isEmpty()) {
+                // 尝试查找"看精彩视频"
+                nodes = rootNode.findAccessibilityNodeInfosByText("看精彩视频");
+            }
+
+            if (nodes == null || nodes.isEmpty()) {
+                // 尝试查找完整文字"打开抖音看精彩视频"
+                nodes = rootNode.findAccessibilityNodeInfosByText("打开抖音看精彩视频");
+            }
+
+            if (nodes != null && !nodes.isEmpty()) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
+                    logD("🎯 找到'打开抖音看精彩视频'相关文本");
+
+                    // 尝试点击节点本身
+                    boolean clicked = false;
+                    if (node.isClickable()) {
+                        logD("节点本身可点击,准备点击");
+                        clicked = node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                    } else {
+                        // 尝试点击父节点
+                        android.view.accessibility.AccessibilityNodeInfo parent = node.getParent();
+                        if (parent != null && parent.isClickable()) {
+                            logD("父节点可点击,准备点击");
+                            clicked = parent.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                        } else if (parent != null) {
+                            // 尝试点击祖父节点
+                            android.view.accessibility.AccessibilityNodeInfo grandParent = parent.getParent();
+                            if (grandParent != null && grandParent.isClickable()) {
+                                logD("祖父节点可点击,准备点击");
+                                clicked = grandParent.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            }
+                        }
+                    }
+
+                    if (clicked) {
+                        logD("✅ 已点击'打开抖音看精彩视频'按钮");
+
+                        // 重置标志位
+                        isWaitingForQuarkButton = false;
+
+                        // 等待跳转到抖音并观看视频
+                        new Thread(() -> {
+                            try {
+                                // 等待跳转(2秒) + 视频加载(3秒) + 观看(5秒) = 10秒
+                                Thread.sleep(10000);
+
+                                logD("⏱️ 观看完成,准备最小化抖音");
+
+                                // 最小化抖音(返回桌面)
+                                minimizeCurrentApp();
+
+                                logD("✅ 侵权视频已观看并最小化,准备继续后续流程");
+
+                            } catch (InterruptedException e) {
+                                logE("等待过程被中断: " + e.getMessage());
+                            }
+                        }).start();
+
+                        break;
+                    } else {
+                        logE("❌ 点击'打开抖音看精彩视频'按钮失败");
+                    }
+                }
+            }
+
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("处理夸克浏览器按钮失败: " + e.getMessage());
         }
     }
 
@@ -1569,7 +1666,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
     /**
      * 打开侵权链接(通过夸克浏览器)
-     * 流程: 夸克浏览器打开链接 -> 自动跳转抖音 -> 观看视频 -> 最小化
+     * 流程: 夸克浏览器打开链接 -> 点击"打开抖音看精彩视频" -> 跳转抖音 -> 观看视频 -> 最小化
      */
     private void openInfringementUrl(String url) {
         try {
@@ -1584,30 +1681,24 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
             logD("✅ 已打开夸克浏览器访问侵权链接");
 
-            // 等待夸克浏览器加载并跳转到抖音
-            // 预计流程: 夸克打开(1s) -> 加载页面(2s) -> 跳转抖音(2s) -> 视频加载(3s) = 8秒
-            new Thread(() -> {
-                try {
-                    Thread.sleep(8000); // 等待8秒
+            // 设置标志位,等待"打开抖音"按钮出现
+            isWaitingForQuarkButton = true;
+            logD("⏳ 等待夸克浏览器页面加载,准备点击'打开抖音看精彩视频'按钮...");
 
-                    logD("⏱️ 等待完成,准备最小化抖音");
+            // 等待页面加载和按钮点击(最多等待15秒)
+            // 流程: 夸克打开(1s) -> 加载页面(2s) -> 点击按钮(1s) -> 跳转抖音(2s) -> 视频加载(3s) -> 观看(5s) = 14秒
+            Thread.sleep(15000);
 
-                    // 最小化抖音(返回桌面)
-                    minimizeCurrentApp();
-
-                    logD("✅ 侵权视频已打开并最小化,准备继续后续流程");
-
-                } catch (InterruptedException e) {
-                    logE("等待过程被中断: " + e.getMessage());
-                }
-            }).start();
-
-            // 主线程也等待8秒,确保流程完成后再继续
-            Thread.sleep(8000);
+            // 如果15秒后还没点击到按钮,重置标志位
+            if (isWaitingForQuarkButton) {
+                isWaitingForQuarkButton = false;
+                logD("⚠️ 超时未找到'打开抖音'按钮,继续后续流程");
+            }
 
         } catch (Exception e) {
             logE("打开侵权链接失败: " + e.getMessage());
             logE("可能原因: 1.夸克浏览器未安装 2.包名不正确 3.链接格式错误");
+            isWaitingForQuarkButton = false;
         }
     }
 
