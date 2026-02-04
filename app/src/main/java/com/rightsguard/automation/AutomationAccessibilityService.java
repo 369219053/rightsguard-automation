@@ -33,11 +33,15 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private static final String SCREEN_SHARE_MODE_SPINNER_ID = "com.android.systemui:id/real_screen_share_mode_spinner";
     private static final String CONTINUE_BUTTON_ID = "android:id/button1";
 
+    // 夸克浏览器包名
+    private static final String QUARK_BROWSER_PACKAGE = "com.quark.browser";
+
     private static AutomationAccessibilityService instance;
     private boolean isRunning = false;
     private boolean hasClickedScreenRecord = false;
     private boolean hasSelectedDouyin = false; // 是否已勾选抖音
     private String remark = "";
+    private String infringementUrl = ""; // 侵权链接
 
     // 日志收集
     private static final StringBuilder logBuilder = new StringBuilder();
@@ -125,6 +129,14 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
+     * 设置侵权链接
+     */
+    public void setInfringementUrl(String url) {
+        this.infringementUrl = url != null ? url : "";
+        logD("📝 设置侵权链接: " + this.infringementUrl);
+    }
+
+    /**
      * 启动自动化
      */
     public void startAutomation() {
@@ -133,13 +145,20 @@ public class AutomationAccessibilityService extends AccessibilityService {
         hasClickedScreenRecord = false;
         hasSelectedDouyin = false;
 
-        // 🎯 关键: 清空剪贴板,避免打开抖音时弹出"打开看看"
+        // 🆕 步骤1: 打开侵权链接(通过夸克浏览器)
+        if (infringementUrl != null && !infringementUrl.isEmpty()) {
+            openInfringementUrl(infringementUrl);
+        } else {
+            logD("⚠️ 未设置侵权链接,跳过打开步骤");
+        }
+
+        // 🧹 步骤2: 清空剪贴板,避免打开抖音时弹出"打开看看"
         clearClipboard();
 
-        // 最小化当前应用(返回桌面)
+        // 步骤3: 最小化当前应用(返回桌面)
         minimizeCurrentApp();
 
-        // 延迟打开应用
+        // 步骤4: 延迟打开权利卫士
         delayedOpenApp();
     }
 
@@ -1512,6 +1531,50 @@ public class AutomationAccessibilityService extends AccessibilityService {
         } catch (Exception e) {
             logE("分享文件失败: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * 打开侵权链接(通过夸克浏览器)
+     * 流程: 夸克浏览器打开链接 -> 自动跳转抖音 -> 观看视频 -> 最小化
+     */
+    private void openInfringementUrl(String url) {
+        try {
+            logD("🌐 准备打开侵权链接: " + url);
+
+            // 使用Intent直接打开链接
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+            intent.setData(android.net.Uri.parse(url));
+            intent.setPackage(QUARK_BROWSER_PACKAGE); // 指定使用夸克浏览器
+            intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+
+            logD("✅ 已打开夸克浏览器访问侵权链接");
+
+            // 等待夸克浏览器加载并跳转到抖音
+            // 预计流程: 夸克打开(1s) -> 加载页面(2s) -> 跳转抖音(2s) -> 视频加载(3s) = 8秒
+            new Thread(() -> {
+                try {
+                    Thread.sleep(8000); // 等待8秒
+
+                    logD("⏱️ 等待完成,准备最小化抖音");
+
+                    // 最小化抖音(返回桌面)
+                    minimizeCurrentApp();
+
+                    logD("✅ 侵权视频已打开并最小化,准备继续后续流程");
+
+                } catch (InterruptedException e) {
+                    logE("等待过程被中断: " + e.getMessage());
+                }
+            }).start();
+
+            // 主线程也等待8秒,确保流程完成后再继续
+            Thread.sleep(8000);
+
+        } catch (Exception e) {
+            logE("打开侵权链接失败: " + e.getMessage());
+            logE("可能原因: 1.夸克浏览器未安装 2.包名不正确 3.链接格式错误");
         }
     }
 
