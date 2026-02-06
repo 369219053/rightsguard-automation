@@ -46,6 +46,11 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private String remark = "";
     private String infringementUrl = ""; // 侵权链接
 
+    // 权利卫士取证阶段标志位
+    private boolean isRightsGuardEvidencePhase = false; // 是否处于权利卫士取证阶段(权利卫士打开抖音后)
+    private boolean hasClickedDouyinMore = false; // 是否已点击抖音"更多"按钮
+    private boolean hasClickedDouyinSettings = false; // 是否已点击抖音"设置"按钮
+
     // 日志收集
     private static final StringBuilder logBuilder = new StringBuilder();
     private static final int MAX_LOG_LENGTH = 50000; // 最大日志长度
@@ -98,7 +103,14 @@ public class AutomationAccessibilityService extends AccessibilityService {
             return;
         }
 
-
+        // 🆕 处理抖音事件(仅在权利卫士取证阶段)
+        if (DOUYIN_PACKAGE.equals(packageName) && isRightsGuardEvidencePhase) {
+            if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+                eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+                handleDouyinMePage();
+            }
+            return;
+        }
 
         // 只处理权利卫士应用的事件
         if (!TARGET_PACKAGE.equals(packageName)) {
@@ -1031,6 +1043,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                 if (clicked) {
                     logD("✅ 成功点击'开始取证'按钮");
+                    // 🆕 设置权利卫士取证阶段标志位
+                    isRightsGuardEvidencePhase = true;
+                    logD("🎯 进入权利卫士取证阶段,将监听抖音事件");
                 } else {
                     logE("❌ 点击'开始取证'按钮失败");
                 }
@@ -1985,6 +2000,136 @@ public class AutomationAccessibilityService extends AccessibilityService {
             }
         } catch (Exception e) {
             logE("清空剪贴板失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🆕 随机延迟1-2秒,模拟真人操作
+     */
+    private void randomDelay() {
+        try {
+            // 生成1000-2000毫秒的随机延迟
+            int delayMs = 1000 + new java.util.Random().nextInt(1000);
+            logD("⏱️ 随机延迟 " + delayMs + "ms (模拟真人操作)");
+            Thread.sleep(delayMs);
+        } catch (InterruptedException e) {
+            logE("随机延迟失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🆕 处理抖音"我"页面(权利卫士取证阶段)
+     */
+    private void handleDouyinMePage() {
+        try {
+            // 步骤1: 点击"更多"按钮
+            if (!hasClickedDouyinMore) {
+                logD("📱 检测到抖音页面,准备点击'更多'按钮...");
+                randomDelay(); // 🆕 随机延迟1-3秒
+                clickDouyinMoreButton();
+                return;
+            }
+
+            // 步骤2: 点击"设置"按钮
+            if (!hasClickedDouyinSettings) {
+                logD("📱 检测到'更多'菜单,准备点击'设置'按钮...");
+                randomDelay(); // 🆕 随机延迟1-3秒
+                clickDouyinSettingsButton();
+                return;
+            }
+
+        } catch (Exception e) {
+            logE("处理抖音页面失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🆕 点击抖音"更多"按钮(三条杠)
+     */
+    private void clickDouyinMoreButton() {
+        try {
+            logD("🔍 尝试点击抖音'更多'按钮...");
+
+            // 方法1: 尝试通过content-desc查找"更多"按钮
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode != null) {
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> moreNodes =
+                    rootNode.findAccessibilityNodeInfosByText("更多");
+
+                if (moreNodes != null && !moreNodes.isEmpty()) {
+                    for (android.view.accessibility.AccessibilityNodeInfo node : moreNodes) {
+                        if (node.isClickable()) {
+                            boolean clicked = node.performAction(
+                                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                            );
+                            if (clicked) {
+                                logD("✅ 成功点击'更多'按钮(通过文本查找)");
+                                hasClickedDouyinMore = true;
+                                rootNode.recycle();
+                                return;
+                            }
+                        }
+                    }
+                }
+                rootNode.recycle();
+            }
+
+            // 方法2: 使用坐标点击(备用方案)
+            logD("⚠️ 未找到'更多'按钮,使用坐标点击...");
+            Runtime.getRuntime().exec("input tap 984 192");
+            logD("✅ 已点击'更多'按钮 (坐标: 984, 192)");
+            hasClickedDouyinMore = true;
+
+        } catch (Exception e) {
+            logE("点击'更多'按钮失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🆕 点击抖音"设置"按钮
+     */
+    private void clickDouyinSettingsButton() {
+        try {
+            logD("🔍 尝试点击抖音'设置'按钮...");
+
+            // 方法1: 尝试通过文本查找"设置"按钮
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode != null) {
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> settingsNodes =
+                    rootNode.findAccessibilityNodeInfosByText("设置");
+
+                if (settingsNodes != null && !settingsNodes.isEmpty()) {
+                    for (android.view.accessibility.AccessibilityNodeInfo node : settingsNodes) {
+                        // 查找可点击的父节点
+                        android.view.accessibility.AccessibilityNodeInfo clickableNode = node;
+                        while (clickableNode != null && !clickableNode.isClickable()) {
+                            clickableNode = clickableNode.getParent();
+                        }
+
+                        if (clickableNode != null && clickableNode.isClickable()) {
+                            boolean clicked = clickableNode.performAction(
+                                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                            );
+                            if (clicked) {
+                                logD("✅ 成功点击'设置'按钮(通过文本查找)");
+                                hasClickedDouyinSettings = true;
+                                rootNode.recycle();
+                                return;
+                            }
+                        }
+                    }
+                }
+                rootNode.recycle();
+            }
+
+            // 方法2: 使用坐标点击(备用方案)
+            logD("⚠️ 未找到'设置'按钮,使用坐标点击...");
+            Runtime.getRuntime().exec("input tap 627 186");
+            logD("✅ 已点击'设置'按钮 (坐标: 627, 186)");
+            hasClickedDouyinSettings = true;
+
+        } catch (Exception e) {
+            logE("点击'设置'按钮失败: " + e.getMessage());
         }
     }
 
