@@ -159,25 +159,68 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("MainActivity", "✅ 侵权链接: " + result.infringementUrl);
             }
 
-            // 🆕 提取备注 (第一个URL之前的内容)
-            int firstHttpIndex = info.indexOf("http://");
-            int firstHttpsIndex = info.indexOf("https://");
-            int firstUrlStart = -1;
+            // 🆕 提取备注 (格式: 原创名称-抖音:侵权人名称)
+            int douyinIndex = info.indexOf("-抖音:");
 
-            if (firstHttpIndex >= 0 && firstHttpsIndex >= 0) {
-                firstUrlStart = Math.min(firstHttpIndex, firstHttpsIndex);
-            } else if (firstHttpIndex >= 0) {
-                firstUrlStart = firstHttpIndex;
-            } else if (firstHttpsIndex >= 0) {
-                firstUrlStart = firstHttpsIndex;
-            }
+            if (douyinIndex > 0) {
+                // 找到了"-抖音:",提取原创名称和侵权人名称
+                String originalName = info.substring(0, douyinIndex).trim();
 
-            if (firstUrlStart > 0) {
-                result.remark = info.substring(0, firstUrlStart).trim();
+                // 从"-抖音:"之后开始查找侵权人名称
+                String afterDouyin = info.substring(douyinIndex + 4); // 跳过"-抖音:"
+
+                // 侵权人名称到下一个"-"之前
+                int nextDash = afterDouyin.indexOf("-");
+                String infringerName;
+                if (nextDash > 0) {
+                    infringerName = afterDouyin.substring(0, nextDash).trim();
+                } else {
+                    // 如果没有"-",就到空格或URL之前
+                    int spaceIndex = afterDouyin.indexOf(" ");
+                    int httpIndex = afterDouyin.indexOf("http");
+                    int endIndex = -1;
+
+                    if (spaceIndex > 0 && httpIndex > 0) {
+                        endIndex = Math.min(spaceIndex, httpIndex);
+                    } else if (spaceIndex > 0) {
+                        endIndex = spaceIndex;
+                    } else if (httpIndex > 0) {
+                        endIndex = httpIndex;
+                    }
+
+                    if (endIndex > 0) {
+                        infringerName = afterDouyin.substring(0, endIndex).trim();
+                    } else {
+                        infringerName = afterDouyin.trim();
+                    }
+                }
+
+                // 生成备注: 原创名称-抖音:侵权人名称
+                result.remark = originalName + "-抖音:" + infringerName;
                 Log.d("MainActivity", "✅ 备注: " + result.remark);
+                Log.d("MainActivity", "  - 原创名称: " + originalName);
+                Log.d("MainActivity", "  - 侵权人名称: " + infringerName);
             } else {
-                result.remark = info;
-                Log.d("MainActivity", "⚠️ 未找到URL,使用完整内容作为备注");
+                // 没有找到"-抖音:",使用第一个URL之前的内容
+                int firstHttpIndex = info.indexOf("http://");
+                int firstHttpsIndex = info.indexOf("https://");
+                int firstUrlStart = -1;
+
+                if (firstHttpIndex >= 0 && firstHttpsIndex >= 0) {
+                    firstUrlStart = Math.min(firstHttpIndex, firstHttpsIndex);
+                } else if (firstHttpIndex >= 0) {
+                    firstUrlStart = firstHttpIndex;
+                } else if (firstHttpsIndex >= 0) {
+                    firstUrlStart = firstHttpsIndex;
+                }
+
+                if (firstUrlStart > 0) {
+                    result.remark = info.substring(0, firstUrlStart).trim();
+                    Log.d("MainActivity", "✅ 备注: " + result.remark);
+                } else {
+                    result.remark = info;
+                    Log.d("MainActivity", "⚠️ 未找到URL,使用完整内容作为备注");
+                }
             }
 
         } catch (Exception e) {

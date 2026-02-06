@@ -1683,11 +1683,18 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     switchToDouyin();
                 }
 
-                // 等待抖音启动并加载视频
-                logD("⏱️ 等待抖音启动并加载视频(3秒)...");
-                Thread.sleep(3000);
+                // 等待抖音启动并加载视频,观看5秒
+                logD("⏱️ 等待抖音启动并加载视频...");
+                Thread.sleep(2000); // 等待2秒让抖音启动
 
-                logD("✅ 抖音已打开,侵权视频应该正在显示");
+                logD("✅ 抖音已打开,侵权视频正在显示");
+                logD("👀 观看侵权视频5秒...");
+                Thread.sleep(5000); // 观看5秒
+
+                logD("✅ 观看完成,准备返回首页");
+
+                // 🆕 智能返回到首页并点击"我"
+                returnToDouyinHomeAndClickMe();
 
                 // 🆕 步骤: 清空剪贴板,避免打开抖音时弹出"打开看看"
                 clearClipboard();
@@ -1880,6 +1887,84 @@ public class AutomationAccessibilityService extends AccessibilityService {
         } catch (Exception e) {
             logE("坐标点击异常: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * 智能返回到抖音首页并点击"我"
+     */
+    private void returnToDouyinHomeAndClickMe() {
+        try {
+            // 第一次返回
+            logD("🔙 按返回键返回首页...");
+            performGlobalAction(GLOBAL_ACTION_BACK);
+            Thread.sleep(500);
+
+            // 检查是否到达首页(通过查找底部导航栏)
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            boolean hasBottomNav = checkForBottomNavigation(rootNode);
+
+            if (!hasBottomNav) {
+                logD("⚠️ 未到达首页,再次按返回键...");
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(500);
+            }
+
+            logD("✅ 已到达首页");
+
+            // 点击"我"按钮 (使用坐标点击,因为UI dump可能超时)
+            logD("👤 点击'我'按钮...");
+            clickMeButton();
+            Thread.sleep(1000);
+
+            logD("✅ 已进入'我'页面");
+
+        } catch (Exception e) {
+            logE("❌ 返回首页并点击'我'失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 检查是否有底部导航栏
+     */
+    private boolean checkForBottomNavigation(android.view.accessibility.AccessibilityNodeInfo rootNode) {
+        if (rootNode == null) {
+            return false;
+        }
+
+        try {
+            // 查找包含"我"文本的节点
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> meNodes = rootNode.findAccessibilityNodeInfosByText("我");
+            if (meNodes != null && !meNodes.isEmpty()) {
+                // 检查是否在屏幕底部 (y坐标 > 2000)
+                for (android.view.accessibility.AccessibilityNodeInfo node : meNodes) {
+                    android.graphics.Rect rect = new android.graphics.Rect();
+                    node.getBoundsInScreen(rect);
+                    if (rect.top > 2000) {
+                        logD("✅ 检测到底部导航栏");
+                        return true;
+                    }
+                }
+            }
+
+            logD("⚠️ 未检测到底部导航栏");
+            return false;
+        } catch (Exception e) {
+            logE("检查底部导航栏失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 点击"我"按钮 (使用坐标)
+     */
+    private void clickMeButton() {
+        try {
+            // 抖音"我"按钮通常在右下角: [972, 2300]
+            Runtime.getRuntime().exec("input tap 972 2300");
+            logD("✅ 已点击'我'按钮 (坐标: 972, 2300)");
+        } catch (Exception e) {
+            logE("点击'我'按钮失败: " + e.getMessage());
         }
     }
 
