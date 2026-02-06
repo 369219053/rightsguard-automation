@@ -49,72 +49,15 @@ public class FloatingWindowService extends Service {
     public void onCreate() {
         super.onCreate();
 
-        // 启动前台服务(添加try-catch保护)
-        try {
-            startForegroundService();
-        } catch (Exception e) {
-            android.util.Log.e("FloatingWindowService", "启动前台服务失败: " + e.getMessage());
-            // 降级为普通Service,继续运行
-        }
+        // 🔧 注意: 悬浮窗服务不需要前台Service
+        // 因为它有悬浮窗权限,系统会保持它运行
+        // 而且targetSDK=35时,前台Service启动会失败
 
         // 创建悬浮窗
         createFloatingWindow();
     }
 
-    /**
-     * 启动前台服务,防止被系统杀死
-     */
-    private void startForegroundService() {
-        try {
-            // 创建通知渠道 (Android 8.0+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "悬浮窗服务",
-                    NotificationManager.IMPORTANCE_LOW
-                );
-                channel.setDescription("保持悬浮窗持续显示");
-                NotificationManager manager = getSystemService(NotificationManager.class);
-                if (manager != null) {
-                    manager.createNotificationChannel(channel);
-                }
-            }
 
-            // 创建通知Intent
-            Intent notificationIntent = new Intent(this, MainActivity.class);
-
-            // 根据Android版本选择PendingIntent标志
-            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                flags |= PendingIntent.FLAG_IMMUTABLE;
-            }
-
-            PendingIntent pendingIntent = PendingIntent.getActivity(
-                this,
-                0,
-                notificationIntent,
-                flags
-            );
-
-            // 创建通知(兼容低版本)
-            NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("权利卫士自动化")
-                .setContentText("悬浮窗正在运行")
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentIntent(pendingIntent)
-                .setPriority(NotificationCompat.PRIORITY_LOW);
-
-            Notification notification = builder.build();
-
-            // 启动前台服务
-            startForeground(NOTIFICATION_ID, notification);
-
-        } catch (Exception e) {
-            android.util.Log.e("FloatingWindowService", "前台服务启动异常: " + e.getMessage());
-            throw e; // 重新抛出,让外层catch处理
-        }
-    }
-    
     private void createFloatingWindow() {
         // 获取WindowManager
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);

@@ -116,15 +116,22 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
     }
 
     private void updateLogDisplay() {
-        String logs = AutomationAccessibilityService.getLogs();
+        try {
+            String logs = AutomationAccessibilityService.getLogs();
 
-        if (logs == null || logs.isEmpty()) {
-            tvLogContent.setText(R.string.log_empty);
-            tvLogContent.setTextColor(getResources().getColor(R.color.text_hint, null));
-        } else {
-            tvLogContent.setText(logs);
-            tvLogContent.setTextColor(getResources().getColor(R.color.text_secondary, null));
-            scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+            if (logs == null || logs.isEmpty()) {
+                tvLogContent.setText(R.string.log_empty);
+                tvLogContent.setTextColor(getResources().getColor(R.color.text_hint, null));
+            } else {
+                tvLogContent.setText(logs);
+                tvLogContent.setTextColor(getResources().getColor(R.color.text_secondary, null));
+                scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            tvLogContent.setText("❌ 日志加载失败: " + e.getMessage());
+            tvLogContent.setTextColor(getResources().getColor(android.R.color.holo_red_dark, null));
+            Toast.makeText(this, "日志加载失败: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -182,21 +189,24 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
             markdown.append("---\n\n");
             markdown.append("*由权利卫士取证自动化系统自动生成*\n");
 
-            // 2. 保存到Documents/RightsGuard/目录
+            // 2. 保存到应用私有外部存储目录(不需要权限,Android 11+兼容)
             String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault())
                     .format(new Date());
             String fileName = "Automation_Log_" + timestamp + ".md";
 
-            File documentsDir = Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOCUMENTS);
-            File rightsGuardDir = new File(documentsDir, "RightsGuard");
+            // 使用应用私有目录,避免权限问题
+            File logsDir = new File(getExternalFilesDir(null), "Logs");
 
             // 确保目录存在
-            if (!rightsGuardDir.exists()) {
-                rightsGuardDir.mkdirs();
+            if (!logsDir.exists()) {
+                boolean created = logsDir.mkdirs();
+                if (!created) {
+                    Toast.makeText(this, "❌ 创建日志目录失败", Toast.LENGTH_SHORT).show();
+                    return;
+                }
             }
 
-            File logFile = new File(rightsGuardDir, fileName);
+            File logFile = new File(logsDir, fileName);
 
             FileWriter writer = new FileWriter(logFile);
             writer.write(markdown.toString());
@@ -221,12 +231,17 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
             // 4. 弹出分享对话框
             startActivity(Intent.createChooser(shareIntent, "分享日志"));
 
-            Toast.makeText(this, "✅ 日志已保存并准备分享", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "✅ 日志已保存: " + logFile.getAbsolutePath(),
+                Toast.LENGTH_LONG).show();
 
         } catch (IOException e) {
             e.printStackTrace();
             Toast.makeText(this, "❌ 导出失败: " + e.getMessage(),
-                    Toast.LENGTH_SHORT).show();
+                    Toast.LENGTH_LONG).show();
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "❌ 发生异常: " + e.getMessage(),
+                    Toast.LENGTH_LONG).show();
         }
     }
 

@@ -33,6 +33,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private static final String SCREEN_SHARE_MODE_SPINNER_ID = "com.android.systemui:id/real_screen_share_mode_spinner";
     private static final String CONTINUE_BUTTON_ID = "android:id/button1";
 
+    // 抖音包名
+    private static final String DOUYIN_PACKAGE = "com.ss.android.ugc.aweme";
+
     // 夸克浏览器包名
     private static final String QUARK_BROWSER_PACKAGE = "com.quark.browser";
 
@@ -40,7 +43,6 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private boolean isRunning = false;
     private boolean hasClickedScreenRecord = false;
     private boolean hasSelectedDouyin = false; // 是否已勾选抖音
-    private boolean isWaitingForQuarkButton = false; // 是否正在等待夸克浏览器的"打开抖音"按钮
     private String remark = "";
     private String infringementUrl = ""; // 侵权链接
 
@@ -55,9 +57,15 @@ public class AutomationAccessibilityService extends AccessibilityService {
         instance = this;
         logD("无障碍服务已创建");
 
+        // 🔧 注意: AccessibilityService是系统管理的特殊Service,不需要调用startForeground()
+        // 系统会自动保持它运行,调用startForeground()反而会导致崩溃
+
         // 启动悬浮窗服务
+        logD("📞 即将启动悬浮窗服务...");
         startFloatingWindow();
     }
+
+
 
     /**
      * 启动悬浮窗服务
@@ -90,14 +98,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
             return;
         }
 
-        // 处理夸克浏览器的"打开抖音"按钮
-        if (QUARK_BROWSER_PACKAGE.equals(packageName) && isWaitingForQuarkButton) {
-            if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
-                eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-                handleQuarkBrowserButton();
-            }
-            return;
-        }
+
 
         // 只处理权利卫士应用的事件
         if (!TARGET_PACKAGE.equals(packageName)) {
@@ -188,21 +189,19 @@ public class AutomationAccessibilityService extends AccessibilityService {
         hasClickedScreenRecord = false;
         hasSelectedDouyin = false;
 
-        // 🆕 步骤1: 打开侵权链接(通过夸克浏览器)
+        // 🆕 步骤1: 打开侵权链接(通过WebView)
         if (infringementUrl != null && !infringementUrl.isEmpty()) {
             openInfringementUrl(infringementUrl);
+            // ⚠️ 注意: 不要在这里立即打开权利卫士!
+            // 需要等待WebView加载完成并点击"打开App"后,再打开权利卫士
+            // 后续流程在onWebViewPageLoaded()中完成
         } else {
             logD("⚠️ 未设置侵权链接,跳过打开步骤");
+            // 如果没有侵权链接,直接打开权利卫士
+            clearClipboard();
+            minimizeCurrentApp();
+            delayedOpenApp();
         }
-
-        // 🧹 步骤2: 清空剪贴板,避免打开抖音时弹出"打开看看"
-        clearClipboard();
-
-        // 步骤3: 最小化当前应用(返回桌面)
-        minimizeCurrentApp();
-
-        // 步骤4: 延迟打开权利卫士
-        delayedOpenApp();
     }
 
     /**
@@ -527,116 +526,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
         }
     }
 
-    /**
-     * 处理夸克浏览器的"打开抖音看精彩视频"按钮
-     */
-    private void handleQuarkBrowserButton() {
-        try {
-            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-            if (rootNode == null) {
-                logD("⚠️ rootNode为null,等待页面加载");
-                return;
-            }
 
-            logD("🔍 开始查找'打开抖音看精彩视频'按钮...");
-
-            // 查找"打开抖音看精彩视频"按钮 (完整文字优先)
-            java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
-                rootNode.findAccessibilityNodeInfosByText("打开抖音看精彩视频");
-
-            if (nodes == null || nodes.isEmpty()) {
-                logD("⚠️ 未找到完整文字,尝试查找'打开抖音'");
-                nodes = rootNode.findAccessibilityNodeInfosByText("打开抖音");
-            }
-
-            if (nodes == null || nodes.isEmpty()) {
-                logD("⚠️ 未找到'打开抖音',尝试查找'看精彩视频'");
-                nodes = rootNode.findAccessibilityNodeInfosByText("看精彩视频");
-            }
-
-            if (nodes == null || nodes.isEmpty()) {
-                logD("⚠️ 未找到'看精彩视频',尝试查找'精彩视频'");
-                nodes = rootNode.findAccessibilityNodeInfosByText("精彩视频");
-            }
-
-            if (nodes != null && !nodes.isEmpty()) {
-                logD("✅ 找到 " + nodes.size() + " 个匹配节点");
-
-                for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
-                    CharSequence text = node.getText();
-                    CharSequence desc = node.getContentDescription();
-                    logD("📝 节点文本: " + (text != null ? text : "(无)") +
-                         ", 描述: " + (desc != null ? desc : "(无)") +
-                         ", 可点击: " + node.isClickable());
-
-                    // 尝试点击节点本身
-                    boolean clicked = false;
-                    if (node.isClickable()) {
-                        logD("✅ 节点本身可点击,准备点击");
-                        clicked = node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
-                    } else {
-                        logD("⚠️ 节点不可点击,尝试查找父节点");
-                        // 尝试点击父节点
-                        android.view.accessibility.AccessibilityNodeInfo parent = node.getParent();
-                        if (parent != null) {
-                            logD("📍 父节点可点击: " + parent.isClickable());
-                            if (parent.isClickable()) {
-                                logD("✅ 父节点可点击,准备点击");
-                                clicked = parent.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
-                            } else {
-                                // 尝试点击祖父节点
-                                android.view.accessibility.AccessibilityNodeInfo grandParent = parent.getParent();
-                                if (grandParent != null) {
-                                    logD("📍 祖父节点可点击: " + grandParent.isClickable());
-                                    if (grandParent.isClickable()) {
-                                        logD("✅ 祖父节点可点击,准备点击");
-                                        clicked = grandParent.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (clicked) {
-                        logD("🎉 成功点击'打开抖音看精彩视频'按钮!");
-
-                        // 重置标志位
-                        isWaitingForQuarkButton = false;
-
-                        // 等待跳转到抖音并观看视频
-                        new Thread(() -> {
-                            try {
-                                // 等待跳转(2秒) + 视频加载(3秒) + 观看(5秒) = 10秒
-                                Thread.sleep(10000);
-
-                                logD("⏱️ 观看完成,准备最小化抖音");
-
-                                // 最小化抖音(返回桌面)
-                                minimizeCurrentApp();
-
-                                logD("✅ 侵权视频已观看并最小化,准备继续后续流程");
-
-                            } catch (InterruptedException e) {
-                                logE("等待过程被中断: " + e.getMessage());
-                            }
-                        }).start();
-
-                        break;
-                    } else {
-                        logE("❌ 点击失败,尝试下一个节点");
-                    }
-                }
-            } else {
-                logD("⚠️ 未找到任何匹配的按钮文本,继续等待...");
-            }
-
-            rootNode.recycle();
-
-        } catch (Exception e) {
-            logE("处理夸克浏览器按钮失败: " + e.getMessage());
-            e.printStackTrace();
-        }
-    }
 
     /**
      * 处理系统录屏权限弹窗
@@ -1028,6 +918,40 @@ public class AutomationAccessibilityService extends AccessibilityService {
             if (logBuilder.length() > MAX_LOG_LENGTH) {
                 logBuilder.delete(0, logBuilder.length() - MAX_LOG_LENGTH);
             }
+        }
+
+        // 🆕 同时将日志写入文件,防止APP被杀掉后日志丢失
+        saveLogToFile(logLine);
+    }
+
+    /**
+     * 将日志保存到文件
+     */
+    private static void saveLogToFile(String logLine) {
+        try {
+            // 获取外部存储目录
+            java.io.File logDir = new java.io.File(
+                android.os.Environment.getExternalStorageDirectory(),
+                "权利卫士取证/logs"
+            );
+
+            if (!logDir.exists()) {
+                logDir.mkdirs();
+            }
+
+            // 日志文件名:按日期命名
+            String dateStr = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                .format(new java.util.Date());
+            java.io.File logFile = new java.io.File(logDir, "automation_" + dateStr + ".log");
+
+            // 追加写入日志
+            java.io.FileWriter writer = new java.io.FileWriter(logFile, true);
+            writer.write(logLine);
+            writer.close();
+
+        } catch (Exception e) {
+            // 忽略日志保存失败的异常,避免影响主流程
+            Log.e(TAG, "保存日志到文件失败: " + e.getMessage());
         }
     }
 
@@ -1546,36 +1470,47 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
             // 节点类名
             CharSequence className = node.getClassName();
-            sb.append("[").append(className != null ? className : "Unknown").append("]");
-            sb.append(" (clickable=").append(node.isClickable()).append(")\n");
+            sb.append("**[").append(className != null ? className : "Unknown").append("]**");
+
+            // 状态标记
+            sb.append(" `");
+            if (node.isClickable()) sb.append("clickable ");
+            if (node.isEnabled()) sb.append("enabled ");
+            if (node.isVisibleToUser()) sb.append("visible ");
+            if (node.isFocusable()) sb.append("focusable ");
+            sb.append("`\n");
 
             // Resource ID
             String viewId = node.getViewIdResourceName();
             if (viewId != null && !viewId.isEmpty()) {
                 for (int i = 0; i < depth; i++) sb.append("│   ");
-                sb.append("  ID: ").append(viewId).append("\n");
+                sb.append("  🆔 **ID**: `").append(viewId).append("`\n");
             }
 
             // 文本内容
             CharSequence text = node.getText();
             if (text != null && text.length() > 0) {
                 for (int i = 0; i < depth; i++) sb.append("│   ");
-                sb.append("  Text: \"").append(text).append("\"\n");
+                sb.append("  📝 **Text**: \"").append(text).append("\"\n");
             }
 
             // 内容描述
             CharSequence desc = node.getContentDescription();
             if (desc != null && desc.length() > 0) {
                 for (int i = 0; i < depth; i++) sb.append("│   ");
-                sb.append("  Desc: \"").append(desc).append("\"\n");
+                sb.append("  💬 **Desc**: \"").append(desc).append("\"\n");
             }
 
             // 位置和大小
             android.graphics.Rect bounds = new android.graphics.Rect();
             node.getBoundsInScreen(bounds);
+            int width = bounds.right - bounds.left;
+            int height = bounds.bottom - bounds.top;
+
             for (int i = 0; i < depth; i++) sb.append("│   ");
-            sb.append("  Bounds: [").append(bounds.left).append(",").append(bounds.top)
-              .append("][").append(bounds.right).append(",").append(bounds.bottom).append("]\n");
+            sb.append("  📐 **Bounds**: [").append(bounds.left).append(",").append(bounds.top)
+              .append("] → [").append(bounds.right).append(",").append(bounds.bottom)
+              .append("] (").append(width).append("x").append(height).append(")\n");
 
             // 遍历子节点
             int childCount = node.getChildCount();
@@ -1620,14 +1555,13 @@ public class AutomationAccessibilityService extends AccessibilityService {
      */
     private java.io.File saveDumpToFile(String dumpText) {
         try {
-            // 获取外部存储的Documents目录
-            java.io.File documentsDir = android.os.Environment.getExternalStoragePublicDirectory(
-                android.os.Environment.DIRECTORY_DOCUMENTS);
+            // 使用应用私有的外部存储目录(不需要权限,Android 11+兼容)
+            java.io.File appDir = new java.io.File(getExternalFilesDir(null), "UIDump");
 
-            // 创建RightsGuard目录
-            java.io.File appDir = new java.io.File(documentsDir, "RightsGuard");
+            // 确保目录存在
             if (!appDir.exists()) {
-                appDir.mkdirs();
+                boolean created = appDir.mkdirs();
+                logD("📁 创建目录: " + appDir.getAbsolutePath() + " - " + (created ? "成功" : "失败"));
             }
 
             // 生成文件名(带时间戳)
@@ -1640,15 +1574,19 @@ public class AutomationAccessibilityService extends AccessibilityService {
             // 写入文件
             java.io.FileWriter writer = new java.io.FileWriter(file);
             writer.write("# UI结构 Dump\n\n");
+            writer.write("**生成时间**: " + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss",
+                java.util.Locale.CHINA).format(new java.util.Date()) + "\n\n");
+            writer.write("---\n\n");
             writer.write(dumpText);
             writer.close();
 
-            logD("📄 文件已保存: " + file.getAbsolutePath());
+            logD("✅ 文件已保存: " + file.getAbsolutePath());
+            logD("📂 文件大小: " + (file.length() / 1024) + " KB");
 
             return file;
 
         } catch (Exception e) {
-            logE("保存文件失败: " + e.getMessage());
+            logE("❌ 保存文件失败: " + e.getMessage());
             e.printStackTrace();
             return null;
         }
@@ -1689,54 +1627,217 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
-     * 打开侵权链接(通过夸克浏览器)
-     * 流程: 夸克浏览器打开链接 -> 点击"打开抖音看精彩视频" -> 跳转抖音 -> 观看视频 -> 最小化
+     * 打开侵权链接(通过WebView)
+     * 新方案: 在APP内部使用WebView打开抖音链接,避免跳转到外部浏览器导致无障碍服务被杀掉
+     * 流程: 打开WebView -> 加载抖音链接 -> 无障碍服务自动点击"打开App" -> 跳转到抖音 -> 观看视频 -> 返回
      */
     private void openInfringementUrl(String url) {
         try {
-            logD("🌐 准备打开侵权链接: " + url);
+            logD("🌐 准备通过WebView打开侵权链接: " + url);
 
-            // 使用Intent直接打开链接
-            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
-            intent.setData(android.net.Uri.parse(url));
-            intent.setPackage(QUARK_BROWSER_PACKAGE); // 指定使用夸克浏览器
+            // 步骤1: 启动WebView Activity
+            android.content.Intent intent = new android.content.Intent(this, WebViewActivity.class);
+            intent.putExtra("url", url);
             intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+
+            logD("🎯 启动WebView Activity...");
             startActivity(intent);
 
-            logD("✅ 已打开夸克浏览器访问侵权链接");
-
-            // 设置标志位,等待"打开抖音"按钮出现
-            isWaitingForQuarkButton = true;
-            logD("⏳ 等待夸克浏览器页面加载,准备点击'打开抖音看精彩视频'按钮...");
-
-            // 等待页面加载(3秒)
-            Thread.sleep(3000);
-
-            // 尝试通过坐标点击按钮(备用方案)
-            // 按钮位置大约在屏幕底部中央
-            logD("🎯 尝试通过坐标点击'打开抖音看精彩视频'按钮");
-            clickByCoordinates(540, 1700); // 根据截图估算的坐标
-
-            logD("✅ 已点击按钮,等待跳转到抖音");
-
-            // 重置标志位
-            isWaitingForQuarkButton = false;
-
-            // 等待跳转到抖音并观看视频
-            // 流程: 跳转(2s) + 视频加载(3s) + 观看(5s) = 10秒
-            Thread.sleep(10000);
-
-            logD("⏱️ 观看完成,准备最小化抖音");
-
-            // 最小化抖音(返回桌面)
-            minimizeCurrentApp();
-
-            logD("✅ 侵权视频已观看并最小化,准备继续后续流程");
+            logD("✅ WebView Activity已启动,等待页面加载...");
 
         } catch (Exception e) {
-            logE("打开侵权链接失败: " + e.getMessage());
-            logE("可能原因: 1.夸克浏览器未安装 2.包名不正确 3.链接格式错误");
-            isWaitingForQuarkButton = false;
+            logE("❌ 打开侵权链接失败: " + e.getMessage());
+            logE("异常类型: " + e.getClass().getName());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * WebView页面加载完成的回调
+     */
+    /**
+     * 当WebView检测到抖音URL Scheme时调用
+     */
+    public void onDouyinSchemeDetected(String schemeUrl) {
+        new Thread(() -> {
+            try {
+                logD("🎯 检测到抖音URL Scheme: " + schemeUrl);
+
+                // 关闭WebView Activity
+                logD("🔧 关闭WebView Activity...");
+                android.content.Intent closeIntent = new android.content.Intent("com.rightsguard.automation.CLOSE_WEBVIEW");
+                sendBroadcast(closeIntent);
+                Thread.sleep(500);
+
+                // 🆕 直接使用URL Scheme打开抖音APP
+                logD("📱 使用URL Scheme打开抖音APP: " + schemeUrl);
+                try {
+                    android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                    intent.setData(android.net.Uri.parse(schemeUrl));
+                    intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                    logD("✅ 已发送打开抖音的Intent");
+                } catch (Exception e) {
+                    logE("❌ 使用URL Scheme打开抖音失败: " + e.getMessage());
+                    // 如果URL Scheme失败,尝试直接打开抖音APP
+                    switchToDouyin();
+                }
+
+                // 等待抖音启动并加载视频
+                logD("⏱️ 等待抖音启动并加载视频(3秒)...");
+                Thread.sleep(3000);
+
+                logD("✅ 抖音已打开,侵权视频应该正在显示");
+
+                // 🆕 步骤: 清空剪贴板,避免打开抖音时弹出"打开看看"
+                clearClipboard();
+
+                // 🆕 步骤: 最小化当前应用(返回桌面)
+                minimizeCurrentApp();
+
+                // 🆕 步骤: 延迟打开权利卫士
+                delayedOpenApp();
+
+            } catch (Exception e) {
+                logE("❌ 处理抖音URL Scheme失败: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    public void onWebViewPageLoaded() {
+        new Thread(() -> {
+            try {
+                logD("📄 WebView页面加载完成,开始查找'打开App'按钮...");
+
+                // 等待2秒让页面完全渲染
+                Thread.sleep(2000);
+
+                // 查找并点击"打开App"按钮
+                boolean foundButton = false;
+                for (int i = 0; i < 10; i++) {
+                    android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+                    if (rootNode != null) {
+                        String packageName = rootNode.getPackageName() != null ?
+                            rootNode.getPackageName().toString() : "";
+
+                        logD("🔍 第" + (i+1) + "次查找,当前包名: " + packageName);
+
+                        // 查找"打开App"按钮
+                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> buttons =
+                            rootNode.findAccessibilityNodeInfosByText("打开App");
+
+                        if (buttons != null && !buttons.isEmpty()) {
+                            logD("✅ 找到 " + buttons.size() + " 个'打开App'节点");
+
+                            for (int j = 0; j < buttons.size(); j++) {
+                                android.view.accessibility.AccessibilityNodeInfo button = buttons.get(j);
+                                String text = button.getText() != null ? button.getText().toString() : "";
+
+                                if (button.isClickable() && text.equals("打开App")) {
+                                    boolean clicked = button.performAction(
+                                        android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+
+                                    if (clicked) {
+                                        logD("✅ 成功点击'打开App'按钮!");
+                                        foundButton = true;
+
+                                        // 🔑 关键: 立即把我们的APP拉回前台,防止无障碍服务被杀掉!
+                                        logD("🔑 立即把我们的APP拉回前台,防止服务被杀掉...");
+                                        bringAppToFront();
+                                        Thread.sleep(1000); // 等待1秒确保我们的APP在前台
+
+                                        break;
+                                    }
+                                }
+                            }
+
+                            for (int j = 0; j < buttons.size(); j++) {
+                                buttons.get(j).recycle();
+                            }
+
+                            if (foundButton) {
+                                rootNode.recycle();
+                                break;
+                            }
+                        }
+
+                        rootNode.recycle();
+                    }
+
+                    if (!foundButton) {
+                        Thread.sleep(500);
+                    }
+                }
+
+                if (!foundButton) {
+                    logE("❌ 未找到'打开App'按钮");
+                    return;
+                }
+
+                // 关闭WebView Activity
+                logD("🔧 关闭WebView Activity...");
+                android.content.Intent closeIntent = new android.content.Intent("com.rightsguard.automation.CLOSE_WEBVIEW");
+                sendBroadcast(closeIntent);
+                Thread.sleep(500);
+
+                // 现在切换到抖音
+                logD("📱 切换到抖音...");
+                switchToDouyin();
+
+                // 等待抖音启动并加载视频
+                logD("⏱️ 等待抖音启动并加载视频(3秒)...");
+                Thread.sleep(3000);
+
+                logD("✅ 抖音已打开,侵权视频应该正在显示");
+
+                // 🆕 步骤: 清空剪贴板,避免打开抖音时弹出"打开看看"
+                clearClipboard();
+
+                // 🆕 步骤: 最小化当前应用(返回桌面)
+                minimizeCurrentApp();
+
+                // 🆕 步骤: 延迟打开权利卫士
+                delayedOpenApp();
+
+            } catch (Exception e) {
+                logE("❌ WebView页面处理失败: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    /**
+     * 把我们的APP拉回前台
+     */
+    private void bringAppToFront() {
+        try {
+            android.content.Intent intent = new android.content.Intent(this, MainActivity.class);
+            intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK |
+                          android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+            logD("✅ 已把我们的APP拉回前台");
+        } catch (Exception e) {
+            logE("拉回APP到前台失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 切换到抖音APP
+     */
+    private void switchToDouyin() {
+        try {
+            android.content.Intent intent = getPackageManager().getLaunchIntentForPackage(DOUYIN_PACKAGE);
+            if (intent != null) {
+                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK |
+                              android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                startActivity(intent);
+                logD("✅ 已切换到抖音APP");
+            } else {
+                logE("❌ 无法获取抖音启动Intent");
+            }
+        } catch (Exception e) {
+            logE("切换到抖音失败: " + e.getMessage());
         }
     }
 

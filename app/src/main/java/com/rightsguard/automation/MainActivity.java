@@ -3,6 +3,7 @@ package com.rightsguard.automation;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -87,23 +88,112 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // 获取备注内容
-        String remark = "";
+        // 获取取证信息
+        String evidenceInfo = "";
         if (etRemark != null && etRemark.getText() != null) {
-            remark = etRemark.getText().toString().trim();
+            evidenceInfo = etRemark.getText().toString().trim();
+        }
+
+        // 检查是否为空
+        if (evidenceInfo.isEmpty()) {
+            Toast.makeText(this, "请输入取证信息", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 解析取证信息
+        ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
+
+        // 显示解析结果Toast
+        if (parseResult.infringementUrl != null && !parseResult.infringementUrl.isEmpty()) {
+            Toast.makeText(this, "✅ 侵权链接: " + parseResult.infringementUrl,
+                Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(this, "⚠️ 未解析到侵权链接,请检查输入格式",
+                Toast.LENGTH_LONG).show();
         }
 
         // 启动自动化
         AutomationAccessibilityService service = AutomationAccessibilityService.getInstance();
         if (service != null) {
-            service.setRemark(remark);
+            // 设置备注
+            service.setRemark(parseResult.remark);
+
+            // 设置侵权链接
+            if (parseResult.infringementUrl != null && !parseResult.infringementUrl.isEmpty()) {
+                service.setInfringementUrl(parseResult.infringementUrl);
+                Log.d("MainActivity", "✅ 已设置侵权链接: " + parseResult.infringementUrl);
+            } else {
+                Log.d("MainActivity", "⚠️ 未解析到侵权链接");
+            }
+
             service.startAutomation();
             isRunning = true;
             updateStatus(STATUS_RUNNING);
-            Toast.makeText(this, R.string.toast_started, Toast.LENGTH_SHORT).show();
         } else {
             Toast.makeText(this, "无障碍服务未启动", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /**
+     * 解析取证信息
+     */
+    private ParseResult parseEvidenceInfo(String info) {
+        ParseResult result = new ParseResult();
+
+        try {
+            Log.d("MainActivity", "🔍 开始解析: " + info);
+
+            // 智能提取侵权链接 (最后一个URL)
+            int lastHttpIndex = info.lastIndexOf("http://");
+            int lastHttpsIndex = info.lastIndexOf("https://");
+            int lastUrlStart = Math.max(lastHttpIndex, lastHttpsIndex);
+
+            if (lastUrlStart >= 0) {
+                String urlPart = info.substring(lastUrlStart);
+                int spaceIndex = urlPart.indexOf(" ");
+                if (spaceIndex > 0) {
+                    result.infringementUrl = urlPart.substring(0, spaceIndex).trim();
+                } else {
+                    result.infringementUrl = urlPart.trim();
+                }
+                Log.d("MainActivity", "✅ 侵权链接: " + result.infringementUrl);
+            }
+
+            // 🆕 提取备注 (第一个URL之前的内容)
+            int firstHttpIndex = info.indexOf("http://");
+            int firstHttpsIndex = info.indexOf("https://");
+            int firstUrlStart = -1;
+
+            if (firstHttpIndex >= 0 && firstHttpsIndex >= 0) {
+                firstUrlStart = Math.min(firstHttpIndex, firstHttpsIndex);
+            } else if (firstHttpIndex >= 0) {
+                firstUrlStart = firstHttpIndex;
+            } else if (firstHttpsIndex >= 0) {
+                firstUrlStart = firstHttpsIndex;
+            }
+
+            if (firstUrlStart > 0) {
+                result.remark = info.substring(0, firstUrlStart).trim();
+                Log.d("MainActivity", "✅ 备注: " + result.remark);
+            } else {
+                result.remark = info;
+                Log.d("MainActivity", "⚠️ 未找到URL,使用完整内容作为备注");
+            }
+
+        } catch (Exception e) {
+            Log.e("MainActivity", "解析失败: " + e.getMessage());
+            result.remark = info;
+        }
+
+        return result;
+    }
+
+    /**
+     * 解析结果类
+     */
+    private static class ParseResult {
+        String infringementUrl;
+        String remark;
     }
 
     /**
