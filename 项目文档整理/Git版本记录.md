@@ -12,11 +12,61 @@
 
 ## 🚀 版本历史
 
-### V2.4 (2026-02-06) 🎯 权利卫士取证阶段自动化!
+### V2.4 (2026-02-06) 🎯 权利卫士取证阶段自动化 + 关键Bug修复!
 
-**权利卫士取证阶段自动化 - 随机延迟模拟真人操作**
+**🔧 关键Bug修复 - 坐标点击权限问题**
 
 #### ✅ 完成内容
+
+**1. 问题发现**
+- 用户测试发现点击"我"按钮没有反应
+- 日志显示"✅ 已点击'我'按钮",但实际没有点击
+- 第一次测试成功,第二次测试失败(标志位未重置)
+
+**2. 根本原因分析**
+- ❌ **错误方法**: 使用 `Runtime.getRuntime().exec("input tap x y")` 执行shell命令
+- ❌ **权限问题**: shell命令在无障碍服务中**没有权限执行**
+- ❌ **标志位问题**: 第一次测试后标志位未重置,导致第二次测试不触发
+
+**3. 解决方案**
+- ✅ **修改点击方法**: 所有坐标点击改用 `clickByCoordinates(x, y)` 方法
+- ✅ **使用正确API**: 使用无障碍服务的 `dispatchGesture()` API
+- ✅ **标志位重置**: 每次点击"开始取证"时重置所有抖音自动化标志位
+
+**4. 修改的方法**
+- ✅ `clickMeButton()` - 点击"我"按钮 (坐标: 972, 2273)
+- ✅ `clickDouyinMoreButton()` - 点击"更多"按钮 (坐标: 984, 192)
+- ✅ `clickDouyinSettingsButton()` - 点击"设置"按钮 (坐标: 627, 186)
+- ✅ `clickDouyinBackButton()` - 点击返回按钮 (坐标: 90, 186)
+
+**5. clickByCoordinates()方法**
+```java
+private void clickByCoordinates(int x, int y) {
+    // 使用无障碍服务的 dispatchGesture() API
+    android.graphics.Path path = new android.graphics.Path();
+    path.moveTo(x, y);
+
+    GestureDescription.StrokeDescription stroke =
+        new GestureDescription.StrokeDescription(path, 0, 100);
+
+    dispatchGesture(builder.build(), null, null);
+}
+```
+
+**6. 标志位重置机制**
+```java
+// 点击"开始取证"按钮成功后
+isRightsGuardEvidencePhase = true;
+hasStartedDouyinAutomation = false;  // 重置:允许再次触发
+hasClickedDouyinMe = false;          // 重置:允许再次点击"我"
+hasClickedDouyinMore = false;        // 重置:允许再次点击"更多"
+hasClickedDouyinSettings = false;    // 重置:允许再次点击"设置"
+hasScrolledToAboutSection = false;   // 重置:允许再次滑动
+```
+
+---
+
+**🎯 权利卫士取证阶段自动化 - 随机延迟模拟真人操作**
 
 **1. 问题背景**
 - V2.3版本成功实现智能返回到首页并点击"我"
@@ -25,18 +75,23 @@
 - 需要模拟真人操作,避免被识别为机器人
 
 **2. 两次打开抖音的区别**
-- **第一次** (V2.3) - 我们的APP通过WebView打开侵权视频 → 观看5秒 → 返回首页 → 点击"我" → 打开权利卫士
+- **第一次** (V2.4优化) - 我们的APP通过WebView打开侵权视频 → 观看3秒 → 直接最小化 → 打开权利卫士
 - **第二次** (V2.4) - 权利卫士点击"开始取证" → 权利卫士自动跳转到抖音 → **需要自动化操作**
 
 **3. 核心技术实现**
 - ✅ 添加`isRightsGuardEvidencePhase`标志位 - 标识权利卫士取证阶段
+- ✅ 添加`hasStartedDouyinAutomation`标志位 - 标识是否已开始抖音自动化(防止重复触发)
+- ✅ 添加`hasClickedDouyinMe`标志位 - 标识是否已点击"我"
 - ✅ 添加`hasClickedDouyinMore`标志位 - 标识是否已点击"更多"
 - ✅ 添加`hasClickedDouyinSettings`标志位 - 标识是否已点击"设置"
+- ✅ 添加`hasScrolledToAboutSection`标志位 - 标识是否已滑动到"关于"
 - ✅ 创建`randomDelay()` - 随机延迟1-2秒,模拟真人操作
-- ✅ 创建`handleDouyinMePage()` - 处理抖音"我"页面
+- ✅ 创建`startDouyinAutomation()` - 开始抖音自动化流程(独立线程)
+- ✅ 创建`clickMeButton()` - 点击"我"按钮
 - ✅ 创建`clickDouyinMoreButton()` - 点击"更多"按钮(三条杠)
 - ✅ 创建`clickDouyinSettingsButton()` - 点击"设置"按钮
-- ✅ 修改`onAccessibilityEvent()` - 添加对抖音事件的处理
+- ✅ 创建`scrollToAboutSection()` - 滑动到"关于"部分
+- ✅ 修改`onAccessibilityEvent()` - 添加对抖音窗口状态变化事件的处理(只触发一次)
 
 **4. 随机延迟机制**
 - ✅ 生成1000-2000毫秒的随机延迟
@@ -46,8 +101,13 @@
 
 **5. 智能点击机制**
 - ✅ 优先通过文本查找控件并点击
-- ✅ 失败则使用坐标点击作为备用方案
+- ✅ 失败则使用坐标点击作为备用方案(使用clickByCoordinates)
 - ✅ 查找可点击的父节点(针对"设置"按钮)
+
+**6. 流程优化**
+- ✅ 观看侵权视频从5秒改为3秒
+- ✅ 观看后直接最小化,不再返回首页点击"我"
+- ✅ 简化流程,提高效率
 - ✅ 详细的日志记录,便于调试
 
 **6. 自动化流程**

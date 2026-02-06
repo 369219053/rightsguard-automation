@@ -48,8 +48,11 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
     // 权利卫士取证阶段标志位
     private boolean isRightsGuardEvidencePhase = false; // 是否处于权利卫士取证阶段(权利卫士打开抖音后)
+    private boolean hasStartedDouyinAutomation = false; // 是否已开始抖音自动化
+    private boolean hasClickedDouyinMe = false; // 是否已点击抖音"我"按钮
     private boolean hasClickedDouyinMore = false; // 是否已点击抖音"更多"按钮
     private boolean hasClickedDouyinSettings = false; // 是否已点击抖音"设置"按钮
+    private boolean hasScrolledToAboutSection = false; // 是否已滑动到"关于"部分
 
     // 日志收集
     private static final StringBuilder logBuilder = new StringBuilder();
@@ -105,9 +108,12 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
         // 🆕 处理抖音事件(仅在权利卫士取证阶段)
         if (DOUYIN_PACKAGE.equals(packageName) && isRightsGuardEvidencePhase) {
-            if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
-                eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-                handleDouyinMePage();
+            if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+                // 只在窗口状态变化时触发一次
+                if (!hasStartedDouyinAutomation) {
+                    hasStartedDouyinAutomation = true;
+                    startDouyinAutomation();
+                }
             }
             return;
         }
@@ -1043,8 +1049,13 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                 if (clicked) {
                     logD("✅ 成功点击'开始取证'按钮");
-                    // 🆕 设置权利卫士取证阶段标志位
+                    // 🆕 设置权利卫士取证阶段标志位,并重置所有抖音自动化标志位
                     isRightsGuardEvidencePhase = true;
+                    hasStartedDouyinAutomation = false;  // 重置:允许再次触发抖音自动化
+                    hasClickedDouyinMe = false;          // 重置:允许再次点击"我"
+                    hasClickedDouyinMore = false;        // 重置:允许再次点击"更多"
+                    hasClickedDouyinSettings = false;    // 重置:允许再次点击"设置"
+                    hasScrolledToAboutSection = false;   // 重置:允许再次滑动
                     logD("🎯 进入权利卫士取证阶段,将监听抖音事件");
                 } else {
                     logE("❌ 点击'开始取证'按钮失败");
@@ -1698,18 +1709,15 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     switchToDouyin();
                 }
 
-                // 等待抖音启动并加载视频,观看5秒
+                // 等待抖音启动并加载视频,观看3秒
                 logD("⏱️ 等待抖音启动并加载视频...");
                 Thread.sleep(2000); // 等待2秒让抖音启动
 
                 logD("✅ 抖音已打开,侵权视频正在显示");
-                logD("👀 观看侵权视频5秒...");
-                Thread.sleep(5000); // 观看5秒
+                logD("👀 观看侵权视频3秒...");
+                Thread.sleep(3000); // 观看3秒
 
-                logD("✅ 观看完成,准备返回首页");
-
-                // 🆕 智能返回到首页并点击"我"
-                returnToDouyinHomeAndClickMe();
+                logD("✅ 观看完成,准备最小化应用");
 
                 // 🆕 步骤: 清空剪贴板,避免打开抖音时弹出"打开看看"
                 clearClipboard();
@@ -1910,24 +1918,54 @@ public class AutomationAccessibilityService extends AccessibilityService {
      */
     private void returnToDouyinHomeAndClickMe() {
         try {
-            // 第一次返回
-            logD("🔙 按返回键返回首页...");
-            performGlobalAction(GLOBAL_ACTION_BACK);
+            // 第一次点击抖音左上角返回按钮
+            logD("🔙 点击抖音左上角返回按钮...");
+            boolean clicked = clickDouyinBackButton();
+
+            if (!clicked) {
+                logE("❌ 未找到抖音返回按钮,尝试使用系统返回键...");
+                performGlobalAction(GLOBAL_ACTION_BACK);
+            }
+
             Thread.sleep(500);
 
             // 检查是否到达首页(通过查找底部导航栏)
             android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-            boolean hasBottomNav = checkForBottomNavigation(rootNode);
-
-            if (!hasBottomNav) {
-                logD("⚠️ 未到达首页,再次按返回键...");
-                performGlobalAction(GLOBAL_ACTION_BACK);
-                Thread.sleep(500);
+            if (rootNode == null) {
+                logE("❌ rootNode为null,无法检测当前应用");
+                return;
             }
 
-            logD("✅ 已到达首页");
+            boolean hasBottomNav = checkForBottomNavigation(rootNode);
 
-            // 点击"我"按钮 (使用坐标点击,因为UI dump可能超时)
+            if (hasBottomNav) {
+                // 已到达首页,直接点击"我"
+                logD("✅ 已到达首页,准备点击'我'按钮...");
+            } else {
+                // 未到达首页,再点击一次返回按钮
+                logD("⚠️ 未到达首页,再次点击返回按钮...");
+                clicked = clickDouyinBackButton();
+
+                if (!clicked) {
+                    logE("❌ 未找到抖音返回按钮,尝试使用系统返回键...");
+                    performGlobalAction(GLOBAL_ACTION_BACK);
+                }
+
+                Thread.sleep(500);
+
+                // 再次检查是否到达首页
+                rootNode = getRootInActiveWindow();
+                if (rootNode != null) {
+                    hasBottomNav = checkForBottomNavigation(rootNode);
+                    if (hasBottomNav) {
+                        logD("✅ 已到达首页");
+                    } else {
+                        logD("⚠️ 仍未到达首页,但继续执行...");
+                    }
+                }
+            }
+
+            // 点击"我"按钮
             logD("👤 点击'我'按钮...");
             clickMeButton();
             Thread.sleep(1000);
@@ -1936,6 +1974,73 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
         } catch (Exception e) {
             logE("❌ 返回首页并点击'我'失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 点击抖音左上角返回按钮
+     */
+    private boolean clickDouyinBackButton() {
+        try {
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                return false;
+            }
+
+            // 方法1: 通过ID查找返回按钮 (最准确)
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> backNodes =
+                rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/back_btn");
+
+            if (backNodes != null && !backNodes.isEmpty()) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : backNodes) {
+                    if (node.isClickable()) {
+                        boolean clicked = node.performAction(
+                            android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                        );
+                        if (clicked) {
+                            logD("✅ 成功点击抖音返回按钮(通过ID查找)");
+                            rootNode.recycle();
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            // 方法2: 通过content-desc查找"返回"按钮
+            backNodes = rootNode.findAccessibilityNodeInfosByText("返回");
+
+            if (backNodes != null && !backNodes.isEmpty()) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : backNodes) {
+                    // 查找可点击的节点或父节点
+                    android.view.accessibility.AccessibilityNodeInfo clickableNode = node;
+                    while (clickableNode != null && !clickableNode.isClickable()) {
+                        clickableNode = clickableNode.getParent();
+                    }
+
+                    if (clickableNode != null && clickableNode.isClickable()) {
+                        boolean clicked = clickableNode.performAction(
+                            android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                        );
+                        if (clicked) {
+                            logD("✅ 成功点击抖音返回按钮(通过文本查找)");
+                            rootNode.recycle();
+                            return true;
+                        }
+                    }
+                }
+            }
+
+            rootNode.recycle();
+
+            // 方法3: 使用坐标点击左上角(备用方案)
+            // 抖音返回按钮坐标: [18,114] → [162,258], 中心点约 (90, 186)
+            logD("⚠️ 未找到返回按钮,使用坐标点击...");
+            clickByCoordinates(90, 186);
+            return true;
+
+        } catch (Exception e) {
+            logE("点击抖音返回按钮失败: " + e.getMessage());
+            return false;
         }
     }
 
@@ -1975,9 +2080,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
      */
     private void clickMeButton() {
         try {
-            // 抖音"我"按钮通常在右下角: [972, 2300]
-            Runtime.getRuntime().exec("input tap 972 2300");
-            logD("✅ 已点击'我'按钮 (坐标: 972, 2300)");
+            // 抖音"我"按钮坐标: [864,2201] → [1080,2346], 中心点 (972, 2273)
+            logD("👤 准备点击'我'按钮 (坐标: 972, 2273)...");
+            clickByCoordinates(972, 2273);
         } catch (Exception e) {
             logE("点击'我'按钮失败: " + e.getMessage());
         }
@@ -2018,29 +2123,75 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
-     * 🆕 处理抖音"我"页面(权利卫士取证阶段)
+     * 🆕 开始抖音自动化(权利卫士取证阶段)
      */
-    private void handleDouyinMePage() {
-        try {
-            // 步骤1: 点击"更多"按钮
-            if (!hasClickedDouyinMore) {
-                logD("📱 检测到抖音页面,准备点击'更多'按钮...");
-                randomDelay(); // 🆕 随机延迟1-3秒
+    private void startDouyinAutomation() {
+        new Thread(() -> {
+            try {
+                logD("🎯 权利卫士已打开抖音,开始自动化流程...");
+
+                // 等待抖音完全启动
+                logD("⏱️ 等待抖音完全启动(3秒)...");
+                Thread.sleep(3000);
+
+                // 检测是否在首页
+                android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+                if (rootNode != null) {
+                    boolean hasBottomNav = checkForBottomNavigation(rootNode);
+
+                    if (!hasBottomNav) {
+                        logD("⚠️ 当前不在首页,尝试返回首页...");
+                        // 点击返回按钮
+                        clickDouyinBackButton();
+                        Thread.sleep(1000);
+
+                        // 再次检测
+                        rootNode = getRootInActiveWindow();
+                        if (rootNode != null) {
+                            hasBottomNav = checkForBottomNavigation(rootNode);
+                            if (hasBottomNav) {
+                                logD("✅ 已返回首页");
+                            } else {
+                                logD("⚠️ 仍未到达首页,继续执行...");
+                            }
+                        }
+                    } else {
+                        logD("✅ 当前已在首页");
+                    }
+                }
+
+                // 步骤1: 点击"我"按钮
+                logD("📱 步骤1: 点击'我'按钮...");
+                randomDelay();
+                clickMeButton();
+                hasClickedDouyinMe = true;
+
+                // 等待"我"页面加载完成
+                logD("⏱️ 等待'我'页面加载完成(2秒)...");
+                Thread.sleep(2000);
+
+                // 步骤2: 点击"更多"按钮
+                logD("📱 步骤2: 点击'更多'按钮...");
+                randomDelay();
                 clickDouyinMoreButton();
-                return;
-            }
 
-            // 步骤2: 点击"设置"按钮
-            if (!hasClickedDouyinSettings) {
-                logD("📱 检测到'更多'菜单,准备点击'设置'按钮...");
-                randomDelay(); // 🆕 随机延迟1-3秒
+                // 步骤3: 点击"设置"按钮
+                logD("📱 步骤3: 点击'设置'按钮...");
+                randomDelay();
                 clickDouyinSettingsButton();
-                return;
-            }
 
-        } catch (Exception e) {
-            logE("处理抖音页面失败: " + e.getMessage());
-        }
+                // 步骤4: 滑动到"关于"部分
+                logD("📱 步骤4: 滑动到'关于'部分...");
+                randomDelay();
+                scrollToAboutSection();
+
+                logD("✅ 抖音自动化流程完成");
+
+            } catch (Exception e) {
+                logE("抖音自动化失败: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }).start();
     }
 
     /**
@@ -2076,8 +2227,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
             // 方法2: 使用坐标点击(备用方案)
             logD("⚠️ 未找到'更多'按钮,使用坐标点击...");
-            Runtime.getRuntime().exec("input tap 984 192");
-            logD("✅ 已点击'更多'按钮 (坐标: 984, 192)");
+            clickByCoordinates(984, 192);
             hasClickedDouyinMore = true;
 
         } catch (Exception e) {
@@ -2124,12 +2274,70 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
             // 方法2: 使用坐标点击(备用方案)
             logD("⚠️ 未找到'设置'按钮,使用坐标点击...");
-            Runtime.getRuntime().exec("input tap 627 186");
-            logD("✅ 已点击'设置'按钮 (坐标: 627, 186)");
+            clickByCoordinates(627, 186);
             hasClickedDouyinSettings = true;
 
         } catch (Exception e) {
             logE("点击'设置'按钮失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🆕 滑动到"关于"部分
+     */
+    private void scrollToAboutSection() {
+        try {
+            logD("🔍 准备滑动到'关于'部分...");
+
+            // 使用无障碍服务的滑动手势API
+            // 创建滑动手势路径
+            android.graphics.Path path = new android.graphics.Path();
+            // 起始点: 屏幕中下部 (540, 1800)
+            path.moveTo(540, 1800);
+            // 结束点: 屏幕中上部 (540, 600)
+            path.lineTo(540, 600);
+
+            // 创建手势描述
+            android.accessibilityservice.GestureDescription.StrokeDescription strokeDescription =
+                new android.accessibilityservice.GestureDescription.StrokeDescription(
+                    path,
+                    0,      // 开始时间
+                    400     // 持续时间400ms
+                );
+
+            android.accessibilityservice.GestureDescription.Builder builder =
+                new android.accessibilityservice.GestureDescription.Builder();
+            builder.addStroke(strokeDescription);
+            android.accessibilityservice.GestureDescription gesture = builder.build();
+
+            // 执行手势
+            boolean dispatched = dispatchGesture(
+                gesture,
+                new android.accessibilityservice.AccessibilityService.GestureResultCallback() {
+                    @Override
+                    public void onCompleted(android.accessibilityservice.GestureDescription gestureDescription) {
+                        super.onCompleted(gestureDescription);
+                        logD("✅ 滑动手势执行成功");
+                    }
+
+                    @Override
+                    public void onCancelled(android.accessibilityservice.GestureDescription gestureDescription) {
+                        super.onCancelled(gestureDescription);
+                        logE("❌ 滑动手势被取消");
+                    }
+                },
+                null
+            );
+
+            if (dispatched) {
+                logD("✅ 已发送滑动手势");
+                hasScrolledToAboutSection = true;
+            } else {
+                logE("❌ 滑动手势发送失败");
+            }
+
+        } catch (Exception e) {
+            logE("滑动到'关于'部分失败: " + e.getMessage());
         }
     }
 
