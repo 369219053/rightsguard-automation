@@ -2,6 +2,7 @@ package com.rightsguard.automation;
 
 import android.accessibilityservice.AccessibilityService;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 
@@ -1465,24 +1466,57 @@ public class AutomationAccessibilityService extends AccessibilityService {
         try {
             logD("🔍 开始Dump UI结构...");
 
-            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
-            if (rootNode == null) {
-                logE("❌ 无法获取UI结构: rootNode为null");
-                return;
-            }
-
             // 构建dump文本
             StringBuilder sb = new StringBuilder();
-            sb.append("=== UI结构 Dump ===\n");
-            sb.append("包名: ").append(rootNode.getPackageName()).append("\n");
+            sb.append("=== UI结构 Dump (所有窗口) ===\n");
             sb.append("时间: ").append(new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss",
                                       java.util.Locale.CHINA).format(new java.util.Date())).append("\n\n");
 
-            // 递归遍历UI树
-            dumpNode(rootNode, sb, 0);
+            // 🆕 获取所有窗口
+            java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
+            if (windows != null && !windows.isEmpty()) {
+                logD("📱 找到 " + windows.size() + " 个窗口");
+                sb.append("窗口总数: ").append(windows.size()).append("\n\n");
 
-            // 释放资源
-            rootNode.recycle();
+                // 遍历每个窗口
+                for (int i = 0; i < windows.size(); i++) {
+                    android.view.accessibility.AccessibilityWindowInfo window = windows.get(i);
+
+                    sb.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+                    sb.append("🪟 窗口 #").append(i + 1).append("\n");
+                    sb.append("类型: ").append(getWindowTypeName(window.getType())).append("\n");
+                    sb.append("层级: ").append(window.getLayer()).append("\n");
+                    sb.append("活动: ").append(window.isActive() ? "是" : "否").append("\n");
+                    sb.append("聚焦: ").append(window.isFocused() ? "是" : "否").append("\n");
+                    sb.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+
+                    // 获取窗口的根节点
+                    android.view.accessibility.AccessibilityNodeInfo rootNode = window.getRoot();
+                    if (rootNode != null) {
+                        sb.append("包名: ").append(rootNode.getPackageName()).append("\n\n");
+
+                        // 递归遍历UI树
+                        dumpNode(rootNode, sb, 0);
+
+                        // 释放资源
+                        rootNode.recycle();
+                    } else {
+                        sb.append("⚠️ 无法获取此窗口的根节点\n\n");
+                    }
+                }
+            } else {
+                // 如果getWindows()失败,回退到原来的方法
+                logD("⚠️ 无法获取窗口列表,使用getRootInActiveWindow()");
+                android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+                if (rootNode == null) {
+                    logE("❌ 无法获取UI结构: rootNode为null");
+                    return;
+                }
+
+                sb.append("包名: ").append(rootNode.getPackageName()).append("\n\n");
+                dumpNode(rootNode, sb, 0);
+                rootNode.recycle();
+            }
 
             // 显示dump结果
             showDumpResult(sb.toString());
@@ -1492,6 +1526,24 @@ public class AutomationAccessibilityService extends AccessibilityService {
         } catch (Exception e) {
             logE("❌ Dump UI结构失败: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * 获取窗口类型名称
+     */
+    private String getWindowTypeName(int type) {
+        switch (type) {
+            case android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION:
+                return "应用窗口";
+            case android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD:
+                return "输入法窗口";
+            case android.view.accessibility.AccessibilityWindowInfo.TYPE_SYSTEM:
+                return "系统窗口";
+            case android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY:
+                return "无障碍覆盖层";
+            default:
+                return "未知类型(" + type + ")";
         }
     }
 
@@ -2543,6 +2595,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     performGlobalAction(GLOBAL_ACTION_BACK);
                     Thread.sleep(500);
 
+                    // 点击"我的订单"
+                    clickMyOrderButton();
+
                     logD("🎉 抖音自动化流程完成!");
                     return;
                 }
@@ -2557,6 +2612,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 Thread.sleep(300);
                 performGlobalAction(GLOBAL_ACTION_BACK);
                 Thread.sleep(500);
+
+                // 点击"我的订单"
+                clickMyOrderButton();
 
                 logD("🎉 抖音自动化流程完成!");
             } else {
@@ -2607,6 +2665,145 @@ public class AutomationAccessibilityService extends AccessibilityService {
         } catch (Exception e) {
             logE("检测'我'页面失败: " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * 🆕 点击"我的订单"按钮
+     */
+    private void clickMyOrderButton() {
+        try {
+            logD("📱 准备点击'我的订单'按钮...");
+
+            // 等待页面稳定
+            Thread.sleep(1000);
+
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logE("❌ 无法获取根节点");
+                return;
+            }
+
+            // 通过文本查找"我的订单"按钮
+            logD("🔍 开始查找'我的订单'按钮...");
+
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> textNodes =
+                rootNode.findAccessibilityNodeInfosByText("我的订单");
+
+            if (textNodes != null && !textNodes.isEmpty()) {
+                logD("📋 找到 " + textNodes.size() + " 个包含'我的订单'文本的节点");
+
+                for (android.view.accessibility.AccessibilityNodeInfo node : textNodes) {
+                    // 获取节点文本,验证是否完全匹配
+                    CharSequence nodeText = node.getText();
+                    android.graphics.Rect bounds = new android.graphics.Rect();
+                    node.getBoundsInScreen(bounds);
+
+                    logD("  节点文本: " + (nodeText != null ? nodeText.toString() : "null"));
+                    logD("  节点位置: [" + bounds.left + "," + bounds.top + "] → [" + bounds.right + "," + bounds.bottom + "]");
+
+                    // 只处理文本完全匹配"我的订单"的节点
+                    if (nodeText != null && "我的订单".equals(nodeText.toString())) {
+                        logD("✅ 找到完全匹配的'我的订单'文本节点");
+
+                        // 查找可点击的父节点
+                        android.view.accessibility.AccessibilityNodeInfo clickableNode = node;
+                        int parentLevel = 0;
+                        while (clickableNode != null && !clickableNode.isClickable() && parentLevel < 5) {
+                            clickableNode = clickableNode.getParent();
+                            parentLevel++;
+                        }
+
+                        if (clickableNode != null && clickableNode.isClickable()) {
+                            // 获取父节点的位置信息
+                            android.graphics.Rect parentBounds = new android.graphics.Rect();
+                            clickableNode.getBoundsInScreen(parentBounds);
+
+                            String parentId = clickableNode.getViewIdResourceName();
+                            logD("  可点击父节点ID: " + (parentId != null ? parentId : "null"));
+                            logD("  父节点层级: " + parentLevel);
+                            logD("  父节点位置: [" + parentBounds.left + "," + parentBounds.top + "] → [" + parentBounds.right + "," + parentBounds.bottom + "]");
+
+                            boolean clicked = clickableNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            if (clicked) {
+                                logD("✅ 成功点击'我的订单'按钮(通过文本查找)");
+                                rootNode.recycle();
+
+                                // 等待页面加载
+                                Thread.sleep(1000);
+
+                                // 点击"更多"按钮并截图
+                                clickMoreButtonAndScreenshot();
+
+                                return;
+                            } else {
+                                logE("❌ 点击'我的订单'按钮失败");
+                            }
+                        } else {
+                            logE("❌ 未找到可点击的父节点");
+                        }
+                    }
+                }
+            } else {
+                logE("❌ 未找到'我的订单'文本节点");
+            }
+
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("点击'我的订单'失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 🆕 点击"更多"按钮并截图
+     */
+    private void clickMoreButtonAndScreenshot() {
+        try {
+            logD("📱 准备点击'更多'按钮...");
+
+            // 等待1秒页面稳定
+            Thread.sleep(1000);
+
+            // 🆕 优先使用用户测试保存的坐标
+            SharedPreferences prefs = getSharedPreferences("automation_config", MODE_PRIVATE);
+            int savedX = prefs.getInt("more_button_x", -1);
+            int savedY = prefs.getInt("more_button_y", -1);
+
+            if (savedX != -1 && savedY != -1) {
+                // 使用保存的坐标
+                logD("✅ 使用保存的坐标: (" + savedX + ", " + savedY + ")");
+                clickByCoordinates(savedX, savedY);
+            } else {
+                // 如果没有保存的坐标,使用测试得出的精确坐标
+                logD("✅ 使用默认坐标: (957, 514)");
+
+                // ✅ 通过坐标测试工具测试得出的精确坐标: (957, 514)
+                // 这是"更多"按钮在1080x2400分辨率下的真实位置
+                clickByCoordinates(957, 514);
+            }
+
+            // 等待1秒让页面加载
+            Thread.sleep(1000);
+
+            // 截图保存
+            logD("📸 准备截屏保存订单更多页面...");
+            takeScreenshotWithPrefix("订单更多", new ScreenshotCallback() {
+                @Override
+                public void onSuccess() {
+                    logD("✅ 订单更多页面截屏成功");
+                }
+
+                @Override
+                public void onFailure() {
+                    logE("❌ 订单更多页面截屏失败");
+                }
+            });
+
+        } catch (Exception e) {
+            logE("点击'更多'按钮失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

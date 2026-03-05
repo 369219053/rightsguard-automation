@@ -79,6 +79,18 @@
                 android:textAllCaps="false"
                 android:enabled="false" />
 
+            <!-- 测试坐标按钮 -->
+            <Button
+                android:id="@+id/btn_float_test_coordinate"
+                android:layout_width="60dp"
+                android:layout_height="40dp"
+                android:text="📍测试"
+                android:textSize="11sp"
+                android:textColor="@color/primary_blue"
+                android:background="@drawable/button_outlined"
+                android:layout_marginEnd="8dp"
+                android:textAllCaps="false" />
+
             <!-- Dump按钮 (⚠️ 开发专用,正式版将移除) -->
             <Button
                 android:id="@+id/btn_float_dump"

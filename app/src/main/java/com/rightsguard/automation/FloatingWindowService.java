@@ -6,6 +6,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.PixelFormat;
 import android.os.Build;
 import android.os.IBinder;
@@ -34,6 +35,7 @@ public class FloatingWindowService extends Service {
     private Button btnStart;
     private Button btnStop;
     private Button btnMinimize;
+    private Button btnTestCoordinate; // 测试坐标按钮
     private Button btnDump; // ⚠️ 开发专用,正式版将移除
     private Button btnMinimizedDump; // 最小化状态的Dump按钮
     private TextView tvStatus;
@@ -41,6 +43,13 @@ public class FloatingWindowService extends Service {
 
     private View layoutFull; // 完整状态布局
     private View layoutMinimized; // 最小化状态布局
+
+    // 坐标测试相关
+    private View coordinateTesterView;
+    private WindowManager.LayoutParams testerParams;
+    private boolean isTesterShowing = false;
+    private int lastClickX = 0;
+    private int lastClickY = 0;
 
     private boolean isRunning = false;
     private boolean isMinimized = false;
@@ -101,6 +110,7 @@ public class FloatingWindowService extends Service {
         btnStart = floatingView.findViewById(R.id.btn_float_start);
         btnStop = floatingView.findViewById(R.id.btn_float_stop);
         btnMinimize = floatingView.findViewById(R.id.btn_float_minimize);
+        btnTestCoordinate = floatingView.findViewById(R.id.btn_float_test_coordinate);
         btnDump = floatingView.findViewById(R.id.btn_float_dump); // ⚠️ 开发专用
         tvStatus = floatingView.findViewById(R.id.tv_float_status);
         statusIndicator = floatingView.findViewById(R.id.view_float_status_indicator);
@@ -112,6 +122,7 @@ public class FloatingWindowService extends Service {
         btnStart.setOnClickListener(v -> startAutomation());
         btnStop.setOnClickListener(v -> stopAutomation());
         btnMinimize.setOnClickListener(v -> toggleMinimize());
+        btnTestCoordinate.setOnClickListener(v -> showCoordinateTester());
         btnDump.setOnClickListener(v -> dumpCurrentUI());
 
         // 最小化状态的Dump按钮
@@ -280,9 +291,113 @@ public class FloatingWindowService extends Service {
         }
     }
     
+    /**
+     * 显示坐标测试器
+     */
+    private void showCoordinateTester() {
+        if (isTesterShowing) {
+            return;
+        }
+
+        // 创建坐标测试界面
+        coordinateTesterView = LayoutInflater.from(this).inflate(R.layout.layout_coordinate_tester, null);
+
+        // 设置窗口参数
+        testerParams = new WindowManager.LayoutParams();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            testerParams.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
+        } else {
+            testerParams.type = WindowManager.LayoutParams.TYPE_PHONE;
+        }
+        testerParams.format = PixelFormat.TRANSLUCENT;
+        testerParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        testerParams.width = WindowManager.LayoutParams.MATCH_PARENT;
+        testerParams.height = WindowManager.LayoutParams.MATCH_PARENT;
+        testerParams.gravity = Gravity.TOP | Gravity.START;
+
+        // 添加到窗口
+        windowManager.addView(coordinateTesterView, testerParams);
+        isTesterShowing = true;
+
+        // 初始化坐标测试界面
+        initCoordinateTester();
+
+        Toast.makeText(this, "📍 点击屏幕任意位置查看坐标", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * 初始化坐标测试器
+     */
+    private void initCoordinateTester() {
+        View rootView = coordinateTesterView.findViewById(R.id.coordinate_tester_root);
+        View displayCard = coordinateTesterView.findViewById(R.id.coordinate_display_card);
+        TextView tvX = coordinateTesterView.findViewById(R.id.tv_coordinate_x);
+        TextView tvY = coordinateTesterView.findViewById(R.id.tv_coordinate_y);
+        Button btnUse = coordinateTesterView.findViewById(R.id.btn_use_coordinate);
+        Button btnCancel = coordinateTesterView.findViewById(R.id.btn_cancel_coordinate);
+        Button btnClose = coordinateTesterView.findViewById(R.id.btn_close_tester);
+
+        // 点击根视图获取坐标
+        rootView.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                lastClickX = (int) event.getRawX();
+                lastClickY = (int) event.getRawY();
+
+                // 显示坐标
+                tvX.setText("X: " + lastClickX);
+                tvY.setText("Y: " + lastClickY);
+                displayCard.setVisibility(View.VISIBLE);
+
+                Toast.makeText(this, "✅ 坐标: (" + lastClickX + ", " + lastClickY + ")", Toast.LENGTH_SHORT).show();
+                return true;
+            }
+            return false;
+        });
+
+        // 使用坐标
+        btnUse.setOnClickListener(v -> {
+            saveCoordinate(lastClickX, lastClickY);
+            hideCoordinateTester();
+            Toast.makeText(this, "✅ 已保存坐标: (" + lastClickX + ", " + lastClickY + ")", Toast.LENGTH_LONG).show();
+        });
+
+        // 取消
+        btnCancel.setOnClickListener(v -> {
+            displayCard.setVisibility(View.GONE);
+        });
+
+        // 关闭测试器
+        btnClose.setOnClickListener(v -> {
+            hideCoordinateTester();
+        });
+    }
+
+    /**
+     * 隐藏坐标测试器
+     */
+    private void hideCoordinateTester() {
+        if (coordinateTesterView != null && windowManager != null && isTesterShowing) {
+            windowManager.removeView(coordinateTesterView);
+            coordinateTesterView = null;
+            isTesterShowing = false;
+        }
+    }
+
+    /**
+     * 保存坐标到SharedPreferences
+     */
+    private void saveCoordinate(int x, int y) {
+        SharedPreferences prefs = getSharedPreferences("automation_config", MODE_PRIVATE);
+        prefs.edit()
+                .putInt("more_button_x", x)
+                .putInt("more_button_y", y)
+                .apply();
+    }
+
     @Override
     public void onDestroy() {
         super.onDestroy();
+        hideCoordinateTester();
         if (floatingView != null && windowManager != null) {
             windowManager.removeView(floatingView);
         }

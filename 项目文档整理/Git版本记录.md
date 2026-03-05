@@ -12,6 +12,109 @@
 
 ## 🚀 版本历史
 
+### V2.8 (2026-03-05) 🎯 坐标测试工具 + 订单更多页面截图!
+
+**✨ 新增功能 - 坐标测试工具**
+
+#### ✅ 完成内容
+
+**1. 核心功能**
+- ✅ 坐标测试工具 - 交互式获取屏幕坐标
+- ✅ 点击"我的订单"按钮 - 智能查找并点击
+- ✅ 点击"更多"按钮 - 使用精确坐标(957, 514)
+- ✅ 截图"订单更多"页面 - 完整取证流程
+
+**2. 坐标测试工具特性**
+- 🎯 全屏透明层 - 不影响查看下方内容
+- 🎯 实时坐标显示 - 点击即显示X、Y坐标
+- 🎯 一键保存 - 确认后自动保存到SharedPreferences
+- 🎯 智能使用 - 优先使用保存的坐标,其次使用默认坐标
+
+**3. 技术实现**
+
+**坐标测试工具**:
+```java
+// 1. 创建全屏透明层
+coordinateTesterView = LayoutInflater.from(this)
+    .inflate(R.layout.layout_coordinate_tester, null);
+
+// 2. 监听触摸事件
+rootView.setOnTouchListener((v, event) -> {
+    if (event.getAction() == MotionEvent.ACTION_DOWN) {
+        lastClickX = (int) event.getRawX();
+        lastClickY = (int) event.getRawY();
+        // 显示坐标
+        tvX.setText("X: " + lastClickX);
+        tvY.setText("Y: " + lastClickY);
+        return true;
+    }
+    return false;
+});
+
+// 3. 保存坐标
+private void saveCoordinate(int x, int y) {
+    SharedPreferences prefs = getSharedPreferences("automation_config", MODE_PRIVATE);
+    prefs.edit()
+            .putInt("more_button_x", x)
+            .putInt("more_button_y", y)
+            .apply();
+}
+```
+
+**点击"更多"按钮**:
+```java
+// 优先使用保存的坐标
+SharedPreferences prefs = getSharedPreferences("automation_config", MODE_PRIVATE);
+int savedX = prefs.getInt("more_button_x", -1);
+int savedY = prefs.getInt("more_button_y", -1);
+
+if (savedX != -1 && savedY != -1) {
+    // 使用保存的坐标
+    clickByCoordinates(savedX, savedY);
+} else {
+    // 使用默认坐标(通过测试工具获得)
+    clickByCoordinates(957, 514);
+}
+```
+
+**4. 完整流程**
+```
+营业执照页面截图
+  ↓
+智能返回到"我"页面
+  ↓
+关闭右侧"更多"菜单
+  ↓
+点击"我的订单"按钮 🆕
+  ↓
+点击"更多"按钮(957, 514) 🆕
+  ↓
+截图"订单更多"页面 🆕
+  ↓
+🎉 抖音自动化流程完成!
+```
+
+**5. 使用方法**
+1. 点击悬浮窗的"📍测试"按钮
+2. 打开抖音订单详情页
+3. 点击"更多"按钮的位置
+4. 查看坐标显示
+5. 点击"使用"保存坐标
+6. 自动化流程会使用保存的坐标
+
+**6. 应用案例**
+- **问题**: 抖音订单详情页的"更多"按钮无法通过无障碍服务找到(Canvas绘制)
+- **解决**: 使用坐标测试工具获得精确坐标(957, 514)
+- **效果**: 第一次点击即成功,无需多次尝试
+
+**7. 文件变更**
+- ✅ 新增: `app/src/main/res/layout/layout_coordinate_tester.xml` - 坐标测试界面
+- ✅ 修改: `app/src/main/res/layout/layout_floating_window.xml` - 添加"📍测试"按钮
+- ✅ 修改: `app/src/main/java/com/rightsguard/automation/FloatingWindowService.java` - 坐标测试逻辑
+- ✅ 修改: `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java` - 点击"我的订单"和"更多"按钮
+
+---
+
 ### V2.7 (2026-03-05) 🎯 完整自动化流程优化完成!
 
 **✨ 新增功能 - 智能返回到"我"页面并关闭菜单**
