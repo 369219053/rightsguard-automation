@@ -2389,7 +2389,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
             logD("🔍 准备截图并点击'资质证照'按钮...");
 
             // 等待滑动完成和页面稳定
-            Thread.sleep(2000); // 增加等待时间,确保页面完全稳定
+            Thread.sleep(1000); // 等待1秒即可
 
             // 🆕 先截图保存"设置"页面(显示"资质证照"按钮)
             logD("📸 准备截屏保存抖音设置页面...");
@@ -2460,7 +2460,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                             if (clicked) {
                                 logD("✅ 成功点击'资质证照'按钮(通过文本查找)");
 
-                                // 等待资质证照页面加载,然后截屏
+                                // 等待资质证照页面加载,然后截屏,再点击"营业执照"
                                 new Thread(() -> {
                                     try {
                                         Thread.sleep(2000); // 等待页面加载
@@ -2469,6 +2469,16 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                             @Override
                                             public void onSuccess() {
                                                 logD("✅ 资质证照页面截屏成功");
+
+                                                // 截屏成功后,点击"营业执照"
+                                                new Thread(() -> {
+                                                    try {
+                                                        Thread.sleep(1000); // 等待截屏完成
+                                                        clickBusinessLicenseButton();
+                                                    } catch (Exception e) {
+                                                        logE("点击营业执照失败: " + e.getMessage());
+                                                    }
+                                                }).start();
                                             }
 
                                             @Override
@@ -2497,6 +2507,147 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
         } catch (Exception e) {
             logE("点击'资质证照'按钮失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🆕 点击"营业执照"按钮
+     */
+    private void clickBusinessLicenseButton() {
+        try {
+            logD("🔍 准备点击'营业执照'按钮...");
+
+            // 等待页面稳定
+            Thread.sleep(1000);
+
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logE("❌ 无法获取根节点");
+                return;
+            }
+
+            // 通过文本查找"营业执照"按钮
+            logD("🔍 开始查找'营业执照'按钮...");
+
+            // 尝试多种文本匹配方式
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> textNodes =
+                rootNode.findAccessibilityNodeInfosByText("营业执照");
+
+            // 如果没找到,尝试查找包含"营业"的节点
+            if (textNodes == null || textNodes.isEmpty()) {
+                logD("⚠️ 未找到'营业执照',尝试查找'营业'...");
+                textNodes = rootNode.findAccessibilityNodeInfosByText("营业");
+            }
+
+            if (textNodes != null && !textNodes.isEmpty()) {
+                logD("📋 找到 " + textNodes.size() + " 个包含相关文本的节点");
+
+                for (android.view.accessibility.AccessibilityNodeInfo node : textNodes) {
+                    // 获取节点文本,验证是否完全匹配
+                    CharSequence nodeText = node.getText();
+                    android.graphics.Rect bounds = new android.graphics.Rect();
+                    node.getBoundsInScreen(bounds);
+
+                    logD("  节点文本: " + (nodeText != null ? nodeText.toString() : "null"));
+                    logD("  节点位置: [" + bounds.left + "," + bounds.top + "] → [" + bounds.right + "," + bounds.bottom + "]");
+
+                    // 只处理文本完全匹配"营业执照"的节点
+                    if (nodeText != null && "营业执照".equals(nodeText.toString())) {
+                        logD("✅ 找到完全匹配的'营业执照'文本节点");
+
+                        // 查找可点击的父节点
+                        android.view.accessibility.AccessibilityNodeInfo clickableNode = node;
+                        int parentLevel = 0;
+                        while (clickableNode != null && !clickableNode.isClickable() && parentLevel < 5) {
+                            clickableNode = clickableNode.getParent();
+                            parentLevel++;
+                        }
+
+                        if (clickableNode != null && clickableNode.isClickable()) {
+                            // 获取父节点的位置信息
+                            android.graphics.Rect parentBounds = new android.graphics.Rect();
+                            clickableNode.getBoundsInScreen(parentBounds);
+
+                            String parentId = clickableNode.getViewIdResourceName();
+                            logD("  可点击父节点ID: " + (parentId != null ? parentId : "null"));
+                            logD("  父节点层级: " + parentLevel);
+                            logD("  父节点位置: [" + parentBounds.left + "," + parentBounds.top + "] → [" + parentBounds.right + "," + parentBounds.bottom + "]");
+
+                            boolean clicked = clickableNode.performAction(
+                                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                            );
+                            if (clicked) {
+                                logD("✅ 成功点击'营业执照'按钮(通过文本查找)");
+
+                                // 等待营业执照页面加载,然后截屏
+                                new Thread(() -> {
+                                    try {
+                                        Thread.sleep(2000); // 等待页面加载
+                                        logD("📸 准备截屏保存营业执照页面...");
+                                        takeScreenshotWithPrefix("营业执照", new ScreenshotCallback() {
+                                            @Override
+                                            public void onSuccess() {
+                                                logD("✅ 营业执照页面截屏成功");
+                                                logD("🎉 抖音自动化流程完成!");
+                                            }
+
+                                            @Override
+                                            public void onFailure() {
+                                                logE("❌ 营业执照页面截屏失败");
+                                            }
+                                        });
+                                    } catch (Exception e) {
+                                        logE("截屏失败: " + e.getMessage());
+                                    }
+                                }).start();
+
+                                rootNode.recycle();
+                                return;
+                            }
+                        } else {
+                            logE("❌ 未找到可点击的父节点");
+                        }
+                    }
+                }
+            } else {
+                logE("❌ 未找到包含'营业执照'文本的节点,使用坐标点击...");
+                rootNode.recycle();
+
+                // 使用坐标点击作为备用方案
+                // 根据截图,"营业执照"在页面上部
+                // 点击整行中间位置,Y坐标参考"资质证照"的位置(1854-1915,中心约1885)
+                // "营业执照"应该在更上方,大概Y=400左右
+                clickByCoordinates(540, 400);
+
+                // 等待营业执照页面加载,然后截屏
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(2000); // 等待页面加载
+                        logD("📸 准备截屏保存营业执照页面...");
+                        takeScreenshotWithPrefix("营业执照", new ScreenshotCallback() {
+                            @Override
+                            public void onSuccess() {
+                                logD("✅ 营业执照页面截屏成功");
+                                logD("🎉 抖音自动化流程完成!");
+                            }
+
+                            @Override
+                            public void onFailure() {
+                                logE("❌ 营业执照页面截屏失败");
+                            }
+                        });
+                    } catch (Exception e) {
+                        logE("截屏失败: " + e.getMessage());
+                    }
+                }).start();
+
+                return;
+            }
+
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("点击'营业执照'按钮失败: " + e.getMessage());
         }
     }
 
