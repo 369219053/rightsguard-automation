@@ -12,6 +12,108 @@
 
 ## 🚀 版本历史
 
+### V3.1 (2026-03-05) 🔍 中文OCR识别 + 智能点击定位!
+
+**✨ 核心更新 - OCR识别技术**
+
+#### ✅ 完成内容
+
+**1. 中文OCR识别**
+- ✅ 集成Google ML Kit中文OCR识别器
+- ✅ 支持中文+拉丁文混合识别
+- ✅ 解决"更多"弹窗无法Dump的问题
+- ✅ 自动识别"资质规则"、"我要开店"等按钮
+
+**2. 智能点击定位**
+- ✅ OCR识别到文字后自动计算点击坐标
+- ✅ 处理多按钮合并识别的情况(如"我要开店 资质规则")
+- ✅ 智能计算右侧按钮位置(3/4宽度)
+- ✅ 三重保险方案:OCR识别 → 备选识别 → 固定坐标
+
+**3. 优化改进**
+- ✅ 删除调试截图,只保留必要截图
+- ✅ 相册截图从4张减少到2张(订单更多、资质规则)
+- ✅ 优化日志输出,显示识别到的文本块信息
+
+**4. 技术实现**
+
+**中文OCR识别器**:
+```java
+// 使用ChineseTextRecognizerOptions支持中文
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
+
+TextRecognizer recognizer = TextRecognition.getClient(
+    new ChineseTextRecognizerOptions.Builder().build()
+);
+```
+
+**智能点击定位**:
+```java
+// 检查是否识别成了"我要开店 资质规则"(两个按钮连在一起)
+if (match.text.contains("我要开店") && match.text.contains("资质规则")) {
+    // 点击文本块的右侧3/4位置(资质规则在右边)
+    int width = match.bounds.right - match.bounds.left;
+    clickX = match.bounds.left + (int)(width * 0.75);
+    clickY = match.center.y;
+}
+```
+
+**5. 依赖更新**
+```gradle
+// 新增中文OCR识别库
+implementation 'com.google.mlkit:text-recognition-chinese:16.0.0'
+```
+
+**6. 文档更新**
+- ✅ 更新README.md - 技术栈中注明OCR识别技术
+- ✅ 更新自动化文档 - 新增OCR识别章节
+- ✅ 更新常见问题FAQ - 说明Dump不到页面的解决方案
+
+#### 🎯 技术亮点
+
+**为什么需要OCR识别?**
+- 抖音"更多"弹窗使用特殊渲染方式
+- Accessibility Service无法dump到UI节点信息
+- OCR作为视觉识别方案,不依赖UI树结构
+
+**OCR识别优势**:
+- ✅ 无需Root权限
+- ✅ 跨应用通用
+- ✅ 离线运行(设备端模型)
+- ✅ 中文识别准确率高
+
+#### 📊 测试结果
+
+**OCR识别成功率**:
+- ✅ 识别到"资质规则"按钮
+- ✅ 识别到"我要开店"按钮
+- ✅ 识别到"充值中心"、"小时达"等其他按钮
+- ✅ 识别到营业执照编号(91110101MA0045NI7u)
+
+**点击成功率**:
+- ✅ 单独识别"资质规则" → 点击中心点 → 成功
+- ✅ 合并识别"我要开店 资质规则" → 点击右侧3/4 → 成功
+
+---
+
+### V3.0 (2026-03-05) 🔍 OCR识别技术集成!
+
+**✨ 新增功能 - OCR识别**
+
+#### ✅ 完成内容
+
+**1. 核心功能**
+- ✅ 集成Google ML Kit OCR识别
+- ✅ 初步支持Latin文字识别
+- ✅ 为中文识别做准备
+
+**2. 技术探索**
+- ✅ 测试OCR识别能力
+- ✅ 发现Latin识别器不支持中文
+- ✅ 确定需要使用ChineseTextRecognizerOptions
+
+---
+
 ### V2.8 (2026-03-05) 🎯 坐标测试工具 + 订单更多页面截图!
 
 **✨ 新增功能 - 坐标测试工具**

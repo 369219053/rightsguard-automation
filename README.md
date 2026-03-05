@@ -110,6 +110,7 @@
 ### 自动化技术
 - **UI自动化**: AccessibilityService
 - **控件定位**: UiSelector、Resource ID
+- **OCR识别**: Google ML Kit中文OCR (V3.0+) - **Dump不到页面时使用**
 - **事件模拟**: 点击、滑动、输入
 - **状态监控**: UI元素变化监听
 

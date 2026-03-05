@@ -585,20 +585,18 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     }
                     node.recycle();
                 }
-            } else {
-                logD("⚠️ 未找到'单个应用'文本,可能已经是'整个屏幕'模式");
-                // 检查是否已经是"整个屏幕"模式
-                java.util.List<android.view.accessibility.AccessibilityNodeInfo> wholeScreenNodes =
-                    rootNode.findAccessibilityNodeInfosByText("整个屏幕");
+            }
 
-                if (wholeScreenNodes != null && !wholeScreenNodes.isEmpty()) {
-                    logD("✅ 已经是'整个屏幕'模式,查找'立即开始'按钮");
-                    // 已经是整个屏幕模式,查找并点击"立即开始"按钮
-                    scanSystemDialogButtons(rootNode);
-                    findAndClickStartButton(rootNode);
-                } else {
-                    logD("⚠️ 既不是'单个应用'也不是'整个屏幕',可能是其他状态");
-                }
+            // 如果没有找到"立即开始"按钮,检查是否在截图权限对话框
+            // 只有在对话框中才输出日志,避免日志污染
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> wholeScreenNodes =
+                rootNode.findAccessibilityNodeInfosByText("整个屏幕");
+
+            if (wholeScreenNodes != null && !wholeScreenNodes.isEmpty()) {
+                // 在截图权限对话框中
+                logD("✅ 检测到截图权限对话框,已经是'整个屏幕'模式");
+                scanSystemDialogButtons(rootNode);
+                findAndClickStartButton(rootNode);
             }
 
             // 如果没有找到"立即开始"按钮,查找"单个应用"下拉框
@@ -1284,7 +1282,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
      * 截屏回调接口
      */
     private interface ScreenshotCallback {
-        void onSuccess();
+        default void onSuccess() {}
+        default void onSuccess(android.graphics.Bitmap bitmap) {
+            onSuccess();
+        }
         void onFailure();
     }
 
@@ -1293,6 +1294,14 @@ public class AutomationAccessibilityService extends AccessibilityService {
      */
     private void takeScreenshotBeforeVerify(final ScreenshotCallback callback) {
         takeScreenshotWithPrefix("应用验真", callback);
+    }
+
+    /**
+     * 截屏(不保存,只返回Bitmap)
+     * 用于OCR识别等场景
+     */
+    private void takeScreenshot(final ScreenshotCallback callback) {
+        takeScreenshotWithPrefix(null, callback);
     }
 
     /**
@@ -1322,12 +1331,21 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                                 if (bitmap != null) {
                                     logD("📐 截图尺寸: " + bitmap.getWidth() + "x" + bitmap.getHeight());
-                                    // 保存截图(使用自定义前缀)
-                                    saveScreenshotWithPrefix(bitmap, prefix);
+
+                                    // 转换为可变的Bitmap,供后续使用 (修复ML Kit错误 + 避免Hardware Bitmap被回收)
+                                    android.graphics.Bitmap mutableBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true);
+
+                                    // 回收原始的Hardware Bitmap
                                     bitmap.recycle();
 
+                                    // 如果需要保存,则保存截图
+                                    if (prefix != null && !prefix.isEmpty()) {
+                                        saveScreenshotWithPrefix(mutableBitmap, prefix);
+                                    }
+
+                                    // 传递可变的Bitmap给回调 (由回调负责回收)
                                     if (callback != null) {
-                                        callback.onSuccess();
+                                        callback.onSuccess(mutableBitmap);
                                     }
                                 } else {
                                     logE("❌ 获取Bitmap失败");
@@ -2256,7 +2274,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 // 不需要随机延迟,直接点击
                 clickQualificationButton();
 
-                logD("✅ 抖音自动化流程完成");
+                // 注意: 流程会继续执行,不在这里结束
 
             } catch (Exception e) {
                 logE("抖音自动化失败: " + e.getMessage());
@@ -2598,7 +2616,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     // 点击"我的订单"
                     clickMyOrderButton();
 
-                    logD("🎉 抖音自动化流程完成!");
+                    // 注意: 流程会继续执行,不在这里结束
                     return;
                 }
             }
@@ -2616,7 +2634,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 // 点击"我的订单"
                 clickMyOrderButton();
 
-                logD("🎉 抖音自动化流程完成!");
+                // 注意: 流程会继续执行,不在这里结束
             } else {
                 logE("⚠️ 返回" + maxReturnTimes + "次后仍未到达'我'页面");
             }
@@ -2784,15 +2802,18 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 clickByCoordinates(957, 514);
             }
 
-            // 等待1秒让页面加载
+            // 等待1秒让弹窗完全显示
             Thread.sleep(1000);
 
-            // 截图保存
+            // 截图保存"更多工具与服务"弹窗,并使用同一个Bitmap进行OCR识别
             logD("📸 准备截屏保存订单更多页面...");
             takeScreenshotWithPrefix("订单更多", new ScreenshotCallback() {
                 @Override
-                public void onSuccess() {
+                public void onSuccess(android.graphics.Bitmap bitmap) {
                     logD("✅ 订单更多页面截屏成功");
+
+                    // 使用同一个Bitmap进行OCR识别,避免弹窗关闭
+                    clickQualificationRulesButtonWithOcr(bitmap);
                 }
 
                 @Override
@@ -2805,6 +2826,298 @@ public class AutomationAccessibilityService extends AccessibilityService {
             logE("点击'更多'按钮失败: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * 🆕 使用OCR识别"资质规则"按钮并点击
+     * @param bitmap 已截取的弹窗截图
+     */
+    private void clickQualificationRulesButtonWithOcr(android.graphics.Bitmap bitmap) {
+        try {
+            logD("🔍 准备使用OCR识别'资质规则'按钮...");
+
+            if (bitmap == null) {
+                logE("❌ Bitmap为空,无法进行OCR识别");
+                return;
+            }
+
+            logD("✅ 使用已截取的弹窗图片,开始OCR识别...");
+
+            // Copy一份Bitmap给OCR使用,避免异步处理时Bitmap被修改
+            final android.graphics.Bitmap ocrBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false);
+
+            // 使用OCR识别"资质规则" (传递日志回调)
+            OcrHelper ocrHelper = new OcrHelper(message -> logD(message));
+            ocrHelper.findTextPosition(ocrBitmap, "资质规则", new OcrHelper.OcrCallback() {
+                        @Override
+                        public void onSuccess(OcrHelper.TextMatch match) {
+                            logD("🎯 OCR识别成功,找到'资质规则'按钮");
+                            logD("📍 文本块: " + match.text);
+                            logD("📍 位置: [" + match.bounds.left + "," + match.bounds.top + "][" + match.bounds.right + "," + match.bounds.bottom + "]");
+
+                            try {
+                                int clickX, clickY;
+
+                                // 检查是否识别成了"我要开店 资质规则"(两个按钮连在一起)
+                                if (match.text.contains("我要开店") && match.text.contains("资质规则")) {
+                                    logD("⚠️ OCR把两个按钮识别成一个文本块,计算'资质规则'的位置...");
+                                    // 点击文本块的右半部分(资质规则应该在右边)
+                                    int width = match.bounds.right - match.bounds.left;
+                                    clickX = match.bounds.left + (int)(width * 0.75); // 右侧3/4位置
+                                    clickY = match.center.y;
+                                    logD("📍 调整后的点击位置: (" + clickX + ", " + clickY + ")");
+                                } else {
+                                    // 正常情况,点击中心点
+                                    clickX = match.center.x;
+                                    clickY = match.center.y;
+                                }
+
+                                // 点击"资质规则"按钮
+                                clickByCoordinates(clickX, clickY);
+                                logD("✅ 已点击'资质规则'按钮");
+
+                                // 等待页面加载
+                                Thread.sleep(1000);
+
+                                // 截图保存"资质规则"页面
+                                logD("📸 准备截屏保存资质规则页面...");
+                                takeScreenshotWithPrefix("资质规则", new ScreenshotCallback() {
+                                    @Override
+                                    public void onSuccess() {
+                                        logD("✅ 资质规则页面截屏成功");
+                                        logD("🎉 抖音自动化流程完成!");
+                                    }
+
+                                    @Override
+                                    public void onFailure() {
+                                        logE("❌ 资质规则页面截屏失败");
+                                    }
+                                });
+
+                            } catch (Exception e) {
+                                logE("点击'资质规则'按钮失败: " + e.getMessage());
+                                e.printStackTrace();
+                            } finally {
+                                // 在回调完成后释放资源
+                                ocrHelper.release();
+                                ocrBitmap.recycle();
+                                bitmap.recycle();
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(String error) {
+                            logE("❌ OCR识别'资质规则'失败,尝试识别'我要开店'...");
+
+                            // 方案2: 尝试识别"我要开店",然后点击它右边的位置
+                            OcrHelper ocrHelper2 = new OcrHelper(message -> logD(message));
+                            ocrHelper2.findTextPosition(ocrBitmap, "我要开店", new OcrHelper.OcrCallback() {
+                                @Override
+                                public void onSuccess(OcrHelper.TextMatch match) {
+                                    logD("🎯 找到'我要开店'按钮,计算'资质规则'位置...");
+
+                                    // "资质规则"在"我要开店"的右边,距离大约是按钮宽度
+                                    int buttonWidth = match.bounds.right - match.bounds.left;
+                                    int targetX = match.center.x + buttonWidth + 20; // 右边一个按钮的位置
+                                    int targetY = match.center.y; // 同一行
+
+                                    logD("📍 推测'资质规则'位置: (" + targetX + ", " + targetY + ")");
+
+                                    try {
+                                        // 点击推测的位置
+                                        clickByCoordinates(targetX, targetY);
+                                        logD("✅ 已点击推测的'资质规则'位置");
+
+                                        // 等待页面加载
+                                        Thread.sleep(1000);
+
+                                        // 截图保存"资质规则"页面
+                                        logD("📸 准备截屏保存资质规则页面...");
+                                        takeScreenshotWithPrefix("资质规则", new ScreenshotCallback() {
+                                            @Override
+                                            public void onSuccess() {
+                                                logD("✅ 资质规则页面截屏成功");
+                                                logD("🎉 抖音自动化流程完成!");
+                                            }
+
+                                            @Override
+                                            public void onFailure() {
+                                                logE("❌ 资质规则页面截屏失败");
+                                            }
+                                        });
+
+                                    } catch (Exception e) {
+                                        logE("点击推测位置失败: " + e.getMessage());
+                                        e.printStackTrace();
+                                    } finally {
+                                        ocrHelper2.release();
+                                    }
+                                }
+
+                                @Override
+                                public void onFailure(String error2) {
+                                    logE("❌ OCR识别'我要开店'也失败,使用固定坐标点击...");
+
+                                    // 方案3: 使用固定坐标点击 (从截图估算的位置)
+                                    int fixedX = 850; // 右下角
+                                    int fixedY = 1850;
+
+                                    logD("📍 使用固定坐标: (" + fixedX + ", " + fixedY + ")");
+
+                                    try {
+                                        clickByCoordinates(fixedX, fixedY);
+                                        logD("✅ 已点击固定坐标位置");
+
+                                        Thread.sleep(1000);
+
+                                        takeScreenshotWithPrefix("资质规则", new ScreenshotCallback() {
+                                            @Override
+                                            public void onSuccess() {
+                                                logD("✅ 资质规则页面截屏成功");
+                                                logD("🎉 抖音自动化流程完成!");
+                                            }
+
+                                            @Override
+                                            public void onFailure() {
+                                                logE("❌ 资质规则页面截屏失败");
+                                            }
+                                        });
+
+                                    } catch (Exception e) {
+                                        logE("点击固定坐标失败: " + e.getMessage());
+                                        e.printStackTrace();
+                                    } finally {
+                                        ocrHelper2.release();
+                                    }
+                                }
+                            });
+
+                            // 释放资源
+                            ocrHelper.release();
+                            bitmap.recycle();
+                        }
+                    });
+
+        } catch (Exception e) {
+            logE("OCR识别'资质规则'失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 🆕 使用OCR等待营业执照图片加载完成,然后截屏
+     */
+    private void waitForBusinessLicenseAndScreenshot() {
+        new Thread(() -> {
+            try {
+                logD("⏳ 使用OCR等待营业执照图片加载...");
+
+                // 最多尝试10次,每次间隔1秒
+                int maxAttempts = 10;
+                boolean licenseLoaded = false;
+
+                for (int i = 1; i <= maxAttempts; i++) {
+                    Thread.sleep(1000); // 等待1秒
+
+                    logD("🔍 第" + i + "次检测营业执照是否加载...");
+
+                    // 截取当前屏幕
+                    final boolean[] checkComplete = {false};
+                    final boolean[] foundLicense = {false};
+
+                    takeScreenshot(new ScreenshotCallback() {
+                        @Override
+                        public void onSuccess(android.graphics.Bitmap bitmap) {
+                            if (bitmap == null) {
+                                logE("❌ 截图失败");
+                                checkComplete[0] = true;
+                                return;
+                            }
+
+                            // 转换为可变的Bitmap (修复ML Kit错误)
+                            final android.graphics.Bitmap mutableBitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, true);
+
+                            // 使用OCR识别营业执照上的关键文字 (传递日志回调)
+                            // 改用"MA"(统一社会信用代码特征)作为判断标准
+                            // 从日志看到: 91110101MA0045NI7u - 包含"MA"
+                            OcrHelper ocrHelper = new OcrHelper(message -> logD(message));
+                            ocrHelper.findTextPosition(mutableBitmap, "MA", new OcrHelper.OcrCallback() {
+                                @Override
+                                public void onSuccess(OcrHelper.TextMatch match) {
+                                    logD("✅ 检测到营业执照图片已加载!");
+                                    logD("📍 找到统一社会信用代码特征: " + match.text);
+                                    foundLicense[0] = true;
+                                    checkComplete[0] = true;
+                                    ocrHelper.release();
+                                    mutableBitmap.recycle();
+                                }
+
+                                @Override
+                                public void onFailure(String error) {
+                                    logD("⏳ 营业执照图片尚未加载,继续等待...");
+                                    checkComplete[0] = true;
+                                    ocrHelper.release();
+                                    mutableBitmap.recycle();
+                                }
+                            });
+                        }
+
+                        @Override
+                        public void onFailure() {
+                            logE("❌ 截图失败");
+                            checkComplete[0] = true;
+                        }
+                    });
+
+                    // 等待OCR检测完成
+                    int waitCount = 0;
+                    while (!checkComplete[0] && waitCount < 50) { // 最多等待5秒
+                        Thread.sleep(100);
+                        waitCount++;
+                    }
+
+                    if (foundLicense[0]) {
+                        licenseLoaded = true;
+                        break;
+                    }
+                }
+
+                if (licenseLoaded) {
+                    logD("🎉 营业执照图片已完全加载,准备截屏...");
+                    Thread.sleep(500); // 再等待500ms确保完全加载
+                } else {
+                    logE("⚠️ 超时未检测到营业执照图片,仍然进行截屏...");
+                }
+
+                // 截屏保存营业执照页面
+                logD("📸 准备截屏保存营业执照页面...");
+                takeScreenshotWithPrefix("营业执照", new ScreenshotCallback() {
+                    @Override
+                    public void onSuccess() {
+                        logD("✅ 营业执照页面截屏成功");
+
+                        // 截图成功后,智能返回到"我"的首页
+                        new Thread(() -> {
+                            try {
+                                Thread.sleep(1000); // 等待截图完成
+                                smartReturnToMePage();
+                            } catch (Exception e) {
+                                logE("返回'我'页面失败: " + e.getMessage());
+                            }
+                        }).start();
+                    }
+
+                    @Override
+                    public void onFailure() {
+                        logE("❌ 营业执照页面截屏失败");
+                    }
+                });
+
+            } catch (Exception e) {
+                logE("等待营业执照加载失败: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }).start();
     }
 
     /**
@@ -2876,36 +3189,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
                             if (clicked) {
                                 logD("✅ 成功点击'营业执照'按钮(通过文本查找)");
 
-                                // 等待营业执照页面加载,然后截屏
-                                new Thread(() -> {
-                                    try {
-                                        Thread.sleep(1000); // 等待页面加载
-                                        logD("📸 准备截屏保存营业执照页面...");
-                                        takeScreenshotWithPrefix("营业执照", new ScreenshotCallback() {
-                                            @Override
-                                            public void onSuccess() {
-                                                logD("✅ 营业执照页面截屏成功");
-
-                                                // 截图成功后,智能返回到"我"的首页
-                                                new Thread(() -> {
-                                                    try {
-                                                        Thread.sleep(1000); // 等待截图完成
-                                                        smartReturnToMePage();
-                                                    } catch (Exception e) {
-                                                        logE("返回'我'页面失败: " + e.getMessage());
-                                                    }
-                                                }).start();
-                                            }
-
-                                            @Override
-                                            public void onFailure() {
-                                                logE("❌ 营业执照页面截屏失败");
-                                            }
-                                        });
-                                    } catch (Exception e) {
-                                        logE("截屏失败: " + e.getMessage());
-                                    }
-                                }).start();
+                                // 使用OCR等待营业执照图片加载完成,然后截屏
+                                waitForBusinessLicenseAndScreenshot();
 
                                 rootNode.recycle();
                                 return;
@@ -2925,36 +3210,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 // "营业执照"应该在更上方,大概Y=400左右
                 clickByCoordinates(540, 400);
 
-                // 等待营业执照页面加载,然后截屏
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(1000); // 等待页面加载
-                        logD("📸 准备截屏保存营业执照页面...");
-                        takeScreenshotWithPrefix("营业执照", new ScreenshotCallback() {
-                            @Override
-                            public void onSuccess() {
-                                logD("✅ 营业执照页面截屏成功");
-
-                                // 截图成功后,智能返回到"我"的首页
-                                new Thread(() -> {
-                                    try {
-                                        Thread.sleep(1000); // 等待截图完成
-                                        smartReturnToMePage();
-                                    } catch (Exception e) {
-                                        logE("返回'我'页面失败: " + e.getMessage());
-                                    }
-                                }).start();
-                            }
-
-                            @Override
-                            public void onFailure() {
-                                logE("❌ 营业执照页面截屏失败");
-                            }
-                        });
-                    } catch (Exception e) {
-                        logE("截屏失败: " + e.getMessage());
-                    }
-                }).start();
+                // 使用OCR等待营业执照图片加载完成,然后截屏
+                waitForBusinessLicenseAndScreenshot();
 
                 return;
             }
