@@ -2181,8 +2181,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 hasClickedDouyinMe = true;
 
                 // 等待"我"页面加载完成
-                logD("⏱️ 等待'我'页面加载完成(2秒)...");
-                Thread.sleep(2000);
+                logD("⏱️ 等待'我'页面加载完成(1秒)...");
+                Thread.sleep(1000);
 
                 // 步骤2: 点击"更多"按钮
                 logD("📱 步骤2: 点击'更多'按钮...");
@@ -2201,7 +2201,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                 // 步骤5: 点击"资质证照"按钮
                 logD("📱 步骤5: 点击'资质证照'按钮...");
-                randomDelay();
+                // 不需要随机延迟,直接点击
                 clickQualificationButton();
 
                 logD("✅ 抖音自动化流程完成");
@@ -2463,7 +2463,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                 // 等待资质证照页面加载,然后截屏,再点击"营业执照"
                                 new Thread(() -> {
                                     try {
-                                        Thread.sleep(2000); // 等待页面加载
+                                        Thread.sleep(1000); // 等待页面加载
                                         logD("📸 准备截屏保存资质证照页面...");
                                         takeScreenshotWithPrefix("资质证照", new ScreenshotCallback() {
                                             @Override
@@ -2507,6 +2507,106 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
         } catch (Exception e) {
             logE("点击'资质证照'按钮失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🔙 智能返回到"我"的首页
+     * 最多返回4次,每次返回后检测是否到达"我"页面
+     * 如果检测到"我"页面,立即停止返回
+     */
+    private void smartReturnToMePage() {
+        try {
+            logD("🔙 开始智能返回到'我'的首页...");
+
+            // 先停留1.5秒,让用户看清楚营业执照页面
+            logD("⏱️ 停留1.5秒,查看营业执照页面...");
+            Thread.sleep(1500);
+
+            int maxReturnTimes = 4; // 最多返回4次
+
+            for (int i = 1; i <= maxReturnTimes; i++) {
+                // 执行返回操作
+                logD("🔙 第" + i + "次返回...");
+                performGlobalAction(GLOBAL_ACTION_BACK);
+
+                // 每次返回后等待300ms,让页面稳定
+                Thread.sleep(300);
+
+                // 检测是否已经在"我"页面
+                if (isOnMePage()) {
+                    logD("✅ 第" + i + "次返回后到达'我'页面");
+
+                    // 再按一次返回键,关闭右侧的"更多"菜单
+                    logD("🔙 关闭右侧'更多'菜单...");
+                    Thread.sleep(300);
+                    performGlobalAction(GLOBAL_ACTION_BACK);
+                    Thread.sleep(500);
+
+                    logD("🎉 抖音自动化流程完成!");
+                    return;
+                }
+            }
+
+            // 最后再检测一次
+            if (isOnMePage()) {
+                logD("✅ 成功返回到'我'页面");
+
+                // 再按一次返回键,关闭右侧的"更多"菜单
+                logD("🔙 关闭右侧'更多'菜单...");
+                Thread.sleep(300);
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(500);
+
+                logD("🎉 抖音自动化流程完成!");
+            } else {
+                logE("⚠️ 返回" + maxReturnTimes + "次后仍未到达'我'页面");
+            }
+
+        } catch (Exception e) {
+            logE("智能返回失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🔍 检测是否在"我"页面
+     * 通过查找"获赞"、"关注"、"粉丝"等特征元素判断
+     */
+    private boolean isOnMePage() {
+        try {
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                return false;
+            }
+
+            // 查找"获赞"文本节点
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> likeNodes =
+                rootNode.findAccessibilityNodeInfosByText("获赞");
+
+            // 查找"关注"文本节点
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> followNodes =
+                rootNode.findAccessibilityNodeInfosByText("关注");
+
+            // 查找"粉丝"文本节点
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> fansNodes =
+                rootNode.findAccessibilityNodeInfosByText("粉丝");
+
+            rootNode.recycle();
+
+            // 如果找到"获赞"或"关注"或"粉丝",说明在"我"页面
+            boolean isOnMe = (likeNodes != null && !likeNodes.isEmpty()) ||
+                            (followNodes != null && !followNodes.isEmpty()) ||
+                            (fansNodes != null && !fansNodes.isEmpty());
+
+            if (isOnMe) {
+                logD("🎯 检测到'我'页面特征元素");
+            }
+
+            return isOnMe;
+
+        } catch (Exception e) {
+            logE("检测'我'页面失败: " + e.getMessage());
+            return false;
         }
     }
 
@@ -2582,13 +2682,22 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                 // 等待营业执照页面加载,然后截屏
                                 new Thread(() -> {
                                     try {
-                                        Thread.sleep(2000); // 等待页面加载
+                                        Thread.sleep(1000); // 等待页面加载
                                         logD("📸 准备截屏保存营业执照页面...");
                                         takeScreenshotWithPrefix("营业执照", new ScreenshotCallback() {
                                             @Override
                                             public void onSuccess() {
                                                 logD("✅ 营业执照页面截屏成功");
-                                                logD("🎉 抖音自动化流程完成!");
+
+                                                // 截图成功后,智能返回到"我"的首页
+                                                new Thread(() -> {
+                                                    try {
+                                                        Thread.sleep(1000); // 等待截图完成
+                                                        smartReturnToMePage();
+                                                    } catch (Exception e) {
+                                                        logE("返回'我'页面失败: " + e.getMessage());
+                                                    }
+                                                }).start();
                                             }
 
                                             @Override
@@ -2622,13 +2731,22 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 // 等待营业执照页面加载,然后截屏
                 new Thread(() -> {
                     try {
-                        Thread.sleep(2000); // 等待页面加载
+                        Thread.sleep(1000); // 等待页面加载
                         logD("📸 准备截屏保存营业执照页面...");
                         takeScreenshotWithPrefix("营业执照", new ScreenshotCallback() {
                             @Override
                             public void onSuccess() {
                                 logD("✅ 营业执照页面截屏成功");
-                                logD("🎉 抖音自动化流程完成!");
+
+                                // 截图成功后,智能返回到"我"的首页
+                                new Thread(() -> {
+                                    try {
+                                        Thread.sleep(1000); // 等待截图完成
+                                        smartReturnToMePage();
+                                    } catch (Exception e) {
+                                        logE("返回'我'页面失败: " + e.getMessage());
+                                    }
+                                }).start();
                             }
 
                             @Override
