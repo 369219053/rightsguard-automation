@@ -1291,6 +1291,13 @@ public class AutomationAccessibilityService extends AccessibilityService {
      * 截屏保存应用验真页面
      */
     private void takeScreenshotBeforeVerify(final ScreenshotCallback callback) {
+        takeScreenshotWithPrefix("应用验真", callback);
+    }
+
+    /**
+     * 截屏保存页面(支持自定义前缀)
+     */
+    private void takeScreenshotWithPrefix(final String prefix, final ScreenshotCallback callback) {
         try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
                 // Android 11 (API 30) 及以上使用新的截屏API
@@ -1314,8 +1321,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                                 if (bitmap != null) {
                                     logD("📐 截图尺寸: " + bitmap.getWidth() + "x" + bitmap.getHeight());
-                                    // 保存截图
-                                    saveScreenshot(bitmap);
+                                    // 保存截图(使用自定义前缀)
+                                    saveScreenshotWithPrefix(bitmap, prefix);
                                     bitmap.recycle();
 
                                     if (callback != null) {
@@ -1368,9 +1375,16 @@ public class AutomationAccessibilityService extends AccessibilityService {
      * 保存截图到文件
      */
     private void saveScreenshot(android.graphics.Bitmap bitmap) {
+        saveScreenshotWithPrefix(bitmap, "应用验真");
+    }
+
+    /**
+     * 保存截图到文件(支持自定义前缀)
+     */
+    private void saveScreenshotWithPrefix(android.graphics.Bitmap bitmap, String prefix) {
         try {
-            // 使用备注作为文件名的一部分
-            String fileName = "应用验真_" + remark.replace(":", "_") + "_" +
+            // 使用前缀和备注作为文件名的一部分
+            String fileName = prefix + "_" + remark.replace(":", "_") + "_" +
                             new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.CHINA)
                                 .format(new java.util.Date()) + ".png";
 
@@ -2185,6 +2199,11 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 randomDelay();
                 scrollToAboutSection();
 
+                // 步骤5: 点击"资质证照"按钮
+                logD("📱 步骤5: 点击'资质证照'按钮...");
+                randomDelay();
+                clickQualificationButton();
+
                 logD("✅ 抖音自动化流程完成");
 
             } catch (Exception e) {
@@ -2292,10 +2311,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
             // 使用无障碍服务的滑动手势API
             // 创建滑动手势路径
             android.graphics.Path path = new android.graphics.Path();
-            // 起始点: 屏幕中下部 (540, 1800)
-            path.moveTo(540, 1800);
-            // 结束点: 屏幕中上部 (540, 600)
-            path.lineTo(540, 600);
+            // 起始点: 屏幕中下部 (540, 1700)
+            path.moveTo(540, 1700);
+            // 结束点: 屏幕中上部 (540, 700) - 滑动1000像素,让"资质证照"显示在屏幕中间
+            path.lineTo(540, 700);
 
             // 创建手势描述
             android.accessibilityservice.GestureDescription.StrokeDescription strokeDescription =
@@ -2318,6 +2337,27 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     public void onCompleted(android.accessibilityservice.GestureDescription gestureDescription) {
                         super.onCompleted(gestureDescription);
                         logD("✅ 滑动手势执行成功");
+
+                        // 🆕 滑动完成后等待1秒,然后截屏
+                        new Thread(() -> {
+                            try {
+                                Thread.sleep(1000); // 等待页面稳定
+                                logD("📸 准备截屏保存抖音设置页面...");
+                                takeScreenshotWithPrefix("抖音设置", new ScreenshotCallback() {
+                                    @Override
+                                    public void onSuccess() {
+                                        logD("✅ 抖音设置页面截屏成功");
+                                    }
+
+                                    @Override
+                                    public void onFailure() {
+                                        logE("❌ 抖音设置页面截屏失败");
+                                    }
+                                });
+                            } catch (Exception e) {
+                                logE("截屏失败: " + e.getMessage());
+                            }
+                        }).start();
                     }
 
                     @Override
@@ -2338,6 +2378,125 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
         } catch (Exception e) {
             logE("滑动到'关于'部分失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 🆕 点击"资质证照"按钮
+     */
+    private void clickQualificationButton() {
+        try {
+            logD("🔍 准备截图并点击'资质证照'按钮...");
+
+            // 等待滑动完成和页面稳定
+            Thread.sleep(2000); // 增加等待时间,确保页面完全稳定
+
+            // 🆕 先截图保存"设置"页面(显示"资质证照"按钮)
+            logD("📸 准备截屏保存抖音设置页面...");
+            takeScreenshotWithPrefix("抖音设置", new ScreenshotCallback() {
+                @Override
+                public void onSuccess() {
+                    logD("✅ 抖音设置页面截屏成功");
+                }
+
+                @Override
+                public void onFailure() {
+                    logE("❌ 抖音设置页面截屏失败");
+                }
+            });
+
+            // 等待截屏完成
+            Thread.sleep(1000);
+
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logE("❌ 无法获取根节点");
+                return;
+            }
+
+            // 方法1: 优先通过文本查找"资质证照"按钮(最准确!)
+            // 直接查找包含"资质证照"文本的节点
+            logD("🔍 开始查找'资质证照'按钮...");
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> textNodes =
+                rootNode.findAccessibilityNodeInfosByText("资质证照");
+
+            if (textNodes != null && !textNodes.isEmpty()) {
+                logD("📋 找到 " + textNodes.size() + " 个包含'资质证照'文本的节点");
+
+                for (android.view.accessibility.AccessibilityNodeInfo node : textNodes) {
+                    // 获取节点文本,验证是否完全匹配
+                    CharSequence nodeText = node.getText();
+                    android.graphics.Rect bounds = new android.graphics.Rect();
+                    node.getBoundsInScreen(bounds);
+
+                    logD("  节点文本: " + (nodeText != null ? nodeText.toString() : "null"));
+                    logD("  节点位置: [" + bounds.left + "," + bounds.top + "] → [" + bounds.right + "," + bounds.bottom + "]");
+
+                    // 只处理文本完全匹配"资质证照"的节点
+                    if (nodeText != null && "资质证照".equals(nodeText.toString())) {
+                        logD("✅ 找到完全匹配的'资质证照'文本节点");
+
+                        // 查找可点击的父节点
+                        android.view.accessibility.AccessibilityNodeInfo clickableNode = node;
+                        int parentLevel = 0;
+                        while (clickableNode != null && !clickableNode.isClickable() && parentLevel < 5) {
+                            clickableNode = clickableNode.getParent();
+                            parentLevel++;
+                        }
+
+                        if (clickableNode != null && clickableNode.isClickable()) {
+                            // 获取父节点的位置信息
+                            android.graphics.Rect parentBounds = new android.graphics.Rect();
+                            clickableNode.getBoundsInScreen(parentBounds);
+
+                            String parentId = clickableNode.getViewIdResourceName();
+                            logD("  可点击父节点ID: " + (parentId != null ? parentId : "null"));
+                            logD("  父节点层级: " + parentLevel);
+                            logD("  父节点位置: [" + parentBounds.left + "," + parentBounds.top + "] → [" + parentBounds.right + "," + parentBounds.bottom + "]");
+
+                            boolean clicked = clickableNode.performAction(
+                                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK
+                            );
+                            if (clicked) {
+                                logD("✅ 成功点击'资质证照'按钮(通过文本查找)");
+
+                                // 等待资质证照页面加载,然后截屏
+                                new Thread(() -> {
+                                    try {
+                                        Thread.sleep(2000); // 等待页面加载
+                                        logD("📸 准备截屏保存资质证照页面...");
+                                        takeScreenshotWithPrefix("资质证照", new ScreenshotCallback() {
+                                            @Override
+                                            public void onSuccess() {
+                                                logD("✅ 资质证照页面截屏成功");
+                                            }
+
+                                            @Override
+                                            public void onFailure() {
+                                                logE("❌ 资质证照页面截屏失败");
+                                            }
+                                        });
+                                    } catch (Exception e) {
+                                        logE("截屏失败: " + e.getMessage());
+                                    }
+                                }).start();
+
+                                rootNode.recycle();
+                                return;
+                            }
+                        } else {
+                            logE("❌ 未找到可点击的父节点");
+                        }
+                    }
+                }
+            } else {
+                logE("❌ 未找到包含'资质证照'文本的节点,可能滑动距离不够或页面未加载完成");
+            }
+
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("点击'资质证照'按钮失败: " + e.getMessage());
         }
     }
 
