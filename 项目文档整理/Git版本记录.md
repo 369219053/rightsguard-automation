@@ -12,6 +12,163 @@
 
 ## 🚀 版本历史
 
+### V3.2 (2026-03-06) 📜 资质规则页面完整流程 + 智能返回优化!
+
+**✨ 核心更新 - 资质规则页面自动化**
+
+#### ✅ 完成内容
+
+**1. 资质规则页面OCR加载检测**
+- ✅ 点击"资质规则"按钮后使用OCR检测页面是否加载完成
+- ✅ 识别"资质规则公示"文字作为加载完成的标志
+- ✅ 最多检测10次,每次间隔500ms(总共最多5秒)
+- ✅ 检测成功后立即截图,避免截图空白页面
+- ✅ 超时后仍然尝试截图,避免完全失败
+
+**2. 截图后上拉屏幕到底部**
+- ✅ 截图完成后自动上拉屏幕到底部
+- ✅ 修复手势方向:从下往上滑(2000→800)
+- ✅ 持续时间500ms,滑动距离1200像素
+- ✅ 确保营业执照底部信息完整展示
+
+**3. 智能返回到"我"页面**
+- ✅ 上拉完成后智能返回到"我"页面
+- ✅ 每次返回后检测是否到达"我"页面
+- ✅ 检测"获赞"、"关注"、"粉丝"等特征元素
+- ✅ 到达"我"页面后立即停止返回,避免返回过头
+- ✅ 增强调试日志,显示检测过程和结果
+
+**4. OCR同步问题修复**
+- ✅ 修复OCR异步回调导致的循环继续问题
+- ✅ 使用`ocrCompleted`标志位等待OCR真正完成
+- ✅ 避免在OCR未完成时就判断结果
+
+**5. 调试日志增强**
+- ✅ `isOnMePage()`方法增加详细日志
+- ✅ 显示查找到的"获赞"、"关注"、"粉丝"数量
+- ✅ 显示每次返回后的检测结果
+- ✅ 便于排查页面检测失败的原因
+
+#### 📋 完整流程
+
+```
+点击"资质规则"按钮
+  ↓
+OCR检测"资质规则公示"(页面加载完成)
+  ↓
+截图保存"资质规则"页面 ✅
+  ↓
+上拉屏幕到底部 ✅
+  ↓
+智能返回到"我"页面 ✅
+  ├─ 第1次返回 → 检测
+  ├─ 第2次返回 → 检测
+  ├─ 第3次返回 → 检测到"我"页面 → 停止 ✅
+  └─ 避免返回过头到桌面
+  ↓
+🎉 抖音自动化流程完成!
+```
+
+#### 🔧 技术实现
+
+**OCR页面加载检测**:
+```java
+private void waitForQualificationPageLoaded(PageLoadCallback callback) {
+    new Thread(() -> {
+        for (int i = 1; i <= 10; i++) {
+            final boolean[] textFound = {false};
+            final boolean[] ocrCompleted = {false};
+
+            ocrHelper.findTextPosition(bitmap, "资质规则公示",
+                new OcrHelper.OcrCallback() {
+                    @Override
+                    public void onSuccess(...) {
+                        textFound[0] = true;
+                        ocrCompleted[0] = true;
+                    }
+
+                    @Override
+                    public void onFailure(...) {
+                        ocrCompleted[0] = true;
+                    }
+                });
+
+            // 等待OCR真正完成
+            while (!ocrCompleted[0]) {
+                Thread.sleep(100);
+            }
+
+            if (textFound[0]) {
+                callback.onLoaded();
+                return;
+            }
+            Thread.sleep(500);
+        }
+    }).start();
+}
+```
+
+**智能返回检测**:
+```java
+for (int i = 1; i <= maxReturnTimes; i++) {
+    performGlobalAction(GLOBAL_ACTION_BACK);
+    Thread.sleep(800); // 等待页面完全加载
+
+    // 检测是否到达"我"页面
+    if (isOnMePage()) {
+        logD("✅ 第" + i + "次返回后到达'我'页面,停止返回");
+        return;
+    }
+}
+```
+
+**增强的页面检测**:
+```java
+private boolean isOnMePage() {
+    List<AccessibilityNodeInfo> likeNodes =
+        rootNode.findAccessibilityNodeInfosByText("获赞");
+    logD("🔍 查找'获赞': " + likeNodes.size() + "个");
+
+    List<AccessibilityNodeInfo> followNodes =
+        rootNode.findAccessibilityNodeInfosByText("关注");
+    logD("🔍 查找'关注': " + followNodes.size() + "个");
+
+    List<AccessibilityNodeInfo> fansNodes =
+        rootNode.findAccessibilityNodeInfosByText("粉丝");
+    logD("🔍 查找'粉丝': " + fansNodes.size() + "个");
+
+    boolean isOnMe = (likeNodes != null && !likeNodes.isEmpty()) ||
+                     (followNodes != null && !followNodes.isEmpty()) ||
+                     (fansNodes != null && !fansNodes.isEmpty());
+
+    if (isOnMe) {
+        logD("🎯 检测到'我'页面特征元素");
+    } else {
+        logD("❌ 未检测到'我'页面特征元素");
+    }
+
+    return isOnMe;
+}
+```
+
+#### 🎯 技术亮点
+
+1. **智能等待** - 不是固定等待时间,而是检测到内容才继续
+2. **OCR检测** - 使用视觉识别,比UI Dump更可靠
+3. **容错机制** - 超时后仍然尝试截图,避免完全失败
+4. **智能返回** - 检测到"我"页面立即停止,避免返回过头
+5. **详细日志** - 完整的调试日志,便于排查问题
+
+#### 📦 文件变更
+
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - 新增 `waitForQualificationPageLoaded()` - 资质规则页面加载检测
+  - 新增 `scrollToBottomAndReturnToMe()` - 上拉屏幕并智能返回
+  - 优化 `isOnMePage()` - 增强调试日志
+  - 修复 OCR异步回调同步问题
+
+---
+
 ### V3.1 (2026-03-05) 🔍 中文OCR识别 + 智能点击定位!
 
 **✨ 核心更新 - OCR识别技术**

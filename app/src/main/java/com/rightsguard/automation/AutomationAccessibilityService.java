@@ -2652,20 +2652,24 @@ public class AutomationAccessibilityService extends AccessibilityService {
         try {
             android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
             if (rootNode == null) {
+                logD("⚠️ 无法获取根节点");
                 return false;
             }
 
             // 查找"获赞"文本节点
             java.util.List<android.view.accessibility.AccessibilityNodeInfo> likeNodes =
                 rootNode.findAccessibilityNodeInfosByText("获赞");
+            logD("🔍 查找'获赞': " + (likeNodes != null ? likeNodes.size() : 0) + "个");
 
             // 查找"关注"文本节点
             java.util.List<android.view.accessibility.AccessibilityNodeInfo> followNodes =
                 rootNode.findAccessibilityNodeInfosByText("关注");
+            logD("🔍 查找'关注': " + (followNodes != null ? followNodes.size() : 0) + "个");
 
             // 查找"粉丝"文本节点
             java.util.List<android.view.accessibility.AccessibilityNodeInfo> fansNodes =
                 rootNode.findAccessibilityNodeInfosByText("粉丝");
+            logD("🔍 查找'粉丝': " + (fansNodes != null ? fansNodes.size() : 0) + "个");
 
             rootNode.recycle();
 
@@ -2676,6 +2680,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
             if (isOnMe) {
                 logD("🎯 检测到'我'页面特征元素");
+            } else {
+                logD("❌ 未检测到'我'页面特征元素");
             }
 
             return isOnMe;
@@ -2876,21 +2882,53 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                 clickByCoordinates(clickX, clickY);
                                 logD("✅ 已点击'资质规则'按钮");
 
-                                // 等待页面加载
-                                Thread.sleep(1000);
+                                // 等待页面开始加载
+                                Thread.sleep(500);
 
-                                // 截图保存"资质规则"页面
-                                logD("📸 准备截屏保存资质规则页面...");
-                                takeScreenshotWithPrefix("资质规则", new ScreenshotCallback() {
+                                // 使用OCR检测页面是否加载完成
+                                logD("🔍 使用OCR检测资质规则页面是否加载完成...");
+                                waitForQualificationPageLoaded(new PageLoadCallback() {
                                     @Override
-                                    public void onSuccess() {
-                                        logD("✅ 资质规则页面截屏成功");
-                                        logD("🎉 抖音自动化流程完成!");
+                                    public void onLoaded() {
+                                        logD("✅ 资质规则页面已加载完成!");
+
+                                        // 截图保存"资质规则"页面
+                                        logD("📸 准备截屏保存资质规则页面...");
+                                        takeScreenshotWithPrefix("资质规则", new ScreenshotCallback() {
+                                            @Override
+                                            public void onSuccess() {
+                                                logD("✅ 资质规则页面截屏成功");
+
+                                                // 截图后下拉到最底部,然后返回到"我"的首页
+                                                scrollToBottomAndReturnToMe();
+                                            }
+
+                                            @Override
+                                            public void onFailure() {
+                                                logE("❌ 资质规则页面截屏失败");
+                                            }
+                                        });
                                     }
 
                                     @Override
-                                    public void onFailure() {
-                                        logE("❌ 资质规则页面截屏失败");
+                                    public void onTimeout() {
+                                        logE("❌ 资质规则页面加载超时,仍然尝试截图...");
+
+                                        // 即使超时也尝试截图
+                                        takeScreenshotWithPrefix("资质规则", new ScreenshotCallback() {
+                                            @Override
+                                            public void onSuccess() {
+                                                logD("✅ 资质规则页面截屏成功(超时后)");
+
+                                                // 截图后下拉到最底部,然后返回到"我"的首页
+                                                scrollToBottomAndReturnToMe();
+                                            }
+
+                                            @Override
+                                            public void onFailure() {
+                                                logE("❌ 资质规则页面截屏失败");
+                                            }
+                                        });
                                     }
                                 });
 
@@ -3221,6 +3259,216 @@ public class AutomationAccessibilityService extends AccessibilityService {
         } catch (Exception e) {
             logE("点击'营业执照'按钮失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 页面加载回调接口
+     */
+    private interface PageLoadCallback {
+        void onLoaded();
+        void onTimeout();
+    }
+
+    /**
+     * 截图后下拉到最底部,然后返回到"我"的首页
+     */
+    private void scrollToBottomAndReturnToMe() {
+        new Thread(() -> {
+            try {
+                logD("📜 准备上拉屏幕到最底部...");
+
+                // 等待截图完成
+                Thread.sleep(500);
+
+                // 执行向上滑动手势(从下往上滑,让页面滚动到底部)
+                android.graphics.Path path = new android.graphics.Path();
+                // 起始点: 屏幕中下部 (540, 2000)
+                path.moveTo(540, 2000);
+                // 结束点: 屏幕中上部 (540, 800) - 向上滑动1200像素
+                path.lineTo(540, 800);
+
+                // 创建手势描述
+                android.accessibilityservice.GestureDescription.StrokeDescription strokeDescription =
+                    new android.accessibilityservice.GestureDescription.StrokeDescription(
+                        path,
+                        0,      // 开始时间
+                        500     // 持续时间500ms
+                    );
+
+                android.accessibilityservice.GestureDescription.Builder builder =
+                    new android.accessibilityservice.GestureDescription.Builder();
+                builder.addStroke(strokeDescription);
+                android.accessibilityservice.GestureDescription gesture = builder.build();
+
+                // 执行手势
+                boolean dispatched = dispatchGesture(
+                    gesture,
+                    new android.accessibilityservice.AccessibilityService.GestureResultCallback() {
+                        @Override
+                        public void onCompleted(android.accessibilityservice.GestureDescription gestureDescription) {
+                            super.onCompleted(gestureDescription);
+                            logD("✅ 上拉手势执行成功,页面已滚动到底部");
+
+                            // 下拉完成后,返回到"我"的首页
+                            new Thread(() -> {
+                                try {
+                                    Thread.sleep(500); // 等待页面稳定
+
+                                    logD("🔙 准备智能返回到'我'的首页...");
+
+                                    // 智能返回:检测是否已经在"我"页面,如果是则停止返回
+                                    int maxReturnTimes = 5; // 最多返回5次
+
+                                    for (int i = 1; i <= maxReturnTimes; i++) {
+                                        logD("🔙 第" + i + "次返回...");
+                                        performGlobalAction(GLOBAL_ACTION_BACK);
+                                        Thread.sleep(800); // 增加等待时间,让页面完全加载
+
+                                        // 检测是否已经在"我"页面
+                                        logD("🔍 检测是否到达'我'页面...");
+                                        if (isOnMePage()) {
+                                            logD("✅ 第" + i + "次返回后到达'我'页面,停止返回");
+                                            logD("🎉 抖音自动化流程完成!");
+                                            return;
+                                        } else {
+                                            logD("⏳ 第" + i + "次返回后未到达'我'页面,继续返回...");
+                                        }
+                                    }
+
+                                    // 如果循环结束还没到达"我"页面,再检测一次
+                                    logD("🔍 最后检测是否到达'我'页面...");
+                                    if (isOnMePage()) {
+                                        logD("✅ 成功返回到'我'页面");
+                                        logD("🎉 抖音自动化流程完成!");
+                                    } else {
+                                        logE("❌ 未能返回到'我'页面,可能返回次数不够或页面识别失败");
+                                        logD("🎉 抖音自动化流程完成(可能未完全返回)!");
+                                    }
+
+                                } catch (Exception e) {
+                                    logE("返回到'我'的首页失败: " + e.getMessage());
+                                    e.printStackTrace();
+                                }
+                            }).start();
+                        }
+
+                        @Override
+                        public void onCancelled(android.accessibilityservice.GestureDescription gestureDescription) {
+                            super.onCancelled(gestureDescription);
+                            logE("❌ 上拉手势被取消");
+                        }
+                    },
+                    null
+                );
+
+                if (!dispatched) {
+                    logE("❌ 上拉手势分发失败");
+                }
+
+            } catch (Exception e) {
+                logE("上拉屏幕失败: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    /**
+     * 使用OCR等待资质规则页面加载完成
+     * 检测"资质规则公示"文字
+     */
+    private void waitForQualificationPageLoaded(final PageLoadCallback callback) {
+        new Thread(() -> {
+            try {
+                int maxAttempts = 10; // 最多检测10次
+                int attemptInterval = 500; // 每次间隔500ms
+
+                for (int i = 0; i < maxAttempts; i++) {
+                    logD("🔍 第" + (i + 1) + "次检测资质规则页面是否加载...");
+
+                    // 截图
+                    final boolean[] screenshotSuccess = {false};
+                    final android.graphics.Bitmap[] screenshotBitmap = {null};
+
+                    takeScreenshot(new ScreenshotCallback() {
+                        @Override
+                        public void onSuccess(android.graphics.Bitmap bitmap) {
+                            screenshotBitmap[0] = bitmap;
+                            screenshotSuccess[0] = true;
+                        }
+
+                        @Override
+                        public void onFailure() {
+                            screenshotSuccess[0] = false;
+                        }
+                    });
+
+                    // 等待截图完成
+                    Thread.sleep(1000);
+
+                    if (!screenshotSuccess[0] || screenshotBitmap[0] == null) {
+                        logE("❌ 截图失败,继续等待...");
+                        Thread.sleep(attemptInterval);
+                        continue;
+                    }
+
+                    // 使用OCR识别"资质规则公示"
+                    final boolean[] textFound = {false};
+                    final boolean[] ocrCompleted = {false};
+                    OcrHelper ocrHelper = new OcrHelper(message -> logD(message));
+
+                    ocrHelper.findTextPosition(screenshotBitmap[0], "资质规则公示", new OcrHelper.OcrCallback() {
+                        @Override
+                        public void onSuccess(OcrHelper.TextMatch match) {
+                            logD("✅ 检测到'资质规则公示'文字,页面已加载!");
+                            textFound[0] = true;
+                            ocrCompleted[0] = true;
+                        }
+
+                        @Override
+                        public void onFailure(String error) {
+                            logD("⏳ 未检测到'资质规则公示',页面可能还在加载...");
+                            textFound[0] = false;
+                            ocrCompleted[0] = true;
+                        }
+                    });
+
+                    // 等待OCR完成(最多等待3秒)
+                    int waitCount = 0;
+                    while (!ocrCompleted[0] && waitCount < 30) {
+                        Thread.sleep(100);
+                        waitCount++;
+                    }
+
+                    // 释放资源
+                    ocrHelper.release();
+                    screenshotBitmap[0].recycle();
+
+                    if (textFound[0]) {
+                        // 页面已加载
+                        if (callback != null) {
+                            callback.onLoaded();
+                        }
+                        return;
+                    }
+
+                    // 继续等待
+                    Thread.sleep(attemptInterval);
+                }
+
+                // 超时
+                logE("❌ 等待资质规则页面加载超时(已尝试" + maxAttempts + "次)");
+                if (callback != null) {
+                    callback.onTimeout();
+                }
+
+            } catch (Exception e) {
+                logE("等待资质规则页面加载失败: " + e.getMessage());
+                e.printStackTrace();
+                if (callback != null) {
+                    callback.onTimeout();
+                }
+            }
+        }).start();
     }
 
 }
