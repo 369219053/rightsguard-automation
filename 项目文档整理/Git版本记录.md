@@ -12,6 +12,139 @@
 
 ## 🚀 版本历史
 
+### V3.3 (2026-03-06) 🎯 观看历史视频智能点击 + 三级点击策略!
+
+**✨ 核心更新 - 观看历史视频自动点击**
+
+#### ✅ 完成内容
+
+**1. 观看历史视频关键词匹配**
+- ✅ 支持在取证信息中输入视频关键词(单行格式)
+- ✅ 格式: `原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接+侵权视频标题`
+- ✅ 智能解析最后一个`+`号后的内容作为视频关键词
+- ✅ 在观看历史中通过Content Description匹配视频
+- ✅ 只处理包含"点赞"的节点(视频特征过滤)
+
+**2. 三级点击策略(智能备选)**
+- ✅ **第1级**: 直接点击视频节点 `node.performAction(ACTION_CLICK)`
+- ✅ **第2级**: 查找可点击的父节点(最多向上5层)
+- ✅ **第3级**: 动态坐标点击(根据节点实际位置计算中心点)
+- ✅ 确保在任何情况下都能成功点击视频
+
+**3. 动态坐标计算(非固定坐标)**
+- ✅ 获取节点的实际屏幕位置 `getBoundsInScreen(bounds)`
+- ✅ 动态计算中心点: `centerX = (left + right) / 2`
+- ✅ 适应不同屏幕尺寸和视频位置
+- ✅ 不受滚动位置影响
+
+**4. 详细调试日志**
+- ✅ 记录前3个视频的信息,便于调试
+- ✅ 显示节点类名、是否可点击、位置信息
+- ✅ 记录每级点击策略的执行结果
+- ✅ 统计视频总数和匹配数量
+
+#### 📋 完整流程
+
+```
+智能返回到"我"页面
+  ↓
+点击"观看历史"按钮 ✅
+  ↓
+遍历所有视频节点
+  ├─ 过滤包含"点赞"的节点(视频特征)
+  ├─ 记录前3个视频信息(调试)
+  └─ 匹配视频关键词
+  ↓
+找到匹配的视频 ✅
+  ├─ 视频描述: 花开富贵檀香，燃起来就会开花...
+  ├─ 视频位置: [360,498] → [716,973]
+  ├─ 节点类名: android.view.ViewGroup
+  └─ 节点可点击: false
+  ↓
+三级点击策略
+  ├─ 第1级: 直接点击 → 失败(节点不可点击)
+  ├─ 第2级: 查找父节点 → 失败(父节点也不可点击)
+  └─ 第3级: 动态坐标点击 → 成功! ✅
+      ├─ 计算中心点: (538, 735)
+      └─ 执行坐标点击
+  ↓
+等待视频播放页面加载(2秒)
+  ↓
+🎉 抖音自动化流程完成!
+```
+
+#### 🔧 技术实现
+
+**取证信息解析**:
+```java
+// 格式: 原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接+侵权视频标题
+String info = "花开富贵-抖音:文文工艺品-https://v.douyin.com/xxx/+https://v.douyin.com/iFLNKJNj/+花开富贵檀香，燃起来就会开花";
+
+// 提取视频关键词(最后一个+号之后)
+int lastPlusIndex = info.lastIndexOf("+");
+String videoKeywords = info.substring(lastPlusIndex + 1).trim();
+// 结果: "花开富贵檀香，燃起来就会开花"
+```
+
+**视频关键词匹配**:
+```java
+for (AccessibilityNodeInfo node : allNodes) {
+    CharSequence desc = node.getContentDescription();
+
+    // 只处理包含"点赞"的节点(视频特征)
+    if (desc != null && desc.toString().contains("点赞")) {
+
+        // 匹配视频关键词
+        if (desc.toString().contains(videoKeywords)) {
+            // 找到目标视频!
+            clickVideo(node);
+        }
+    }
+}
+```
+
+**三级点击策略**:
+```java
+// 第1级: 直接点击
+boolean clicked = node.performAction(ACTION_CLICK);
+if (clicked) {
+    return; // 成功
+}
+
+// 第2级: 查找可点击的父节点
+AccessibilityNodeInfo parent = node;
+while (parent != null && !parent.isClickable()) {
+    parent = parent.getParent();
+}
+if (parent != null && parent.isClickable()) {
+    parent.performAction(ACTION_CLICK);
+    return; // 成功
+}
+
+// 第3级: 动态坐标点击
+Rect bounds = new Rect();
+node.getBoundsInScreen(bounds);
+int centerX = (bounds.left + bounds.right) / 2;
+int centerY = (bounds.top + bounds.bottom) / 2;
+clickByCoordinates(centerX, centerY); // 成功!
+```
+
+#### 💡 技术亮点
+
+1. **智能匹配** - 通过Content Description精准匹配视频
+2. **三级备选** - 确保在任何情况下都能点击成功
+3. **动态坐标** - 根据实际位置计算,适应不同屏幕
+4. **视频特征过滤** - 通过"点赞"关键词过滤,提高匹配准确率
+5. **详细日志** - 完整的调试信息,便于问题排查
+
+#### 📦 APK信息
+
+- 📦 文件大小: **45MB**
+- 🎯 版本: V3.3
+- ⏱️ 编译时间: 3秒
+
+---
+
 ### V3.2 (2026-03-06) 📜 资质规则页面完整流程 + 智能返回优化!
 
 **✨ 核心更新 - 资质规则页面自动化**

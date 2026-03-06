@@ -126,6 +126,14 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("MainActivity", "⚠️ 未解析到侵权链接");
             }
 
+            // 🆕 设置视频关键词
+            if (parseResult.videoKeywords != null && !parseResult.videoKeywords.isEmpty()) {
+                service.setVideoKeywords(parseResult.videoKeywords);
+                Log.d("MainActivity", "✅ 已设置视频关键词: " + parseResult.videoKeywords);
+            } else {
+                Log.d("MainActivity", "⚠️ 未解析到视频关键词");
+            }
+
             service.startAutomation();
             isRunning = true;
             updateStatus(STATUS_RUNNING);
@@ -143,84 +151,61 @@ public class MainActivity extends AppCompatActivity {
         try {
             Log.d("MainActivity", "🔍 开始解析: " + info);
 
-            // 智能提取侵权链接 (最后一个URL)
-            int lastHttpIndex = info.lastIndexOf("http://");
-            int lastHttpsIndex = info.lastIndexOf("https://");
-            int lastUrlStart = Math.max(lastHttpIndex, lastHttpsIndex);
+            // 🆕 新格式: 原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接+侵权视频标题
+            // 示例: 花开富贵-抖音:文文工艺品-https://v.douyin.com/xxx/+https://v.douyin.com/iFLNKJNj/+花开富贵檀香，燃起来就会开花
 
-            if (lastUrlStart >= 0) {
-                String urlPart = info.substring(lastUrlStart);
-                int spaceIndex = urlPart.indexOf(" ");
-                if (spaceIndex > 0) {
-                    result.infringementUrl = urlPart.substring(0, spaceIndex).trim();
-                } else {
-                    result.infringementUrl = urlPart.trim();
-                }
-                Log.d("MainActivity", "✅ 侵权链接: " + result.infringementUrl);
+            // 1. 提取视频标题 (最后一个+号之后的内容)
+            int lastPlusIndex = info.lastIndexOf("+");
+            if (lastPlusIndex > 0 && lastPlusIndex < info.length() - 1) {
+                result.videoKeywords = info.substring(lastPlusIndex + 1).trim();
+                Log.d("MainActivity", "✅ 视频关键词: " + result.videoKeywords);
+            } else {
+                Log.d("MainActivity", "⚠️ 未找到视频关键词(需要最后一个+号后的内容)");
             }
 
-            // 🆕 提取备注 (格式: 原创名称-抖音:侵权人名称)
+            // 2. 提取侵权链接 (倒数第二个+号和最后一个+号之间的内容)
+            if (lastPlusIndex > 0) {
+                String beforeLastPlus = info.substring(0, lastPlusIndex);
+                int secondLastPlusIndex = beforeLastPlus.lastIndexOf("+");
+
+                if (secondLastPlusIndex > 0) {
+                    result.infringementUrl = beforeLastPlus.substring(secondLastPlusIndex + 1).trim();
+                    Log.d("MainActivity", "✅ 侵权链接: " + result.infringementUrl);
+                } else {
+                    Log.d("MainActivity", "⚠️ 未找到侵权链接");
+                }
+            }
+
+            // 3. 提取备注 (格式: 原创名称-抖音:侵权人账号名称)
+            // 新格式: 原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接+侵权视频标题
             int douyinIndex = info.indexOf("-抖音:");
 
             if (douyinIndex > 0) {
-                // 找到了"-抖音:",提取原创名称和侵权人名称
+                // 找到了"-抖音:",提取原创名称
                 String originalName = info.substring(0, douyinIndex).trim();
 
-                // 从"-抖音:"之后开始查找侵权人名称
+                // 从"-抖音:"之后开始查找侵权人账号名称
                 String afterDouyin = info.substring(douyinIndex + 4); // 跳过"-抖音:"
 
-                // 侵权人名称到下一个"-"之前
+                // 侵权人账号名称到下一个"-"之前 (新格式中,账号名称后面是"-原创分享链接")
                 int nextDash = afterDouyin.indexOf("-");
                 String infringerName;
                 if (nextDash > 0) {
                     infringerName = afterDouyin.substring(0, nextDash).trim();
                 } else {
-                    // 如果没有"-",就到空格或URL之前
-                    int spaceIndex = afterDouyin.indexOf(" ");
-                    int httpIndex = afterDouyin.indexOf("http");
-                    int endIndex = -1;
-
-                    if (spaceIndex > 0 && httpIndex > 0) {
-                        endIndex = Math.min(spaceIndex, httpIndex);
-                    } else if (spaceIndex > 0) {
-                        endIndex = spaceIndex;
-                    } else if (httpIndex > 0) {
-                        endIndex = httpIndex;
-                    }
-
-                    if (endIndex > 0) {
-                        infringerName = afterDouyin.substring(0, endIndex).trim();
-                    } else {
-                        infringerName = afterDouyin.trim();
-                    }
+                    // 如果没有"-",就使用全部内容
+                    infringerName = afterDouyin.trim();
                 }
 
-                // 生成备注: 原创名称-抖音:侵权人名称
+                // 生成备注: 原创名称-抖音:侵权人账号名称
                 result.remark = originalName + "-抖音:" + infringerName;
                 Log.d("MainActivity", "✅ 备注: " + result.remark);
                 Log.d("MainActivity", "  - 原创名称: " + originalName);
-                Log.d("MainActivity", "  - 侵权人名称: " + infringerName);
+                Log.d("MainActivity", "  - 侵权人账号名称: " + infringerName);
             } else {
-                // 没有找到"-抖音:",使用第一个URL之前的内容
-                int firstHttpIndex = info.indexOf("http://");
-                int firstHttpsIndex = info.indexOf("https://");
-                int firstUrlStart = -1;
-
-                if (firstHttpIndex >= 0 && firstHttpsIndex >= 0) {
-                    firstUrlStart = Math.min(firstHttpIndex, firstHttpsIndex);
-                } else if (firstHttpIndex >= 0) {
-                    firstUrlStart = firstHttpIndex;
-                } else if (firstHttpsIndex >= 0) {
-                    firstUrlStart = firstHttpsIndex;
-                }
-
-                if (firstUrlStart > 0) {
-                    result.remark = info.substring(0, firstUrlStart).trim();
-                    Log.d("MainActivity", "✅ 备注: " + result.remark);
-                } else {
-                    result.remark = info;
-                    Log.d("MainActivity", "⚠️ 未找到URL,使用完整内容作为备注");
-                }
+                // 没有找到"-抖音:",使用完整内容作为备注
+                result.remark = info;
+                Log.d("MainActivity", "⚠️ 未找到'-抖音:',使用完整内容作为备注");
             }
 
         } catch (Exception e) {
@@ -237,6 +222,7 @@ public class MainActivity extends AppCompatActivity {
     private static class ParseResult {
         String infringementUrl;
         String remark;
+        String videoKeywords; // 🆕 视频文案关键词
     }
 
     /**

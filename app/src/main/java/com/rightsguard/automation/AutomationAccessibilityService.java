@@ -46,6 +46,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private boolean hasSelectedDouyin = false; // 是否已勾选抖音
     private String remark = "";
     private String infringementUrl = ""; // 侵权链接
+    private String videoKeywords = ""; // 🆕 视频文案关键词
 
     // 权利卫士取证阶段标志位
     private boolean isRightsGuardEvidencePhase = false; // 是否处于权利卫士取证阶段(权利卫士打开抖音后)
@@ -197,6 +198,14 @@ public class AutomationAccessibilityService extends AccessibilityService {
     public void setInfringementUrl(String url) {
         this.infringementUrl = url != null ? url : "";
         logD("📝 设置侵权链接: " + this.infringementUrl);
+    }
+
+    /**
+     * 🆕 设置视频关键词
+     */
+    public void setVideoKeywords(String keywords) {
+        this.videoKeywords = keywords != null ? keywords : "";
+        logD("📝 设置视频关键词: " + this.videoKeywords);
     }
 
     /**
@@ -2693,6 +2702,246 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
+     * 🆕 点击"观看历史"按钮
+     */
+    private void clickViewHistory() {
+        new Thread(() -> {
+            try {
+                logD("📺 准备点击'观看历史'按钮...");
+
+                // 等待页面稳定
+                Thread.sleep(1000);
+
+                android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+                if (rootNode == null) {
+                    logE("❌ 无法获取根节点");
+                    return;
+                }
+
+                // 通过文本查找"观看历史"按钮
+                logD("🔍 开始查找'观看历史'按钮...");
+
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> textNodes =
+                    rootNode.findAccessibilityNodeInfosByText("观看历史");
+
+                if (textNodes != null && !textNodes.isEmpty()) {
+                    logD("📋 找到 " + textNodes.size() + " 个包含'观看历史'文本的节点");
+
+                    for (android.view.accessibility.AccessibilityNodeInfo node : textNodes) {
+                        // 获取节点文本,验证是否完全匹配
+                        CharSequence nodeText = node.getText();
+                        android.graphics.Rect bounds = new android.graphics.Rect();
+                        node.getBoundsInScreen(bounds);
+
+                        logD("  节点文本: " + (nodeText != null ? nodeText.toString() : "null"));
+                        logD("  节点位置: [" + bounds.left + "," + bounds.top + "] → [" + bounds.right + "," + bounds.bottom + "]");
+
+                        // 只处理文本完全匹配"观看历史"的节点
+                        if (nodeText != null && "观看历史".equals(nodeText.toString())) {
+                            logD("✅ 找到完全匹配的'观看历史'文本节点");
+
+                            // 查找可点击的父节点
+                            android.view.accessibility.AccessibilityNodeInfo clickableNode = node;
+                            int parentLevel = 0;
+                            while (clickableNode != null && !clickableNode.isClickable() && parentLevel < 5) {
+                                clickableNode = clickableNode.getParent();
+                                parentLevel++;
+                            }
+
+                            if (clickableNode != null && clickableNode.isClickable()) {
+                                // 获取父节点的位置信息
+                                android.graphics.Rect parentBounds = new android.graphics.Rect();
+                                clickableNode.getBoundsInScreen(parentBounds);
+
+                                String parentId = clickableNode.getViewIdResourceName();
+                                logD("  可点击父节点ID: " + (parentId != null ? parentId : "null"));
+                                logD("  父节点层级: " + parentLevel);
+                                logD("  父节点位置: [" + parentBounds.left + "," + parentBounds.top + "] → [" + parentBounds.right + "," + parentBounds.bottom + "]");
+
+                                // 点击父节点
+                                boolean clicked = clickableNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                                if (clicked) {
+                                    logD("✅ 成功点击'观看历史'按钮");
+
+                                    // 等待观看历史页面加载
+                                    Thread.sleep(2000);
+
+                                    // 🆕 在观看历史中查找并点击侵权视频
+                                    findAndClickVideoInHistory();
+                                } else {
+                                    logE("❌ 点击'观看历史'按钮失败");
+                                }
+
+                                rootNode.recycle();
+                                return;
+                            } else {
+                                logE("❌ 未找到可点击的父节点");
+                            }
+                        }
+                    }
+
+                    logE("❌ 未找到完全匹配的'观看历史'文本节点");
+                } else {
+                    logE("❌ 未找到'观看历史'按钮");
+                }
+
+                rootNode.recycle();
+
+            } catch (Exception e) {
+                logE("点击'观看历史'按钮失败: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    /**
+     * 🆕 在观看历史中查找并点击侵权视频
+     */
+    private void findAndClickVideoInHistory() {
+        try {
+            logD("🔍 准备在观看历史中查找侵权视频...");
+            logD("📝 视频关键词: " + videoKeywords);
+
+            if (videoKeywords == null || videoKeywords.isEmpty()) {
+                logE("❌ 未设置视频关键词,无法匹配视频");
+                logD("💡 提示: 请在取证信息的第4行输入视频文案关键词");
+                return;
+            }
+
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logE("❌ 无法获取根节点");
+                return;
+            }
+
+            // 查找所有ViewGroup节点(观看历史中的视频都是ViewGroup)
+            logD("🔍 开始查找所有视频节点...");
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> allNodes = new java.util.ArrayList<>();
+            findAllNodes(rootNode, allNodes);
+
+            int videoCount = 0;
+            int matchedCount = 0;
+
+            for (android.view.accessibility.AccessibilityNodeInfo node : allNodes) {
+                // 获取Content Description
+                CharSequence desc = node.getContentDescription();
+                if (desc == null || desc.toString().isEmpty()) {
+                    continue;
+                }
+
+                String descStr = desc.toString();
+
+                // 只统计包含"点赞"的节点(这是视频的特征)
+                if (!descStr.contains("点赞")) {
+                    continue;
+                }
+
+                videoCount++;
+
+                // 记录前3个视频的信息,便于调试
+                if (videoCount <= 3) {
+                    logD("📹 视频" + videoCount + ": " + descStr.substring(0, Math.min(30, descStr.length())) + "...");
+                }
+
+                // 检查是否包含视频关键词
+                if (descStr.contains(videoKeywords)) {
+                    matchedCount++;
+                    logD("✅ 找到匹配的视频!");
+                    logD("  视频描述: " + descStr.substring(0, Math.min(50, descStr.length())) + "...");
+
+                    // 获取节点位置
+                    android.graphics.Rect bounds = new android.graphics.Rect();
+                    node.getBoundsInScreen(bounds);
+                    logD("  视频位置: [" + bounds.left + "," + bounds.top + "] → [" + bounds.right + "," + bounds.bottom + "]");
+                    logD("  节点类名: " + node.getClassName());
+                    logD("  节点可点击: " + node.isClickable());
+
+                    // 尝试点击视频节点
+                    boolean clicked = node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                    if (clicked) {
+                        logD("✅ 成功点击侵权视频");
+
+                        // 等待视频播放页面加载
+                        Thread.sleep(2000);
+
+                        logD("🎉 抖音自动化流程完成!");
+                        rootNode.recycle();
+                        return;
+                    } else {
+                        logD("⚠️ 直接点击失败,尝试查找可点击的父节点...");
+
+                        // 查找可点击的父节点
+                        android.view.accessibility.AccessibilityNodeInfo clickableNode = node;
+                        int parentLevel = 0;
+                        while (clickableNode != null && !clickableNode.isClickable() && parentLevel < 5) {
+                            clickableNode = clickableNode.getParent();
+                            parentLevel++;
+                        }
+
+                        if (clickableNode != null && clickableNode.isClickable()) {
+                            logD("  找到可点击的父节点,层级: " + parentLevel);
+                            clicked = clickableNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            if (clicked) {
+                                logD("✅ 成功点击侵权视频(通过父节点)");
+                                Thread.sleep(2000);
+                                logD("🎉 抖音自动化流程完成!");
+                                rootNode.recycle();
+                                return;
+                            }
+                        }
+
+                        // 如果父节点也点击失败,使用坐标点击
+                        logD("⚠️ 父节点点击也失败,尝试使用坐标点击...");
+
+                        // 计算视频中心点坐标
+                        int centerX = (bounds.left + bounds.right) / 2;
+                        int centerY = (bounds.top + bounds.bottom) / 2;
+                        logD("  视频中心点坐标: (" + centerX + ", " + centerY + ")");
+
+                        // 使用坐标点击
+                        clickByCoordinates(centerX, centerY);
+                        logD("✅ 已执行坐标点击侵权视频");
+                        Thread.sleep(2000);
+                        logD("🎉 抖音自动化流程完成!");
+                    }
+
+                    rootNode.recycle();
+                    return;
+                }
+            }
+
+            logE("❌ 未找到匹配的视频");
+            logD("📊 统计: 共找到 " + videoCount + " 个视频,匹配 " + matchedCount + " 个");
+            logD("💡 提示: 请检查视频关键词是否正确: " + videoKeywords);
+
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("在观看历史中查找视频失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 🆕 递归查找所有节点
+     */
+    private void findAllNodes(android.view.accessibility.AccessibilityNodeInfo node, java.util.List<android.view.accessibility.AccessibilityNodeInfo> result) {
+        if (node == null) {
+            return;
+        }
+
+        result.add(node);
+
+        int childCount = node.getChildCount();
+        for (int i = 0; i < childCount; i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                findAllNodes(child, result);
+            }
+        }
+    }
+
+    /**
      * 🆕 点击"我的订单"按钮
      */
     private void clickMyOrderButton() {
@@ -3328,7 +3577,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                         logD("🔍 检测是否到达'我'页面...");
                                         if (isOnMePage()) {
                                             logD("✅ 第" + i + "次返回后到达'我'页面,停止返回");
-                                            logD("🎉 抖音自动化流程完成!");
+
+                                            // 返回到"我"页面后,点击"观看历史"
+                                            clickViewHistory();
                                             return;
                                         } else {
                                             logD("⏳ 第" + i + "次返回后未到达'我'页面,继续返回...");
@@ -3339,7 +3590,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                     logD("🔍 最后检测是否到达'我'页面...");
                                     if (isOnMePage()) {
                                         logD("✅ 成功返回到'我'页面");
-                                        logD("🎉 抖音自动化流程完成!");
+
+                                        // 返回到"我"页面后,点击"观看历史"
+                                        clickViewHistory();
                                     } else {
                                         logE("❌ 未能返回到'我'页面,可能返回次数不够或页面识别失败");
                                         logD("🎉 抖音自动化流程完成(可能未完全返回)!");
