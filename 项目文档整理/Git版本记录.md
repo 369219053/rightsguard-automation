@@ -12,6 +12,84 @@
 
 ## 🚀 版本历史
 
+### V3.6 (2026-03-07) 🔧 人脸检测漏检修复 + 截图兜底补全 + 评论计数默认值
+
+**✨ 核心更新 - 修复截图数量不足 & 评论区不滚动两大问题**
+
+#### ✅ 完成内容
+
+**1. 人脸检测漏检修复 - FaceDetectionHelper.java**
+- ✅ **问题根因**: `minFaceSize=0.5f`（占画面短边50%+）过滤掉了中景/半身镜头的人脸（只占15-30%）
+- ✅ **检测后1秒盲区**: 检测到人脸后 `Thread.sleep(1000)`，加上保存耗时共约2秒停止扫描，同一时间段内后续帧全部错过
+- ✅ **修复1 - 性能模式**: `PERFORMANCE_MODE_ACCURATE` → `PERFORMANCE_MODE_FAST`（更快，提高扫描频率）
+- ✅ **修复2 - 最小人脸大小**: `0.5f` → `0.15f`（覆盖中景/半身镜头人脸）
+- ✅ **修复3 - 验证阈值放宽**: `宽>20% AND 高>20% AND 面积>3%` → `宽>8% AND 高>8% AND 面积>0.5%`
+- ✅ **修复4 - 删除检测后sleep**: 检测到人脸保存后立即继续扫描下一帧，消除盲区
+
+**2. 截图兜底补全逻辑修复 - AutomationAccessibilityService.java**
+- ✅ **问题根因**: 兜底条件 `savedCount == 0`（全程零截图才触发），检测到2张但目标5张时，兜底不触发，最终只有2张
+- ✅ **修复**: 改为 `while (savedCount < targetCount)`，循环从3个兜底帧（开始/中间/结尾）中补充，直到达到目标数量
+
+**3. 评论计数解析失败默认值修复 - AutomationAccessibilityService.java**
+- ✅ **问题根因**: `getCommentTotalCount()` 返回0时，按 `≤10条` 逻辑设目标截图为1张，第一屏截到关键词就退出，全程不滚动
+- ✅ **修复**: `totalComments == 0` 时保守默认 `targetScreenshots = 3`，确保充分滚动扫描
+
+#### 🔧 技术关键代码
+
+**人脸检测器新配置**:
+```java
+// FaceDetectionHelper.java
+FaceDetectorOptions options = new FaceDetectorOptions.Builder()
+    .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST) // 从ACCURATE改为FAST
+    .setMinFaceSize(0.15f) // 从0.5f降低到0.15f，覆盖中景人脸
+    .build();
+
+// 验证阈值放宽（宽>8% AND 高>8% AND 面积>0.5%）
+if (widthRatio > 0.08f && heightRatio > 0.08f && areaRatio > 0.005f) {
+    return true; // 有效人脸
+}
+```
+
+**兜底补全新逻辑**:
+```java
+// 从 if (savedCount == 0) 改为 while (savedCount < targetCount)
+while (savedCount < targetCount) {
+    if (fallbackBitmaps[fallbackIndex] != null) {
+        saveBitmapToGallery(fallbackBitmaps[fallbackIndex], ...);
+        savedCount++;
+    }
+    fallbackIndex++;
+    if (fallbackIndex >= 3) break;
+}
+```
+
+**评论计数默认值**:
+```java
+int targetScreenshots;
+if (totalComments == 0) {
+    targetScreenshots = 3; // 解析失败保守默认3张，确保充分滚动
+} else if (totalComments <= 10) {
+    targetScreenshots = 1;
+} else if (totalComments <= 30) {
+    targetScreenshots = 2;
+} else {
+    targetScreenshots = 3;
+}
+```
+
+#### 📦 文件变更
+
+- `app/src/main/java/com/rightsguard/automation/FaceDetectionHelper.java`
+  - 改为 `PERFORMANCE_MODE_FAST`
+  - `minFaceSize`: `0.5f` → `0.15f`
+  - 验证阈值: `>0.2f` → `>0.08f`，面积: `>0.03f` → `>0.005f`
+  - 删除检测到人脸后的 `Thread.sleep(1000)`
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - 兜底条件: `savedCount == 0` → `savedCount < targetCount`（循环补全）
+  - 评论计数为0时默认 `targetScreenshots = 3`
+
+---
+
 ### V3.5 (2026-03-07) 💬 评论区取证截图 + 作者主页导航
 
 **✨ 核心更新 - 评论区购买意图扫描 & 进入作者主页**

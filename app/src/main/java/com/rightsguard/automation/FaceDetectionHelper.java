@@ -25,15 +25,14 @@ public class FaceDetectionHelper {
     public FaceDetectionHelper() {
         // 配置人脸检测器
         FaceDetectorOptions options = new FaceDetectorOptions.Builder()
-                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE) // 准确模式(提高准确度)
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST) // 快速模式(减少处理时间,提高扫描频率)
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE) // 不需要关键点
                 .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE) // 不需要分类
-                .setMinFaceSize(0.5f) // 最小人脸大小提高到0.5(短边的50%),大幅减少logo/物品误判
-                .enableTracking() // 启用人脸追踪
+                .setMinFaceSize(0.15f) // 最小人脸大小0.15(短边的15%),覆盖中景/半身镜头
                 .build();
 
         detector = FaceDetection.getClient(options);
-        Log.d(TAG, "人脸检测器初始化完成(准确模式,最小人脸0.5)");
+        Log.d(TAG, "人脸检测器初始化完成(快速模式,最小人脸0.15)");
     }
 
     /**
@@ -68,12 +67,12 @@ public class FaceDetectionHelper {
                                 float imageWidth = bitmap.getWidth();
                                 float imageHeight = bitmap.getHeight();
 
-                                // 人脸宽度AND高度都必须超过图片各自维度的20%,且面积不小于图片的3%
-                                // 使用AND条件避免误判细长形的logo/图案
+                                // 人脸宽度OR高度超过图片各自维度的8%,且面积不小于0.5%
+                                // 覆盖特写/中景/半身镜头,避免漏检
                                 float widthRatio = faceWidth / imageWidth;
                                 float heightRatio = faceHeight / imageHeight;
                                 float areaRatio = (faceWidth * faceHeight) / (imageWidth * imageHeight);
-                                if (widthRatio > 0.2f && heightRatio > 0.2f && areaRatio > 0.03f) {
+                                if (widthRatio > 0.08f && heightRatio > 0.08f && areaRatio > 0.005f) {
                                     hasValidFace = true;
                                     Log.d(TAG, "✅ 检测到有效人脸,大小: " + (int)faceWidth + "x" + (int)faceHeight +
                                              " (" + String.format("%.0f", widthRatio*100) + "% x " +

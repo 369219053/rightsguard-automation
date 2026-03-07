@@ -3051,10 +3051,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                         savedCount++;
                         screenshotIndex++;
-
-                        // 等待间隔时间后继续扫描(真实时间自动推进,无需手动累加)
-                        logD("⏱️ 等待 " + intervalSeconds + " 秒后继续扫描...");
-                        Thread.sleep(intervalSeconds * 1000);
+                        // 不额外等待,ML Kit处理时间已足够作为间隔,立即继续扫描下一帧
                     } else {
                         // 没检测到人脸,继续扫描
                         logD("🔍 " + String.format("%.1f", finalRealElapsedSec) + "秒: 未检测到人脸,继续扫描...");
@@ -3074,19 +3071,21 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 Thread.sleep(remainingMs);
             }
 
-            // 🆕 兜底逻辑: 全程未检测到人脸,保存开始/中间/结尾3张截图
-            if (savedCount == 0) {
-                logD("⚠️ 全程未检测到人脸,启用兜底截图(开始/中间/结尾)...");
+            // 🆕 兜底逻辑: 人脸截图不足目标数量时,用缓存帧补足到目标数量
+            if (savedCount < targetCount) {
+                logD("⚠️ 人脸截图数量不足(已有" + savedCount + "张,目标" + targetCount + "张),用兜底帧补足...");
                 String[] fallbackLabels = {"开始", "中间", "结尾"};
-                for (int i = 0; i < 3; i++) {
+                for (int i = 0; i < 3 && savedCount < targetCount; i++) {
                     if (fallbackBitmaps[i] != null && !fallbackBitmaps[i].isRecycled()) {
-                        String name = "侵权视频_" + fallbackLabels[i] + "_" + String.format("%.1f", fallbackTargetTimes[i]) + "秒";
+                        String name = "侵权视频_" + fallbackLabels[i] + "_" + String.format("%.1f", fallbackTargetTimes[i]) + "秒_兜底";
                         saveBitmapToGallery(fallbackBitmaps[i], name);
-                        logD("📸 兜底截图已保存: " + name);
+                        savedCount++;
+                        logD("📸 兜底截图已补充: " + name + " (现共" + savedCount + "张)");
                     } else {
                         logD("⚠️ 兜底帧[" + i + "] 未捕获,跳过");
                     }
                 }
+                logD("✅ 兜底补充完成,最终共 " + savedCount + " 张截图");
             }
 
             logD("✅ 视频播放和截图完成!");
@@ -3103,6 +3102,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
             Thread.sleep(2000);
             captureCommentEvidence();
             // captureCommentEvidence() 内部已调用 closeDouyinComments()
+
+            // 🆕 步骤: 检查购物车链接并截图（在进入作者主页前）
+            checkAndCaptureShoppingCart();
 
             // 🆕 步骤: 进入侵权作者主页
             navigateToAuthorProfile();
@@ -3247,7 +3249,11 @@ public class AutomationAccessibilityService extends AccessibilityService {
             // Step1: 读取评论总数，决定目标张数
             int totalComments = getCommentTotalCount();
             int targetScreenshots;
-            if (totalComments <= 10) {
+            if (totalComments == 0) {
+                // 读取失败时保守处理：默认3张，确保充分取证
+                targetScreenshots = 3;
+                logD("📊 评论总数读取失败，保守默认目标截图: 3张");
+            } else if (totalComments <= 10) {
                 targetScreenshots = 1;
             } else if (totalComments <= 30) {
                 targetScreenshots = 2;
@@ -3580,6 +3586,174 @@ public class AutomationAccessibilityService extends AccessibilityService {
         } catch (Exception e) {
             logE("关闭评论区失败: " + e.getMessage());
         }
+    }
+
+    // =====================================================================
+    //  购物车取证
+    // =====================================================================
+
+    /**
+     * 🛒 检查视频页面是否存在购物车/产品链接，如果有则点击、截图、关闭
+     * 检测依据：Dump确认 p+8 容器为可点击产品区域，内含 3h5（"已售X"文本）
+     * 调用时机：关闭评论区之后、进入作者主页之前
+     */
+    private void checkAndCaptureShoppingCart() {
+        try {
+            logD("🛒 检查是否存在购物车/产品链接...");
+            Thread.sleep(800); // 等待评论区关闭动画稳定
+
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logD("⚠️ 购物车检查: 无法获取根节点，跳过");
+                return;
+            }
+
+            boolean shoppingCartFound = false;
+
+            // === 检测方法1: 查找 3h5 节点（含"已售"文字），确认商品链接存在 ===
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> soldNodes =
+                rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/3h5");
+            if (soldNodes != null && !soldNodes.isEmpty()) {
+                for (android.view.accessibility.AccessibilityNodeInfo soldNode : soldNodes) {
+                    CharSequence text = soldNode.getText();
+                    if (text != null && text.toString().contains("已售")) {
+                        logD("🎯 检测到购物车产品区域（" + text + "），准备点击...");
+                        shoppingCartFound = true;
+                        // 向上找可点击的父节点（即 p+8 容器）并点击
+                        android.view.accessibility.AccessibilityNodeInfo clickTarget =
+                            findClickableParent(soldNode);
+                        if (clickTarget != null) {
+                            clickTarget.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            logD("✅ 点击购物车产品链接成功（via 已售节点父容器）");
+                            clickTarget.recycle();
+                        } else {
+                            // 无法找到父节点时直接点击该节点所在坐标
+                            android.graphics.Rect bounds = new android.graphics.Rect();
+                            soldNode.getBoundsInScreen(bounds);
+                            int cx = (bounds.left + bounds.right) / 2;
+                            int cy = (bounds.top + bounds.bottom) / 2;
+                            android.graphics.Path tapPath = new android.graphics.Path();
+                            tapPath.moveTo(cx, cy);
+                            tapPath.lineTo(cx, cy);
+                            android.accessibilityservice.GestureDescription tapGesture =
+                                new android.accessibilityservice.GestureDescription.Builder()
+                                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(tapPath, 0, 100))
+                                    .build();
+                            dispatchGesture(tapGesture, null, null);
+                            logD("✅ 坐标点击购物车区域: (" + cx + ", " + cy + ")");
+                        }
+                        for (android.view.accessibility.AccessibilityNodeInfo n : soldNodes) n.recycle();
+                        rootNode.recycle();
+                        break;
+                    }
+                }
+                if (!shoppingCartFound) {
+                    for (android.view.accessibility.AccessibilityNodeInfo n : soldNodes) n.recycle();
+                }
+            }
+
+            // === 检测方法2: 直接查找 p+8 容器（备用） ===
+            if (!shoppingCartFound) {
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> cartNodes =
+                    rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/p+8");
+                if (cartNodes != null && !cartNodes.isEmpty()) {
+                    for (android.view.accessibility.AccessibilityNodeInfo node : cartNodes) {
+                        if (node.isVisibleToUser() && node.isClickable()) {
+                            logD("🎯 检测到购物车容器（p+8），准备点击...");
+                            shoppingCartFound = true;
+                            node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            logD("✅ 点击购物车容器成功");
+                            for (android.view.accessibility.AccessibilityNodeInfo n : cartNodes) n.recycle();
+                            rootNode.recycle();
+                            break;
+                        }
+                    }
+                    if (!shoppingCartFound) {
+                        for (android.view.accessibility.AccessibilityNodeInfo n : cartNodes) n.recycle();
+                    }
+                }
+            }
+
+            // === 检测方法3: 通过Desc包含"购物车"节点 ===
+            if (!shoppingCartFound) {
+                android.view.accessibility.AccessibilityNodeInfo cartNode =
+                    findNodeByDescContains(rootNode, "购物车");
+                if (cartNode != null) {
+                    logD("🎯 检测到购物车节点（Desc含'购物车'），准备点击...");
+                    shoppingCartFound = true;
+                    cartNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                    logD("✅ 点击购物车节点成功");
+                    cartNode.recycle();
+                    rootNode.recycle();
+                }
+            }
+
+            if (!shoppingCartFound) {
+                logD("ℹ️ 未检测到购物车/产品链接，跳过此步骤");
+                rootNode.recycle();
+                return;
+            }
+
+            // 等待购物车/产品页面加载
+            logD("⏱️ 等待购物车页面加载(2.5秒)...");
+            Thread.sleep(2500);
+
+            // 截图1：产品页初始状态
+            logD("📸 截取购物车页面取证截图1...");
+            takeScreenshotWithPrefix("购物车取证_1", new ScreenshotCallback() {
+                @Override public void onSuccess() { logD("✅ 购物车截图1保存成功"); }
+                @Override public void onFailure() { logE("❌ 购物车截图1保存失败"); }
+            });
+            Thread.sleep(700);
+
+            // 向下滚动，查看更多商品信息
+            logD("⬇️ 向下滚动查看更多购物车内容...");
+            android.graphics.Path scrollPath = new android.graphics.Path();
+            scrollPath.moveTo(540, 1600);
+            scrollPath.lineTo(540, 900);
+            android.accessibilityservice.GestureDescription scrollGesture =
+                new android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                        scrollPath, 0, 350))
+                    .build();
+            dispatchGesture(scrollGesture, null, null);
+            Thread.sleep(800);
+
+            // 截图2：滚动后的商品详情
+            logD("📸 截取购物车页面取证截图2...");
+            takeScreenshotWithPrefix("购物车取证_2", new ScreenshotCallback() {
+                @Override public void onSuccess() { logD("✅ 购物车截图2保存成功"); }
+                @Override public void onFailure() { logE("❌ 购物车截图2保存失败"); }
+            });
+            Thread.sleep(700);
+
+            // 关闭购物车页面，返回视频页
+            logD("🔙 关闭购物车页面（按返回键）...");
+            performGlobalAction(GLOBAL_ACTION_BACK);
+            Thread.sleep(1200);
+            logD("✅ 购物车页面已关闭，回到视频页");
+
+        } catch (Exception e) {
+            logE("❌ 购物车取证失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 向上遍历节点树，找到第一个可点击的父节点
+     */
+    private android.view.accessibility.AccessibilityNodeInfo findClickableParent(
+            android.view.accessibility.AccessibilityNodeInfo node) {
+        android.view.accessibility.AccessibilityNodeInfo parent = node.getParent();
+        while (parent != null) {
+            if (parent.isClickable()) {
+                return parent;
+            }
+            android.view.accessibility.AccessibilityNodeInfo grandParent = parent.getParent();
+            parent.recycle();
+            parent = grandParent;
+        }
+        return null;
     }
 
     /**
