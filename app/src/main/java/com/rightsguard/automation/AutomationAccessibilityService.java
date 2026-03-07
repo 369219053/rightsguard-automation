@@ -3099,6 +3099,14 @@ public class AutomationAccessibilityService extends AccessibilityService {
             Thread.sleep(1000);
             openDouyinComments();
 
+            // 🆕 步骤: 等待评论区加载后截取评论取证截图
+            Thread.sleep(2000);
+            captureCommentEvidence();
+            // captureCommentEvidence() 内部已调用 closeDouyinComments()
+
+            // 🆕 步骤: 进入侵权作者主页
+            navigateToAuthorProfile();
+
         } catch (Exception e) {
             logE("播放视频并截图失败: " + e.getMessage());
             e.printStackTrace();
@@ -3222,6 +3230,445 @@ public class AutomationAccessibilityService extends AccessibilityService {
             logE("❌ 打开评论区失败: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    // =====================================================================
+    //  评论区取证
+    // =====================================================================
+
+    /**
+     * 🆕 评论区取证入口
+     * 策略：先滚动到底部（加载所有评论），再从底部向上扫描截图
+     */
+    private void captureCommentEvidence() {
+        try {
+            logD("💬 开始评论区取证...");
+
+            // Step1: 读取评论总数，决定目标张数
+            int totalComments = getCommentTotalCount();
+            int targetScreenshots;
+            if (totalComments <= 10) {
+                targetScreenshots = 1;
+            } else if (totalComments <= 30) {
+                targetScreenshots = 2;
+            } else {
+                targetScreenshots = 3;
+            }
+            logD("📊 评论总数: " + totalComments + "，目标截图: " + targetScreenshots + "张");
+
+            // Step2: 70+ 购买意图关键词
+            String[] purchaseKeywords = {
+                // === 已购买类 ===
+                "买了","买过","买到了","已购","已买","入手了","入手",
+                "下单了","已下单","刚下单","付款了","已付款",
+                "收到了","收到货","到货了","到手了","拿到了",
+                "回购","复购","又买了","再买","买了好几","买了两",
+                "购入了","已购入","刚买","昨天买的","前天买的","买了一",
+                // === 想购买类 ===
+                "想买","想入手","想下单","好想买","特别想买",
+                "准备买","打算买","计划买","考虑买","考虑入手",
+                "在哪买","哪里买","去哪买","哪里有卖","怎么买",
+                "求链接","发链接","链接发一下","购买链接","求购",
+                "多少钱","什么价","价格","多少一个","多少一件","多少一套",
+                "能买吗","可以买吗","有货吗","还有货吗","有库存吗",
+                "同款在哪","哪里同款","哪里可以买",
+                // === 使用体验类（暗示已购）===
+                "好用","超好用","非常好用","真的好用","用了","用过",
+                "效果好","效果不错","用起来","买对了","没买错",
+                "值得买","值得入手","强烈推荐","推荐买",
+                "后悔没早买","早买就好了","买亏了",
+                "质量好","质量不错","质量差","不好用",
+                // === 询问产品类（购买前咨询）===
+                "安全吗","有没有毒","有没有甲醛","有异味吗",
+                "质量怎么样","耐用吗","好不好","靠谱吗",
+                "什么牌子","哪个牌子","正品吗","假的吗",
+                "适合","推荐吗","值不值","划算吗","值得吗"
+            };
+
+            // ★ Step3: 强制先向下滚动一次（不管评论多少，确保评论区已加载）
+            logD("⬇️ 先向下滚动一次，加载评论...");
+            scrollCommentList();
+            Thread.sleep(800);
+
+            // Step4: 边滚动边扫描截图（最多10次）
+            int capturedCount = 0;
+            int maxScrolls = 10;
+
+            for (int scroll = 0; scroll <= maxScrolls && capturedCount < targetScreenshots; scroll++) {
+
+                // 第2次起才额外滚动
+                if (scroll > 0) {
+                    scrollCommentList();
+                    Thread.sleep(800);
+                }
+
+                // 扫描当前可见评论节点
+                android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+                if (rootNode == null) {
+                    logE("❌ 评论扫描: 无法获取根节点");
+                    break;
+                }
+
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> contentNodes =
+                    rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/content");
+
+                boolean foundInThisScroll = false;
+
+                if (contentNodes != null) {
+                    for (android.view.accessibility.AccessibilityNodeInfo node : contentNodes) {
+                        if (!node.isVisibleToUser()) continue;
+
+                        CharSequence textSeq = node.getText();
+                        if (textSeq == null) continue;
+                        String text = textSeq.toString();
+
+                        // 关键词匹配
+                        String matchedKeyword = null;
+                        for (String kw : purchaseKeywords) {
+                            if (text.contains(kw)) {
+                                matchedKeyword = kw;
+                                break;
+                            }
+                        }
+
+                        if (matchedKeyword != null) {
+                            logD("🔑 关键词匹配: [" + matchedKeyword + "] 评论: " + text);
+                            foundInThisScroll = true;
+                            break; // 一屏只截一张
+                        }
+                    }
+                    for (android.view.accessibility.AccessibilityNodeInfo n : contentNodes) {
+                        if (n != null) n.recycle();
+                    }
+                }
+                rootNode.recycle();
+
+                // 找到匹配则截图
+                if (foundInThisScroll) {
+                    capturedCount++;
+                    final int idx = capturedCount;
+                    logD("📸 截取购买意图评论截图 (" + idx + "/" + targetScreenshots + ")...");
+                    takeScreenshotWithPrefix("评论取证_" + idx, new ScreenshotCallback() {
+                        @Override public void onSuccess() { logD("✅ 评论截图" + idx + "保存成功"); }
+                        @Override public void onFailure() { logE("❌ 评论截图" + idx + "保存失败"); }
+                    });
+                    Thread.sleep(600);
+                }
+            }
+
+            // Step5: 兜底 — 如果一张都没截到，截一张当前状态
+            if (capturedCount == 0) {
+                logD("⚠️ 未找到购买意图评论，截兜底截图...");
+                takeScreenshotWithPrefix("评论取证_兜底", new ScreenshotCallback() {
+                    @Override public void onSuccess() { logD("✅ 评论兜底截图保存成功"); }
+                    @Override public void onFailure() { logE("❌ 评论兜底截图保存失败"); }
+                });
+                Thread.sleep(600);
+            }
+
+            logD("🎉 评论取证完成，共截图: " + Math.max(capturedCount, 1) + "张");
+
+            // Step6: 关闭评论区
+            Thread.sleep(500);
+            closeDouyinComments();
+
+        } catch (Exception e) {
+            logE("❌ 评论区取证失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 读取评论总数（从 title TextView 解析 "X条评论"）
+     */
+    private int getCommentTotalCount() {
+        try {
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) return 0;
+
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> titleNodes =
+                rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/title");
+
+            if (titleNodes != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : titleNodes) {
+                    CharSequence textSeq = node.getText();
+                    if (textSeq != null) {
+                        String text = textSeq.toString(); // 例如 "10条评论"
+                        // 提取数字
+                        String numStr = text.replaceAll("[^0-9]", "");
+                        if (!numStr.isEmpty()) {
+                            int count = Integer.parseInt(numStr);
+                            logD("📊 评论总数: " + count + " (原文: " + text + ")");
+                            rootNode.recycle();
+                            return count;
+                        }
+                    }
+                }
+                for (android.view.accessibility.AccessibilityNodeInfo n : titleNodes) {
+                    if (n != null) n.recycle();
+                }
+            }
+            rootNode.recycle();
+        } catch (Exception e) {
+            logE("读取评论总数失败: " + e.getMessage());
+        }
+        return 0; // 读不到则默认0（按≤10条处理，截1张）
+    }
+
+    /**
+     * 滚动评论列表（向上滑动，让更多评论进入视野）
+     */
+    /**
+     * ★ 将评论区一直滚动到底部（最多滚20次，直到无法继续为止）
+     */
+    private void scrollCommentToBottom() {
+        try {
+            int maxScrolls = 20;
+            for (int i = 0; i < maxScrolls; i++) {
+                boolean canScroll = false;
+
+                // 优先用 RecyclerView ACTION_SCROLL_FORWARD
+                android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+                if (rootNode != null) {
+                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> listNodes =
+                        rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/rmw");
+                    if (listNodes != null && !listNodes.isEmpty()) {
+                        android.view.accessibility.AccessibilityNodeInfo listNode = listNodes.get(0);
+                        canScroll = listNode.performAction(
+                            android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+                        for (android.view.accessibility.AccessibilityNodeInfo n : listNodes) n.recycle();
+                    }
+                    rootNode.recycle();
+                }
+
+                if (!canScroll) {
+                    // ACTION_SCROLL_FORWARD 返回 false → 已到底部；用手势再滑一下确认
+                    android.graphics.Path path = new android.graphics.Path();
+                    path.moveTo(540, 1800);
+                    path.lineTo(540, 1000);
+                    android.accessibilityservice.GestureDescription gesture =
+                        new android.accessibilityservice.GestureDescription.Builder()
+                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 300))
+                            .build();
+                    dispatchGesture(gesture, null, null);
+                    Thread.sleep(500);
+                    logD("⬇️ 已滚动到评论底部（第" + (i + 1) + "次）");
+                    break;
+                }
+
+                logD("⬇️ 评论向下滚动第 " + (i + 1) + " 次...");
+                Thread.sleep(500); // 等待每次滚动加载
+            }
+            logD("✅ 评论区已拉到底部");
+        } catch (Exception e) {
+            logE("滚动到评论底部失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 向上滚动评论列表一屏（从底部往上翻，查找更多关键词）
+     */
+    private void scrollCommentUp() {
+        try {
+            // 优先用 RecyclerView ACTION_SCROLL_BACKWARD
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode != null) {
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> listNodes =
+                    rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/rmw");
+                if (listNodes != null && !listNodes.isEmpty()) {
+                    android.view.accessibility.AccessibilityNodeInfo listNode = listNodes.get(0);
+                    boolean scrolled = listNode.performAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
+                    if (scrolled) {
+                        logD("⬆️ 评论向上滚动成功 (ACTION_SCROLL_BACKWARD)");
+                        for (android.view.accessibility.AccessibilityNodeInfo n : listNodes) n.recycle();
+                        rootNode.recycle();
+                        return;
+                    }
+                    for (android.view.accessibility.AccessibilityNodeInfo n : listNodes) n.recycle();
+                }
+                rootNode.recycle();
+            }
+
+            // 兜底：手势向下滑（让列表向上滚动）
+            android.graphics.Path path = new android.graphics.Path();
+            path.moveTo(540, 1000);
+            path.lineTo(540, 1800);
+            android.accessibilityservice.GestureDescription gesture =
+                new android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 350))
+                    .build();
+            boolean dispatched = dispatchGesture(gesture, null, null);
+            logD(dispatched ? "⬆️ 评论向上手势滚动成功" : "❌ 评论向上手势滚动失败");
+
+        } catch (Exception e) {
+            logE("向上滚动评论列表失败: " + e.getMessage());
+        }
+    }
+
+    private void scrollCommentList() {
+        try {
+            // 先尝试 RecyclerView 的 ACTION_SCROLL_FORWARD
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode != null) {
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> listNodes =
+                    rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/rmw");
+                if (listNodes != null && !listNodes.isEmpty()) {
+                    android.view.accessibility.AccessibilityNodeInfo listNode = listNodes.get(0);
+                    boolean scrolled = listNode.performAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+                    if (scrolled) {
+                        logD("✅ 评论列表 ACTION_SCROLL_FORWARD 成功");
+                        for (android.view.accessibility.AccessibilityNodeInfo n : listNodes) n.recycle();
+                        rootNode.recycle();
+                        return;
+                    }
+                    for (android.view.accessibility.AccessibilityNodeInfo n : listNodes) n.recycle();
+                }
+                rootNode.recycle();
+            }
+
+            // 兜底：手势向上滑
+            android.graphics.Path path = new android.graphics.Path();
+            path.moveTo(540, 1800);
+            path.lineTo(540, 1000);
+            android.accessibilityservice.GestureDescription.StrokeDescription stroke =
+                new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 350);
+            android.accessibilityservice.GestureDescription gesture =
+                new android.accessibilityservice.GestureDescription.Builder().addStroke(stroke).build();
+            boolean dispatched = dispatchGesture(gesture, null, null);
+            logD(dispatched ? "✅ 评论手势滚动成功" : "❌ 评论手势滚动失败");
+
+        } catch (Exception e) {
+            logE("滚动评论列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 关闭抖音评论区（优先点击 back_btn 关闭按钮，兜底按返回键）
+     */
+    private void closeDouyinComments() {
+        try {
+            logD("🔙 关闭评论区...");
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode != null) {
+                // Dump确认：关闭按钮ID = back_btn，Desc = "关闭"
+                String[] closeIds = {
+                    "com.ss.android.ugc.aweme:id/back_btn",
+                    "com.ss.android.ugc.aweme:id/ej4",
+                    "com.ss.android.ugc.aweme:id/cl_"
+                };
+                for (String id : closeIds) {
+                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> closeNodes =
+                        rootNode.findAccessibilityNodeInfosByViewId(id);
+                    if (closeNodes != null && !closeNodes.isEmpty()) {
+                        android.view.accessibility.AccessibilityNodeInfo closeNode = closeNodes.get(0);
+                        if (closeNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) {
+                            logD("✅ 已关闭评论区 (ID: " + id + ")");
+                            for (android.view.accessibility.AccessibilityNodeInfo n : closeNodes) n.recycle();
+                            rootNode.recycle();
+                            return;
+                        }
+                        for (android.view.accessibility.AccessibilityNodeInfo n : closeNodes) n.recycle();
+                    }
+                }
+                rootNode.recycle();
+            }
+            // 兜底：按返回键
+            performGlobalAction(GLOBAL_ACTION_BACK);
+            logD("✅ 已按返回键关闭评论区");
+        } catch (Exception e) {
+            logE("关闭评论区失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 关闭评论区后，点击视频播放界面中的作者头像/昵称，进入侵权作者主页
+     * 策略：依次尝试多个已知ID，兜底使用坐标点击（抖音作者名通常在屏幕左下角）
+     */
+    private void navigateToAuthorProfile() {
+        try {
+            logD("👤 准备进入侵权作者主页...");
+            Thread.sleep(1500); // 等待评论区关闭动画完成，视频播放界面出现
+
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode != null) {
+                // Dump确认：作者头像ID = user_avatar，位于右侧 [915,911]→[1059,1055]
+                String[] authorIds = {
+                    "com.ss.android.ugc.aweme:id/user_avatar",  // ✅ Dump确认的头像ID
+                    "com.ss.android.ugc.aweme:id/iv_avatar",    // 备用
+                    "com.ss.android.ugc.aweme:id/author_anim_icon",
+                    "com.ss.android.ugc.aweme:id/expand_avatar",
+                    "com.ss.android.ugc.aweme:id/avatar_cover"
+                };
+
+                for (String id : authorIds) {
+                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
+                        rootNode.findAccessibilityNodeInfosByViewId(id);
+                    if (nodes != null && !nodes.isEmpty()) {
+                        android.view.accessibility.AccessibilityNodeInfo node = nodes.get(0);
+                        if (node.isVisibleToUser() &&
+                            node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) {
+                            logD("✅ 点击作者头像成功 (ID: " + id + ")");
+                            for (android.view.accessibility.AccessibilityNodeInfo n : nodes) n.recycle();
+                            rootNode.recycle();
+                            return;
+                        }
+                        for (android.view.accessibility.AccessibilityNodeInfo n : nodes) n.recycle();
+                    }
+                }
+
+                // 尝试通过desc包含"头像"的节点
+                android.view.accessibility.AccessibilityNodeInfo avatarNode = findNodeByDescContains(rootNode, "头像");
+                if (avatarNode != null) {
+                    if (avatarNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) {
+                        logD("✅ 点击作者头像成功 (Desc含'头像')");
+                        avatarNode.recycle();
+                        rootNode.recycle();
+                        return;
+                    }
+                    avatarNode.recycle();
+                }
+                rootNode.recycle();
+            }
+
+            // 兜底：坐标点击（Dump确认：user_avatar中心点约 x=987, y=983）
+            logD("⚠️ 未找到作者头像节点，使用坐标兜底点击...");
+            android.graphics.Path path = new android.graphics.Path();
+            path.moveTo(987, 983);
+            path.lineTo(987, 983);
+            android.accessibilityservice.GestureDescription gesture =
+                new android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 100))
+                    .build();
+            boolean dispatched = dispatchGesture(gesture, null, null);
+            logD(dispatched ? "✅ 坐标点击作者头像成功" : "❌ 坐标点击作者头像失败");
+
+        } catch (Exception e) {
+            logE("进入作者主页失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 在节点树中递归查找 contentDescription 包含指定关键词的节点
+     */
+    private android.view.accessibility.AccessibilityNodeInfo findNodeByDescContains(
+            android.view.accessibility.AccessibilityNodeInfo root, String keyword) {
+        if (root == null) return null;
+        CharSequence desc = root.getContentDescription();
+        if (desc != null && desc.toString().contains(keyword)) {
+            return root;
+        }
+        for (int i = 0; i < root.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = root.getChild(i);
+            android.view.accessibility.AccessibilityNodeInfo result = findNodeByDescContains(child, keyword);
+            if (result != null) {
+                if (child != result) child.recycle();
+                return result;
+            }
+            if (child != null) child.recycle();
+        }
+        return null;
     }
 
     /**

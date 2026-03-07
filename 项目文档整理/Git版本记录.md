@@ -12,6 +12,91 @@
 
 ## 🚀 版本历史
 
+### V3.5 (2026-03-07) 💬 评论区取证截图 + 作者主页导航
+
+**✨ 核心更新 - 评论区购买意图扫描 & 进入作者主页**
+
+#### ✅ 完成内容
+
+**1. 评论区取证截图 - captureCommentEvidence()**
+- ✅ **读取评论总数**: 解析"X条评论"文本，动态决定目标截图数量
+  - ≤10条 → 1张 | 11-30条 → 2张 | >30条 → 3张（上限）
+- ✅ **强制先滚一次**: 避免零评论时直接截图，确保所有视口评论都被扫描
+- ✅ **边滚边扫描**: 循环最多10次，每次扫描可见 `id/content` TextView节点
+- ✅ **70+购买意图关键词**，覆盖4类场景:
+  - 已购买类（最强证据）: 买了、收到了、入手、复购、下单了…
+  - 想购买类（购买意向）: 想买、求链接、多少钱、哪里买…
+  - 使用体验类（暗示已购）: 好用、效果好、值得买、推荐买…
+  - 询问产品类（买前咨询）: 安全吗、耐用吗、正品吗、值不值…
+- ✅ **双重滚动策略**: 优先 `ACTION_SCROLL_FORWARD`（RecyclerView `rmw`），兜底手势上滑
+- ✅ **兜底截图**: 全程无匹配时截1张当前状态，记录"无购买意图评论"
+
+**2. 关闭评论区 - closeDouyinComments()**
+- ✅ **精准ID**: 使用 Dump 确认的 `back_btn` 作为首选关闭按钮
+- ✅ **多级兜底**: back_btn → ej4 → cl_ → 按返回键
+
+**3. 进入侵权作者主页 - navigateToAuthorProfile()**
+- ✅ **精准头像ID**: `com.ss.android.ugc.aweme:id/user_avatar`（来自 UI_Dump_20260307_223358.md）
+- ✅ **头像坐标**: 中心点 (987, 983)，范围 [915,911]→[1059,1055]
+- ✅ **多ID策略**: user_avatar → iv_avatar → author_anim_icon → expand_avatar → avatar_cover
+- ✅ **新增辅助方法**: `findNodeByDescContains()` 递归节点树，按 contentDescription 关键词定位
+
+**4. 主流程集成**
+```
+captureCommentEvidence()（扫描+截图+关闭评论区）
+    ↓
+navigateToAuthorProfile()（点击头像进入作者主页）
+```
+
+#### 🔧 技术关键代码
+
+**评论截图核心逻辑**:
+```java
+// 强制先滚一次，确保UI激活
+scrollCommentListOnce(commentList);
+Thread.sleep(500);
+
+// 边滚边扫，最多循环10次
+for (int scroll = 0; scroll < 10 && savedCount < targetCount; scroll++) {
+    List<AccessibilityNodeInfo> contentNodes =
+        rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/content");
+    for (AccessibilityNodeInfo node : contentNodes) {
+        String text = node.getText().toString();
+        if (containsPurchaseKeyword(text)) {
+            takeScreenshot(...); // 全屏截图
+            savedCount++;
+        }
+    }
+    scrollCommentListOnce(commentList); // 继续滚动
+    Thread.sleep(800);
+}
+```
+
+**作者头像点击**:
+```java
+// 优先ID精准点击
+List<AccessibilityNodeInfo> avatarNodes =
+    root.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/user_avatar");
+if (!avatarNodes.isEmpty()) {
+    avatarNodes.get(0).performAction(ACTION_CLICK);
+} else {
+    // 兜底坐标：Dump确认的头像中心点
+    clickByCoordinates(987, 983);
+}
+```
+
+#### 📦 文件变更
+
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - 新增 `captureCommentEvidence()` - 评论区扫描截图主方法
+  - 新增 `scrollCommentListOnce()` - 单次滚动评论列表
+  - 新增 `containsPurchaseKeyword()` - 70+关键词匹配
+  - 修改 `closeDouyinComments()` - 使用 back_btn 精准关闭
+  - 新增 `navigateToAuthorProfile()` - 进入作者主页
+  - 新增 `findNodeByDescContains()` - 递归描述关键词搜索
+
+---
+
 ### V3.4 (2026-03-07) ⏱️ 真实时钟同步 + 人脸检测优化 + 兜底截图
 
 **✨ 核心更新 - 修复截图计时漂移 & 增强人脸过滤**
