@@ -2953,6 +2953,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
      */
     private void playVideoAndTakeScreenshots() {
         FaceDetectionHelper faceDetector = null;
+        // 兜底帧: 开始/中间/结尾 (索引 0/1/2)
+        android.graphics.Bitmap[] fallbackBitmaps = new android.graphics.Bitmap[3];
         try {
             logD("🎬 开始播放视频并智能截图...");
             logD("📝 视频时长: " + videoDurationSeconds + "秒");
@@ -2967,19 +2969,38 @@ public class AutomationAccessibilityService extends AccessibilityService {
             logD("🎯 目标截图数量: " + targetCount + "张");
             logD("⏱️ 截图间隔时间: " + intervalSeconds + "秒 (统一1秒)");
 
+            // 兜底帧的目标时间点: 开始(1秒)、中间(1/2)、结尾(最后1秒)
+            double[] fallbackTargetTimes = {
+                1.0,
+                videoDurationSeconds / 2.0,
+                Math.max(1.0, videoDurationSeconds - 1.0)
+            };
+            boolean[] fallbackCaptured = {false, false, false};
+
+            // 🔑 记录视频真实开始时间(用系统时钟,彻底解决时间漂移问题)
+            long startRealTimeMs = System.currentTimeMillis();
             int savedCount = 0;
-            double currentTime = 1.0; // 从第1秒开始
             int screenshotIndex = 1;
 
-            // 开始扫描并截图
-            while (savedCount < targetCount && currentTime < videoDurationSeconds) {
-                // 等待到当前时间点
-                Thread.sleep(200); // 每隔5帧(约0.2秒)
+            logD("⏱️ 开始基于真实时钟扫描 (视频时长: " + videoDurationSeconds + "秒)");
 
-                // 截图并检测人脸
+            // 开始扫描并截图(退出条件: 保存足够数量 OR 真实时间超过视频时长)
+            while (savedCount < targetCount) {
+                // 计算当前真实播放进度(以系统时钟为准)
+                double realElapsedSec = (System.currentTimeMillis() - startRealTimeMs) / 1000.0;
+
+                // 视频已播放完毕,退出循环
+                if (realElapsedSec >= videoDurationSeconds) {
+                    logD("⏱️ 视频已播放完毕 (" + String.format("%.1f", realElapsedSec) + "秒),停止扫描");
+                    break;
+                }
+
+                // 等待约0.2秒再截图
+                Thread.sleep(200);
+
+                // sleep之后重新计算真实时间(更准确)
+                final double finalRealElapsedSec = (System.currentTimeMillis() - startRealTimeMs) / 1000.0;
                 final int finalScreenshotIndex = screenshotIndex;
-                final double finalCurrentTime = currentTime;
-                final int finalSavedCount = savedCount;
 
                 // 使用同步标志位
                 final boolean[] screenshotSuccess = {false};
@@ -3004,12 +3025,25 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 Thread.sleep(300);
 
                 if (screenshotSuccess[0] && capturedBitmap[0] != null) {
+                    // 检查是否需要缓存兜底帧 (开始/中间/结尾),基于真实时间
+                    for (int i = 0; i < 3; i++) {
+                        if (!fallbackCaptured[i] && finalRealElapsedSec >= fallbackTargetTimes[i]) {
+                            // 回收旧的兜底帧,缓存新的
+                            if (fallbackBitmaps[i] != null && !fallbackBitmaps[i].isRecycled()) {
+                                fallbackBitmaps[i].recycle();
+                            }
+                            fallbackBitmaps[i] = capturedBitmap[0].copy(android.graphics.Bitmap.Config.ARGB_8888, false);
+                            fallbackCaptured[i] = true;
+                            logD("📦 缓存兜底帧[" + i + "]: " + String.format("%.1f", finalRealElapsedSec) + "秒");
+                        }
+                    }
+
                     // 检测人脸
                     hasFace[0] = faceDetector.detectFace(capturedBitmap[0]);
 
                     if (hasFace[0]) {
                         // 检测到人脸,保存图片
-                        String screenshotName = "侵权视频_" + String.format("%.1f", finalCurrentTime) + "秒_人脸";
+                        String screenshotName = "侵权视频_" + String.format("%.1f", finalRealElapsedSec) + "秒_人脸";
                         logD("📸 截图 " + finalScreenshotIndex + "/" + targetCount + ": " + screenshotName + " ✅ 检测到人脸!");
 
                         // 保存图片
@@ -3018,30 +3052,52 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         savedCount++;
                         screenshotIndex++;
 
-                        // 等待间隔时间
+                        // 等待间隔时间后继续扫描(真实时间自动推进,无需手动累加)
                         logD("⏱️ 等待 " + intervalSeconds + " 秒后继续扫描...");
                         Thread.sleep(intervalSeconds * 1000);
-                        currentTime += intervalSeconds;
                     } else {
                         // 没检测到人脸,继续扫描
-                        logD("🔍 " + String.format("%.1f", finalCurrentTime) + "秒: 未检测到人脸,继续扫描...");
+                        logD("🔍 " + String.format("%.1f", finalRealElapsedSec) + "秒: 未检测到人脸,继续扫描...");
                         capturedBitmap[0].recycle(); // 释放bitmap
                     }
                 }
-
-                currentTime += 0.2; // 每次增加0.2秒(5帧)
+                // 注意: 不再手动累加currentTime, System.currentTimeMillis()自动追踪真实时间
             }
 
             logD("✅ 智能截图完成! 共保存 " + savedCount + " 张图片");
 
-            // 等待视频播放完成
-            int remainingTime = (int) (videoDurationSeconds - currentTime);
-            if (remainingTime > 0) {
-                logD("⏱️ 等待视频播放完成,剩余 " + remainingTime + " 秒...");
-                Thread.sleep(remainingTime * 1000);
+            // 等待视频播放完成(基于真实时钟计算剩余时间)
+            long videoEndTimeMs = startRealTimeMs + (long)(videoDurationSeconds * 1000L);
+            long remainingMs = videoEndTimeMs - System.currentTimeMillis();
+            if (remainingMs > 0) {
+                logD("⏱️ 等待视频播放完成,剩余 " + String.format("%.1f", remainingMs / 1000.0) + " 秒...");
+                Thread.sleep(remainingMs);
+            }
+
+            // 🆕 兜底逻辑: 全程未检测到人脸,保存开始/中间/结尾3张截图
+            if (savedCount == 0) {
+                logD("⚠️ 全程未检测到人脸,启用兜底截图(开始/中间/结尾)...");
+                String[] fallbackLabels = {"开始", "中间", "结尾"};
+                for (int i = 0; i < 3; i++) {
+                    if (fallbackBitmaps[i] != null && !fallbackBitmaps[i].isRecycled()) {
+                        String name = "侵权视频_" + fallbackLabels[i] + "_" + String.format("%.1f", fallbackTargetTimes[i]) + "秒";
+                        saveBitmapToGallery(fallbackBitmaps[i], name);
+                        logD("📸 兜底截图已保存: " + name);
+                    } else {
+                        logD("⚠️ 兜底帧[" + i + "] 未捕获,跳过");
+                    }
+                }
             }
 
             logD("✅ 视频播放和截图完成!");
+
+            // 🆕 步骤: 点击暂停视频
+            Thread.sleep(500);
+            pauseDouyinVideo();
+
+            // 🆕 步骤: 打开评论区
+            Thread.sleep(1000);
+            openDouyinComments();
 
         } catch (Exception e) {
             logE("播放视频并截图失败: " + e.getMessage());
@@ -3051,6 +3107,120 @@ public class AutomationAccessibilityService extends AccessibilityService {
             if (faceDetector != null) {
                 faceDetector.release();
             }
+            // 释放所有兜底帧
+            for (android.graphics.Bitmap bmp : fallbackBitmaps) {
+                if (bmp != null && !bmp.isRecycled()) {
+                    bmp.recycle();
+                }
+            }
+        }
+    }
+
+    /**
+     * 🆕 点击暂停抖音视频
+     * 点击 qde (播放/暂停覆盖层)
+     */
+    private void pauseDouyinVideo() {
+        try {
+            logD("⏸️ 准备点击暂停视频...");
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logE("❌ pauseDouyinVideo: 无法获取根节点");
+                return;
+            }
+
+            // 优先通过ID查找播放/暂停覆盖层
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
+                rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/qde");
+
+            if (nodes != null && !nodes.isEmpty()) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
+                    if (node.isVisibleToUser()) {
+                        boolean clicked = node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                        if (clicked) {
+                            logD("✅ 已点击暂停 (通过ID: qde)");
+                            rootNode.recycle();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // 兜底: 通过desc查找
+            nodes = rootNode.findAccessibilityNodeInfosByText("播放视频");
+            if (nodes != null && !nodes.isEmpty()) {
+                android.view.accessibility.AccessibilityNodeInfo node = nodes.get(0);
+                boolean clicked = node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                if (clicked) {
+                    logD("✅ 已点击暂停 (通过desc: 播放视频)");
+                    rootNode.recycle();
+                    return;
+                }
+            }
+
+            // 兜底: 点击屏幕中间坐标
+            logD("⚠️ 未找到暂停按钮节点，使用坐标点击屏幕中央");
+            clickByCoordinates(540, 1100);
+            logD("✅ 已点击暂停 (坐标点击)");
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("❌ 点击暂停失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 🆕 打开抖音评论区
+     * 点击 err (评论按钮)
+     */
+    private void openDouyinComments() {
+        try {
+            logD("💬 准备打开评论区...");
+            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            if (rootNode == null) {
+                logE("❌ openDouyinComments: 无法获取根节点");
+                return;
+            }
+
+            // 优先通过ID查找评论按钮
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
+                rootNode.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/err");
+
+            if (nodes != null && !nodes.isEmpty()) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
+                    if (node.isVisibleToUser() && node.isClickable()) {
+                        boolean clicked = node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                        if (clicked) {
+                            logD("✅ 已打开评论区 (通过ID: err)");
+                            rootNode.recycle();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // 兜底: 通过desc模糊查找"评论"
+            nodes = rootNode.findAccessibilityNodeInfosByText("评论");
+            if (nodes != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
+                    if (node.isClickable() && node.isVisibleToUser()) {
+                        boolean clicked = node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                        if (clicked) {
+                            logD("✅ 已打开评论区 (通过text: 评论)");
+                            rootNode.recycle();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            logE("❌ 未找到评论按钮");
+            rootNode.recycle();
+
+        } catch (Exception e) {
+            logE("❌ 打开评论区失败: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 

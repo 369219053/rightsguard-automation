@@ -12,6 +12,78 @@
 
 ## 🚀 版本历史
 
+### V3.4 (2026-03-07) ⏱️ 真实时钟同步 + 人脸检测优化 + 兜底截图
+
+**✨ 核心更新 - 修复截图计时漂移 & 增强人脸过滤**
+
+#### ✅ 完成内容
+
+**1. 修复计时漂移 (Timing Drift) - 视频循环播放根因**
+- ✅ **问题根因**: 旧版本使用 `currentTime += 0.2` 手动步进，但每次循环实际耗时约500ms（200ms sleep + ML Kit处理），逻辑时钟比真实时间慢2-3倍，23秒视频实际扫描了73秒，导致视频循环播放
+- ✅ **修复方案**: 使用 `System.currentTimeMillis()` 真实时钟替换虚假计时器
+- ✅ **精确退出**: `realElapsedSec >= videoDurationSeconds` 立即退出循环
+- ✅ **精确等待**: 截图完成后计算真实剩余时间 `videoEndTimeMs - System.currentTimeMillis()`
+
+**2. 修复暂停和评论区不触发问题**
+- ✅ **问题根因**: 计时器失速导致循环无法在正确时间退出，后续暂停/评论操作被跳过
+- ✅ **修复方案**: 真实时钟控制循环，确保视频结束后立即退出
+- ✅ **暂停视频**: 视频结束后等待500ms，调用 `pauseDouyinVideo()`（优先ID: `qde`，兜底坐标中央）
+- ✅ **打开评论区**: 暂停后等待1秒，调用 `openDouyinComments()`（优先ID: `err`，兜底text: "评论"）
+
+**3. ML Kit人脸检测参数优化 - 减少误检**
+- ✅ **问题根因**: `minFaceSize=0.4f` + `(宽>10% OR 高>10%)` 条件太宽松，导致杯子logo等被误识别为人脸
+- ✅ **minFaceSize**: `0.4f` → `0.5f`（短边至少占图片50%）
+- ✅ **宽度验证**: `>10%` → `>20%`
+- ✅ **高度验证**: `>10%` → `>20%`
+- ✅ **面积验证**: 新增 `面积>3%` 条件
+- ✅ **逻辑关系**: `OR` → `AND`（三重条件全部满足才算有效人脸）
+
+**4. 新增兜底截图逻辑 - 无人脸视频支持**
+- ✅ **触发条件**: 全程扫描后 `savedCount == 0`（未检测到任何有效人脸）
+- ✅ **兜底帧缓存**: 扫描过程中在3个时间点缓存备用帧（开始/中间/结尾）
+- ✅ **兜底帧时间点**:
+  - 开始：第1秒
+  - 中间：`videoDurationSeconds / 2`
+  - 结尾：`videoDurationSeconds - 1`秒
+- ✅ **文件名示例**: `侵权视频_开始_1.0秒_时间戳.png`
+- ✅ **内存安全**: 在 `finally` 块中统一释放3个兜底帧的Bitmap内存
+
+#### 🔧 技术关键代码
+
+**真实时钟替换**:
+```java
+long startRealTimeMs = System.currentTimeMillis();
+long videoEndTimeMs = startRealTimeMs + (long)(videoDurationSeconds * 1000);
+
+while (savedCount < targetCount) {
+    double realElapsedSec = (System.currentTimeMillis() - startRealTimeMs) / 1000.0;
+    if (realElapsedSec >= videoDurationSeconds) break; // 真实时间到了才退出
+    // ... 截图检测逻辑
+}
+
+// 等待真实剩余时间
+long remainingMs = videoEndTimeMs - System.currentTimeMillis();
+if (remainingMs > 0) Thread.sleep(remainingMs);
+```
+
+**加强人脸验证**:
+```java
+// FaceDetectionHelper.java
+FaceDetectorOptions options = new FaceDetectorOptions.Builder()
+    .setMinFaceSize(0.5f) // 由0.4f提升到0.5f
+    .build();
+
+// 三重AND条件替换旧的OR条件
+float widthRatio = (float) faceBounds.width() / bitmap.getWidth();
+float heightRatio = (float) faceBounds.height() / bitmap.getHeight();
+float areaRatio = widthRatio * heightRatio;
+if (widthRatio > 0.2f && heightRatio > 0.2f && areaRatio > 0.03f) {
+    return true; // 有效人脸
+}
+```
+
+---
+
 ### V3.2 (2026-03-07) 🎯 智能人脸检测截图 + Google ML Kit集成!
 
 **✨ 核心更新 - 智能人脸检测截图**

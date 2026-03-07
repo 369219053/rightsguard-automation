@@ -28,12 +28,12 @@ public class FaceDetectionHelper {
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE) // 准确模式(提高准确度)
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_NONE) // 不需要关键点
                 .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE) // 不需要分类
-                .setMinFaceSize(0.4f) // 最小人脸大小(相对于图片,提高到0.4避免误判)
+                .setMinFaceSize(0.5f) // 最小人脸大小提高到0.5(短边的50%),大幅减少logo/物品误判
                 .enableTracking() // 启用人脸追踪
                 .build();
 
         detector = FaceDetection.getClient(options);
-        Log.d(TAG, "人脸检测器初始化完成(准确模式,最小人脸0.4)");
+        Log.d(TAG, "人脸检测器初始化完成(准确模式,最小人脸0.5)");
     }
 
     /**
@@ -68,17 +68,23 @@ public class FaceDetectionHelper {
                                 float imageWidth = bitmap.getWidth();
                                 float imageHeight = bitmap.getHeight();
 
-                                // 人脸宽度或高度至少占图片的10%
-                                if (faceWidth / imageWidth > 0.1f || faceHeight / imageHeight > 0.1f) {
+                                // 人脸宽度AND高度都必须超过图片各自维度的20%,且面积不小于图片的3%
+                                // 使用AND条件避免误判细长形的logo/图案
+                                float widthRatio = faceWidth / imageWidth;
+                                float heightRatio = faceHeight / imageHeight;
+                                float areaRatio = (faceWidth * faceHeight) / (imageWidth * imageHeight);
+                                if (widthRatio > 0.2f && heightRatio > 0.2f && areaRatio > 0.03f) {
                                     hasValidFace = true;
                                     Log.d(TAG, "✅ 检测到有效人脸,大小: " + (int)faceWidth + "x" + (int)faceHeight +
-                                             " (图片: " + (int)imageWidth + "x" + (int)imageHeight + ")");
+                                             " (" + String.format("%.0f", widthRatio*100) + "% x " +
+                                             String.format("%.0f", heightRatio*100) + "%, 面积" +
+                                             String.format("%.1f", areaRatio*100) + "%)");
                                     break;
                                 }
                             }
 
                             if (!hasValidFace) {
-                                Log.d(TAG, "⚠️ 检测到人脸但太小,忽略 (数量: " + faces.size() + ")");
+                                Log.d(TAG, "⚠️ 检测到人脸但太小或比例不符,忽略 (数量: " + faces.size() + ")");
                             }
                         } else {
                             Log.d(TAG, "❌ 未检测到人脸");
