@@ -47,6 +47,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private String remark = "";
     private String infringementUrl = ""; // 侵权链接
     private String videoKeywords = ""; // 🆕 视频文案关键词
+    private int videoDurationSeconds = 60; // 🆕 视频时长(秒),默认60秒
 
     // 权利卫士取证阶段标志位
     private boolean isRightsGuardEvidencePhase = false; // 是否处于权利卫士取证阶段(权利卫士打开抖音后)
@@ -206,6 +207,14 @@ public class AutomationAccessibilityService extends AccessibilityService {
     public void setVideoKeywords(String keywords) {
         this.videoKeywords = keywords != null ? keywords : "";
         logD("📝 设置视频关键词: " + this.videoKeywords);
+    }
+
+    /**
+     * 🆕 设置视频时长
+     */
+    public void setVideoDurationSeconds(int seconds) {
+        this.videoDurationSeconds = seconds > 0 ? seconds : 60;
+        logD("📝 设置视频时长: " + this.videoDurationSeconds + "秒");
     }
 
     /**
@@ -2864,6 +2873,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         // 等待视频播放页面加载
                         Thread.sleep(2000);
 
+                        // 🆕 播放视频并截图
+                        playVideoAndTakeScreenshots();
+
                         logD("🎉 抖音自动化流程完成!");
                         rootNode.recycle();
                         return;
@@ -2884,6 +2896,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
                             if (clicked) {
                                 logD("✅ 成功点击侵权视频(通过父节点)");
                                 Thread.sleep(2000);
+
+                                // 🆕 播放视频并截图
+                                playVideoAndTakeScreenshots();
+
                                 logD("🎉 抖音自动化流程完成!");
                                 rootNode.recycle();
                                 return;
@@ -2902,6 +2918,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         clickByCoordinates(centerX, centerY);
                         logD("✅ 已执行坐标点击侵权视频");
                         Thread.sleep(2000);
+
+                        // 🆕 播放视频并截图
+                        playVideoAndTakeScreenshots();
+
                         logD("🎉 抖音自动化流程完成!");
                     }
 
@@ -2918,6 +2938,139 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
         } catch (Exception e) {
             logE("在观看历史中查找视频失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 🆕 播放视频并智能截图(人脸检测)
+     * 逻辑:
+     * 1. 从第1秒开始,每隔5帧(约0.2秒)截图并检测人脸
+     * 2. 检测到人脸后保存图片,然后等待间隔时间
+     * 3. 继续扫描,直到保存足够数量的图片
+     * 4. 截图数量: <30秒截4张, ≥30秒截5张
+     * 5. 间隔时间: <60秒间隔2秒, ≥60秒间隔4秒
+     */
+    private void playVideoAndTakeScreenshots() {
+        FaceDetectionHelper faceDetector = null;
+        try {
+            logD("🎬 开始播放视频并智能截图...");
+            logD("📝 视频时长: " + videoDurationSeconds + "秒");
+
+            // 初始化人脸检测器
+            faceDetector = new FaceDetectionHelper();
+
+            // 根据视频时长确定参数
+            int targetCount = videoDurationSeconds < 30 ? 4 : 5;
+            int intervalSeconds = 1; // 统一间隔1秒
+
+            logD("🎯 目标截图数量: " + targetCount + "张");
+            logD("⏱️ 截图间隔时间: " + intervalSeconds + "秒 (统一1秒)");
+
+            int savedCount = 0;
+            double currentTime = 1.0; // 从第1秒开始
+            int screenshotIndex = 1;
+
+            // 开始扫描并截图
+            while (savedCount < targetCount && currentTime < videoDurationSeconds) {
+                // 等待到当前时间点
+                Thread.sleep(200); // 每隔5帧(约0.2秒)
+
+                // 截图并检测人脸
+                final int finalScreenshotIndex = screenshotIndex;
+                final double finalCurrentTime = currentTime;
+                final int finalSavedCount = savedCount;
+
+                // 使用同步标志位
+                final boolean[] screenshotSuccess = {false};
+                final boolean[] hasFace = {false};
+                final android.graphics.Bitmap[] capturedBitmap = {null};
+
+                // 截图
+                takeScreenshot(new ScreenshotCallback() {
+                    @Override
+                    public void onSuccess(android.graphics.Bitmap bitmap) {
+                        screenshotSuccess[0] = true;
+                        capturedBitmap[0] = bitmap;
+                    }
+
+                    @Override
+                    public void onFailure() {
+                        screenshotSuccess[0] = false;
+                    }
+                });
+
+                // 等待截图完成
+                Thread.sleep(300);
+
+                if (screenshotSuccess[0] && capturedBitmap[0] != null) {
+                    // 检测人脸
+                    hasFace[0] = faceDetector.detectFace(capturedBitmap[0]);
+
+                    if (hasFace[0]) {
+                        // 检测到人脸,保存图片
+                        String screenshotName = "侵权视频_" + String.format("%.1f", finalCurrentTime) + "秒_人脸";
+                        logD("📸 截图 " + finalScreenshotIndex + "/" + targetCount + ": " + screenshotName + " ✅ 检测到人脸!");
+
+                        // 保存图片
+                        saveBitmapToGallery(capturedBitmap[0], screenshotName);
+
+                        savedCount++;
+                        screenshotIndex++;
+
+                        // 等待间隔时间
+                        logD("⏱️ 等待 " + intervalSeconds + " 秒后继续扫描...");
+                        Thread.sleep(intervalSeconds * 1000);
+                        currentTime += intervalSeconds;
+                    } else {
+                        // 没检测到人脸,继续扫描
+                        logD("🔍 " + String.format("%.1f", finalCurrentTime) + "秒: 未检测到人脸,继续扫描...");
+                        capturedBitmap[0].recycle(); // 释放bitmap
+                    }
+                }
+
+                currentTime += 0.2; // 每次增加0.2秒(5帧)
+            }
+
+            logD("✅ 智能截图完成! 共保存 " + savedCount + " 张图片");
+
+            // 等待视频播放完成
+            int remainingTime = (int) (videoDurationSeconds - currentTime);
+            if (remainingTime > 0) {
+                logD("⏱️ 等待视频播放完成,剩余 " + remainingTime + " 秒...");
+                Thread.sleep(remainingTime * 1000);
+            }
+
+            logD("✅ 视频播放和截图完成!");
+
+        } catch (Exception e) {
+            logE("播放视频并截图失败: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            // 释放人脸检测器
+            if (faceDetector != null) {
+                faceDetector.release();
+            }
+        }
+    }
+
+    /**
+     * 🆕 保存Bitmap到相册
+     * @param bitmap 要保存的图片
+     * @param name 图片名称(不含扩展名)
+     */
+    private void saveBitmapToGallery(android.graphics.Bitmap bitmap, String name) {
+        if (bitmap == null) {
+            logE("❌ Bitmap为空,无法保存");
+            return;
+        }
+
+        try {
+            // 使用现有的保存方法
+            saveScreenshotWithPrefix(bitmap, name);
+            logD("✅ 图片已保存: " + name);
+        } catch (Exception e) {
+            logE("❌ 保存图片失败: " + e.getMessage());
             e.printStackTrace();
         }
     }

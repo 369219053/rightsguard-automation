@@ -12,6 +12,202 @@
 
 ## 🚀 版本历史
 
+### V3.2 (2026-03-07) 🎯 智能人脸检测截图 + Google ML Kit集成!
+
+**✨ 核心更新 - 智能人脸检测截图**
+
+#### ✅ 完成内容
+
+**1. 集成Google ML Kit人脸检测**
+- ✅ 添加依赖:`com.google.mlkit:face-detection:16.1.5`
+- ✅ 创建`FaceDetectionHelper.java`工具类
+- ✅ 配置人脸检测器:
+  - 准确模式:`PERFORMANCE_MODE_ACCURATE`
+  - 最小人脸大小:`0.4f`(避免误判)
+  - 启用人脸追踪
+- ✅ 实现同步检测方法:`detectFace(Bitmap)`
+- ✅ 人脸大小验证:宽度或高度≥图片的10%
+
+**2. 智能扫描截图逻辑**
+- ✅ 从第1秒开始扫描
+- ✅ 每隔5帧(0.2秒)截图并检测人脸
+- ✅ 检测到人脸后:
+  - 保存图片到相册
+  - 等待1秒间隔
+  - 继续下一次扫描
+- ✅ 未检测到人脸:继续扫描,不保存
+- ✅ 直到保存足够数量的图片或视频结束
+
+**3. 动态调整截图参数**
+- ✅ 截图数量:
+  - 视频<30秒:截4张
+  - 视频≥30秒:截5张
+- ✅ 间隔时间:统一1秒(不再区分60秒)
+- ✅ 确保视频播放完整后执行后续操作
+
+**4. 提高检测准确度**
+- ✅ 切换到准确模式(从快速模式)
+- ✅ 提高最小人脸大小(从0.15f到0.4f)
+- ✅ 增加人脸大小验证(≥10%)
+- ✅ 过滤太小的误判
+
+**5. 完善的日志记录**
+- ✅ 记录检测过程:`🔍 X.X秒: 未检测到人脸,继续扫描...`
+- ✅ 记录成功检测:`📸 截图 X/5: 侵权视频_X.X秒_人脸 ✅ 检测到人脸!`
+- ✅ 记录人脸大小:`✅ 检测到有效人脸,大小: 450x600 (图片: 1080x1920)`
+- ✅ 记录过滤结果:`⚠️ 检测到人脸但太小,忽略 (数量: 1)`
+
+#### 📋 完整流程
+
+```
+点击观看历史中的侵权视频
+  ↓
+等待视频播放页面加载(2秒)
+  ↓
+开始智能扫描截图
+  ├─ 初始化人脸检测器(准确模式,最小人脸0.4)
+  ├─ 目标截图数量: 4-5张
+  └─ 截图间隔时间: 1秒
+  ↓
+扫描循环(从第1秒开始)
+  ├─ 每隔5帧(0.2秒)截图
+  ├─ ML Kit检测人脸
+  ├─ 验证人脸大小(≥10%)
+  ├─ 检测到有效人脸 → 保存图片 → 等待1秒
+  └─ 未检测到 → 继续扫描
+  ↓
+保存4-5张人脸截图
+  ↓
+等待视频播放完成(到达视频总时长)
+  ↓
+✅ 视频播放和截图完成!
+  ↓
+执行后续操作(待实现)
+```
+
+#### 🔧 技术实现
+
+**FaceDetectionHelper.java**:
+```java
+public class FaceDetectionHelper {
+    private FaceDetector detector;
+
+    public FaceDetectionHelper() {
+        FaceDetectorOptions options = new FaceDetectorOptions.Builder()
+                .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                .setMinFaceSize(0.4f)
+                .enableTracking()
+                .build();
+        detector = FaceDetection.getClient(options);
+    }
+
+    public boolean detectFace(Bitmap bitmap) {
+        // 检测人脸并验证大小
+        // 人脸宽度或高度≥图片的10%才算有效
+    }
+}
+```
+
+**AutomationAccessibilityService.java**:
+```java
+private void playVideoAndTakeScreenshots() {
+    FaceDetectionHelper faceDetector = new FaceDetectionHelper();
+
+    int targetCount = videoDurationSeconds < 30 ? 4 : 5;
+    int intervalSeconds = 1; // 统一1秒
+
+    int savedCount = 0;
+    double currentTime = 1.0;
+
+    while (savedCount < targetCount && currentTime < videoDurationSeconds) {
+        Thread.sleep(200); // 每隔5帧
+
+        // 截图并检测人脸
+        takeScreenshot(bitmap -> {
+            if (faceDetector.detectFace(bitmap)) {
+                // 保存图片
+                saveBitmapToGallery(bitmap, "侵权视频_" + currentTime + "秒_人脸");
+                savedCount++;
+                Thread.sleep(intervalSeconds * 1000);
+            }
+        });
+
+        currentTime += 0.2;
+    }
+
+    // 等待视频播放完成
+    Thread.sleep((videoDurationSeconds - currentTime) * 1000);
+}
+```
+
+#### 💡 技术优势
+
+**Google ML Kit vs 百度云API**:
+
+| 对比项 | Google ML Kit ⭐ | 百度云API |
+|-------|-----------------|----------|
+| 速度 | 离线检测,毫秒级 | 网络请求,延迟高 |
+| 成本 | 完全免费 | 收费API |
+| 限制 | 无限制 | 有QPS限制 |
+| 准确度 | 高 | 高 |
+| 稳定性 | 不依赖网络 | 依赖网络 |
+| 隐私 | 本地处理 | 上传到云端 |
+
+#### 🎬 实际运行示例
+
+**示例: 106秒视频**
+```
+🎬 开始播放视频并智能截图...
+📝 视频时长: 106秒
+🎯 目标截图数量: 5张
+⏱️ 截图间隔时间: 1秒 (统一1秒)
+
+扫描过程:
+1.0秒: 🔍 未检测到人脸,继续扫描...
+1.2秒: 🔍 未检测到人脸,继续扫描...
+3.2秒: ✅ 检测到有效人脸,大小: 450x600 (图片: 1080x1920)
+       📸 截图 1/5: 侵权视频_3.2秒_人脸 ✅ 检测到人脸!
+       ⏱️ 等待 1 秒后继续扫描...
+4.2秒: 开始扫描...
+8.6秒: ✅ 检测到有效人脸,大小: 480x620 (图片: 1080x1920)
+       📸 截图 2/5: 侵权视频_8.6秒_人脸 ✅ 检测到人脸!
+       ⏱️ 等待 1 秒后继续扫描...
+...
+✅ 智能截图完成! 共保存 5 张图片
+⏱️ 等待视频播放完成,剩余 42 秒...
+✅ 视频播放和截图完成!
+```
+
+#### 📦 依赖更新
+
+**app/build.gradle**:
+```gradle
+dependencies {
+    // Google ML Kit - 文本识别(已有)
+    implementation 'com.google.mlkit:text-recognition-chinese:16.0.0'
+
+    // Google ML Kit - 人脸检测(新增)
+    implementation 'com.google.mlkit:face-detection:16.1.5'
+}
+```
+
+#### 🐛 问题修复
+
+**问题**: 日志显示检测到5张人脸,但实际只有3张露出人脸
+
+**原因**:
+1. ML Kit快速模式可能误判
+2. 最小人脸设置太小(0.15f)
+3. 没有验证人脸大小
+
+**解决方案**:
+1. 切换到准确模式:`PERFORMANCE_MODE_ACCURATE`
+2. 提高最小人脸大小:`0.4f`
+3. 增加人脸大小验证:宽度或高度≥图片的10%
+4. 过滤太小的误判
+
+---
+
 ### V3.3 (2026-03-06) 🎯 观看历史视频智能点击 + 三级点击策略!
 
 **✨ 核心更新 - 观看历史视频自动点击**

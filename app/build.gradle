@@ -45,6 +45,9 @@ dependencies {
     // Google ML Kit - 中文文字识别 (设备端,免费)
     implementation 'com.google.mlkit:text-recognition-chinese:16.0.0'
 
+    // Google ML Kit - 人脸检测 (设备端,免费)
+    implementation 'com.google.mlkit:face-detection:16.1.5'
+
     // 测试库
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'

@@ -134,6 +134,10 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("MainActivity", "⚠️ 未解析到视频关键词");
             }
 
+            // 🆕 设置视频时长
+            service.setVideoDurationSeconds(parseResult.videoDurationSeconds);
+            Log.d("MainActivity", "✅ 已设置视频时长: " + parseResult.videoDurationSeconds + "秒");
+
             service.startAutomation();
             isRunning = true;
             updateStatus(STATUS_RUNNING);
@@ -151,28 +155,53 @@ public class MainActivity extends AppCompatActivity {
         try {
             Log.d("MainActivity", "🔍 开始解析: " + info);
 
-            // 🆕 新格式: 原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接+侵权视频标题
-            // 示例: 花开富贵-抖音:文文工艺品-https://v.douyin.com/xxx/+https://v.douyin.com/iFLNKJNj/+花开富贵檀香，燃起来就会开花
+            // 🆕 新格式: 原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接+侵权视频标题+侵权视频时长
+            // 示例: 花开富贵-抖音:文文工艺品-https://v.douyin.com/xxx/+https://v.douyin.com/iFLNKJNj/+花开富贵檀香，燃起来就会开花+106
 
-            // 1. 提取视频标题 (最后一个+号之后的内容)
+            // 1. 提取视频时长 (最后一个+号之后的内容)
             int lastPlusIndex = info.lastIndexOf("+");
             if (lastPlusIndex > 0 && lastPlusIndex < info.length() - 1) {
-                result.videoKeywords = info.substring(lastPlusIndex + 1).trim();
-                Log.d("MainActivity", "✅ 视频关键词: " + result.videoKeywords);
+                String durationStr = info.substring(lastPlusIndex + 1).trim();
+                try {
+                    result.videoDurationSeconds = Integer.parseInt(durationStr);
+                    Log.d("MainActivity", "✅ 视频时长: " + result.videoDurationSeconds + "秒");
+                } catch (NumberFormatException e) {
+                    Log.d("MainActivity", "⚠️ 视频时长解析失败,使用默认值60秒");
+                    result.videoDurationSeconds = 60;
+                }
             } else {
-                Log.d("MainActivity", "⚠️ 未找到视频关键词(需要最后一个+号后的内容)");
+                Log.d("MainActivity", "⚠️ 未找到视频时长,使用默认值60秒");
+                result.videoDurationSeconds = 60;
             }
 
-            // 2. 提取侵权链接 (倒数第二个+号和最后一个+号之间的内容)
+            // 2. 提取视频标题 (倒数第二个+号和最后一个+号之间的内容)
             if (lastPlusIndex > 0) {
                 String beforeLastPlus = info.substring(0, lastPlusIndex);
                 int secondLastPlusIndex = beforeLastPlus.lastIndexOf("+");
 
                 if (secondLastPlusIndex > 0) {
-                    result.infringementUrl = beforeLastPlus.substring(secondLastPlusIndex + 1).trim();
-                    Log.d("MainActivity", "✅ 侵权链接: " + result.infringementUrl);
+                    result.videoKeywords = beforeLastPlus.substring(secondLastPlusIndex + 1).trim();
+                    Log.d("MainActivity", "✅ 视频关键词: " + result.videoKeywords);
                 } else {
-                    Log.d("MainActivity", "⚠️ 未找到侵权链接");
+                    Log.d("MainActivity", "⚠️ 未找到视频关键词");
+                }
+            }
+
+            // 3. 提取侵权链接 (倒数第三个+号和倒数第二个+号之间的内容)
+            if (lastPlusIndex > 0) {
+                String beforeLastPlus = info.substring(0, lastPlusIndex);
+                int secondLastPlusIndex = beforeLastPlus.lastIndexOf("+");
+
+                if (secondLastPlusIndex > 0) {
+                    String beforeSecondLastPlus = beforeLastPlus.substring(0, secondLastPlusIndex);
+                    int thirdLastPlusIndex = beforeSecondLastPlus.lastIndexOf("+");
+
+                    if (thirdLastPlusIndex > 0) {
+                        result.infringementUrl = beforeSecondLastPlus.substring(thirdLastPlusIndex + 1).trim();
+                        Log.d("MainActivity", "✅ 侵权链接: " + result.infringementUrl);
+                    } else {
+                        Log.d("MainActivity", "⚠️ 未找到侵权链接");
+                    }
                 }
             }
 
@@ -223,6 +252,7 @@ public class MainActivity extends AppCompatActivity {
         String infringementUrl;
         String remark;
         String videoKeywords; // 🆕 视频文案关键词
+        int videoDurationSeconds; // 🆕 视频时长(秒)
     }
 
     /**
