@@ -2817,18 +2817,55 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 return;
             }
 
-            android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
+            // ★ 轮询等待观看历史页面内容加载（最多8次，每次800ms，共6.4秒）
+            logD("⏳ 等待观看历史页面内容加载...");
+            android.view.accessibility.AccessibilityNodeInfo rootNode = null;
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> allNodes = new java.util.ArrayList<>();
+            int videoCount = 0;
+            for (int waitAttempt = 0; waitAttempt < 8; waitAttempt++) {
+                Thread.sleep(800);
+
+                if (rootNode != null) {
+                    rootNode.recycle();
+                    allNodes.clear();
+                }
+                rootNode = getRootInActiveWindow();
+                if (rootNode == null) {
+                    logD("⏳ 第" + (waitAttempt + 1) + "次: 根节点为空,继续等待...");
+                    continue;
+                }
+
+                findAllNodes(rootNode, allNodes);
+                videoCount = 0;
+                for (android.view.accessibility.AccessibilityNodeInfo n : allNodes) {
+                    CharSequence d = n.getContentDescription();
+                    if (d != null && d.toString().contains("点赞")) {
+                        videoCount++;
+                    }
+                }
+
+                if (videoCount > 0) {
+                    logD("✅ 第" + (waitAttempt + 1) + "次检测到 " + videoCount + " 个视频节点,开始匹配...");
+                    break;
+                } else {
+                    logD("⏳ 第" + (waitAttempt + 1) + "次: 找到 0 个视频节点,继续等待...");
+                    allNodes.clear();
+                }
+            }
+
             if (rootNode == null) {
                 logE("❌ 无法获取根节点");
                 return;
             }
 
-            // 查找所有ViewGroup节点(观看历史中的视频都是ViewGroup)
-            logD("🔍 开始查找所有视频节点...");
-            java.util.List<android.view.accessibility.AccessibilityNodeInfo> allNodes = new java.util.ArrayList<>();
-            findAllNodes(rootNode, allNodes);
+            if (videoCount == 0) {
+                logE("❌ 等待超时,观看历史页面仍未加载到视频节点");
+                logD("💡 提示: 请检查观看历史是否有记录,或者网络是否正常");
+                rootNode.recycle();
+                return;
+            }
 
-            int videoCount = 0;
+            // 开始遍历已加载的视频节点列表（allNodes 已在上面轮询中填充）
             int matchedCount = 0;
 
             for (android.view.accessibility.AccessibilityNodeInfo node : allNodes) {
@@ -3246,21 +3283,26 @@ public class AutomationAccessibilityService extends AccessibilityService {
         try {
             logD("💬 开始评论区取证...");
 
-            // Step1: 读取评论总数，决定目标张数
+            // Step1: 读取评论总数，决定目标张数 + 最大滚动次数
             int totalComments = getCommentTotalCount();
             int targetScreenshots;
+            int maxScrolls;
             if (totalComments == 0) {
-                // 读取失败时保守处理：默认3张，确保充分取证
+                // 读取失败时保守处理：默认3张
                 targetScreenshots = 3;
-                logD("📊 评论总数读取失败，保守默认目标截图: 3张");
+                maxScrolls = 10;
+                logD("📊 评论总数读取失败，保守默认目标截图: 3张，最大滚动: 10次");
             } else if (totalComments <= 10) {
                 targetScreenshots = 1;
+                maxScrolls = 3;   // 10条以内，最多滚3次
             } else if (totalComments <= 30) {
                 targetScreenshots = 2;
+                maxScrolls = 6;   // 30条以内，最多滚6次
             } else {
                 targetScreenshots = 3;
+                maxScrolls = 10;  // 30条以上，最多滚10次
             }
-            logD("📊 评论总数: " + totalComments + "，目标截图: " + targetScreenshots + "张");
+            logD("📊 评论总数: " + totalComments + "，目标截图: " + targetScreenshots + "张，最大滚动: " + maxScrolls + "次");
 
             // Step2: 70+ 购买意图关键词
             String[] purchaseKeywords = {
@@ -3293,18 +3335,21 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
             // ★ Step3: 强制先向下滚动一次（不管评论多少，确保评论区已加载）
             logD("⬇️ 先向下滚动一次，加载评论...");
-            scrollCommentList();
+            boolean canScrollMore = scrollCommentList();
             Thread.sleep(800);
 
-            // Step4: 边滚动边扫描截图（最多10次）
+            // Step4: 滚动到底部，沿途扫描截图（到底立即关闭，最多 maxScrolls 次兜底）
             int capturedCount = 0;
-            int maxScrolls = 10;
 
-            for (int scroll = 0; scroll <= maxScrolls && capturedCount < targetScreenshots; scroll++) {
+            for (int scroll = 0; scroll <= maxScrolls; scroll++) {
 
-                // 第2次起才额外滚动
+                // 第2次起才额外滚动；到底立即跳出关闭评论区
                 if (scroll > 0) {
-                    scrollCommentList();
+                    if (!canScrollMore) {
+                        logD("⏹️ 评论已到底部，立即关闭评论区");
+                        break;
+                    }
+                    canScrollMore = scrollCommentList();
                     Thread.sleep(800);
                 }
 
@@ -3349,8 +3394,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 }
                 rootNode.recycle();
 
-                // 找到匹配则截图
-                if (foundInThisScroll) {
+                // 找到匹配则截图（沿途截图，不影响继续滚动到底）
+                if (foundInThisScroll && capturedCount < targetScreenshots) {
                     capturedCount++;
                     final int idx = capturedCount;
                     logD("📸 截取购买意图评论截图 (" + idx + "/" + targetScreenshots + ")...");
@@ -3512,7 +3557,11 @@ public class AutomationAccessibilityService extends AccessibilityService {
         }
     }
 
-    private void scrollCommentList() {
+    /**
+     * 滚动评论列表向下一屏。
+     * @return true=滚动成功（还有内容）；false=已到底部，无法继续滚动
+     */
+    private boolean scrollCommentList() {
         try {
             // 先尝试 RecyclerView 的 ACTION_SCROLL_FORWARD
             android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
@@ -3523,18 +3572,21 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     android.view.accessibility.AccessibilityNodeInfo listNode = listNodes.get(0);
                     boolean scrolled = listNode.performAction(
                         android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+                    for (android.view.accessibility.AccessibilityNodeInfo n : listNodes) n.recycle();
+                    rootNode.recycle();
                     if (scrolled) {
                         logD("✅ 评论列表 ACTION_SCROLL_FORWARD 成功");
-                        for (android.view.accessibility.AccessibilityNodeInfo n : listNodes) n.recycle();
-                        rootNode.recycle();
-                        return;
+                        return true;
+                    } else {
+                        // ACTION_SCROLL_FORWARD 返回 false → 已到底部，无法继续滚动
+                        logD("⏹️ 评论列表已到底部（ACTION_SCROLL_FORWARD 返回 false）");
+                        return false;
                     }
-                    for (android.view.accessibility.AccessibilityNodeInfo n : listNodes) n.recycle();
                 }
                 rootNode.recycle();
             }
 
-            // 兜底：手势向上滑
+            // rmw 节点未找到时，兜底：手势向上滑（无法确认是否到底，返回 true 继续尝试）
             android.graphics.Path path = new android.graphics.Path();
             path.moveTo(540, 1800);
             path.lineTo(540, 1000);
@@ -3544,9 +3596,11 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 new android.accessibilityservice.GestureDescription.Builder().addStroke(stroke).build();
             boolean dispatched = dispatchGesture(gesture, null, null);
             logD(dispatched ? "✅ 评论手势滚动成功" : "❌ 评论手势滚动失败");
+            return dispatched;
 
         } catch (Exception e) {
             logE("滚动评论列表失败: " + e.getMessage());
+            return false;
         }
     }
 
@@ -3727,11 +3781,187 @@ public class AutomationAccessibilityService extends AccessibilityService {
             });
             Thread.sleep(700);
 
-            // 关闭购物车页面，返回视频页
-            logD("🔙 关闭购物车页面（按返回键）...");
-            performGlobalAction(GLOBAL_ACTION_BACK);
-            Thread.sleep(1200);
-            logD("✅ 购物车页面已关闭，回到视频页");
+            // ★ OCR识别循环：先强制滚动几次展示内容，然后每次截图OCR识别内容区"进店"
+            // 注意：底部固定导航栏也有"进店"文字（y≈2270），需过滤，只认内容区（y < 2100）
+            logD("⬇️ 开始OCR识别循环，寻找内容区【进店】按钮...");
+            boolean enterShopClicked = false;
+            final int MAX_SHOP_SCROLL = 15;
+            // 强制先滚动至少MIN_SCROLL次，确保录屏过程中有下拉动作，且能越过底部bar区域
+            final int MIN_SCROLL_BEFORE_DETECT = 2;
+            for (int shopScroll = 0; shopScroll < MAX_SHOP_SCROLL && !enterShopClicked; shopScroll++) {
+                final int currentScroll = shopScroll;
+
+                // 每次循环都先滚动（包括第0次），让录屏能看到下拉过程
+                {
+                    logD("⬇️ 第" + shopScroll + "次下滑...");
+                    android.graphics.Path shopScrollPath = new android.graphics.Path();
+                    shopScrollPath.moveTo(540, 1600);
+                    shopScrollPath.lineTo(540, 900);
+                    android.accessibilityservice.GestureDescription shopScrollGesture =
+                        new android.accessibilityservice.GestureDescription.Builder()
+                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                                shopScrollPath, 0, 350))
+                            .build();
+                    dispatchGesture(shopScrollGesture, null, null);
+                    Thread.sleep(800);
+                }
+
+                // 截图（不存相册，仅用于OCR）
+                final android.graphics.Bitmap[] ocrBitmapHolder = {null};
+                takeScreenshot(new ScreenshotCallback() {
+                    @Override
+                    public void onSuccess(android.graphics.Bitmap bitmap) {
+                        ocrBitmapHolder[0] = bitmap;
+                    }
+                    @Override
+                    public void onFailure() { /* bitmap保持null */ }
+                });
+                Thread.sleep(600); // 等待截图回调
+
+                if (ocrBitmapHolder[0] == null) {
+                    logD("⚠️ 第" + currentScroll + "次截图失败，继续下一轮");
+                    continue;
+                }
+
+                // OCR识别"进店" —— 使用全量接口，自行过滤底部导航栏的结果
+                // 底部导航栏"进店": x ≈ 78（左侧小图标），内容区"进店": x ≈ 985（右侧按钮）
+                final int[] enterX = {-1};
+                final int[] enterY = {-1};
+                final boolean[] ocrDone = {false};
+                OcrHelper shopOcr = new OcrHelper(message -> logD(message));
+                shopOcr.findAllTextPositions(ocrBitmapHolder[0], "进店", new OcrHelper.OcrMultiCallback() {
+                    @Override
+                    public void onSuccess(java.util.List<OcrHelper.TextMatch> matches) {
+                        logD("📋 OCR共找到 " + matches.size() + " 个【进店】:");
+                        for (OcrHelper.TextMatch m : matches) {
+                            logD("   → x=" + m.center.x + " y=" + m.center.y + " (文字: " + m.text + ")");
+                        }
+                        // 过滤：找第一个 x > 200 的（内容区店铺卡片"进店"）
+                        for (OcrHelper.TextMatch m : matches) {
+                            if (m.center.x > 200) {
+                                enterX[0] = m.center.x;
+                                enterY[0] = m.center.y;
+                                logD("✅ 选中内容区【进店】坐标=(" + enterX[0] + "," + enterY[0] + ")");
+                                break;
+                            }
+                        }
+                        if (enterX[0] < 0) {
+                            logD("⚠️ 所有【进店】都是底部导航栏的(x < 200)，继续滚动...");
+                        }
+                        ocrDone[0] = true;
+                        shopOcr.release();
+                        ocrBitmapHolder[0].recycle();
+                    }
+                    @Override
+                    public void onFailure(String error) {
+                        logD("⏳ 第" + (currentScroll + 1) + "次未识别到【进店】，继续滚动...");
+                        ocrDone[0] = true;
+                        shopOcr.release();
+                        ocrBitmapHolder[0].recycle();
+                    }
+                });
+                Thread.sleep(1500); // 等待OCR回调
+
+                if (enterX[0] > 0 && enterY[0] > 0) {
+                    // 找到内容区"进店"！先截图3，再坐标点击
+                    Thread.sleep(200);
+                    logD("📸 截取购物车页面取证截图3（店铺信息）...");
+                    takeScreenshotWithPrefix("购物车取证_3", new ScreenshotCallback() {
+                        @Override public void onSuccess() { logD("✅ 购物车截图3保存成功"); }
+                        @Override public void onFailure() { logE("❌ 购物车截图3保存失败"); }
+                    });
+                    Thread.sleep(700);
+
+                    logD("🏪 点击【进店】坐标=(" + enterX[0] + "," + enterY[0] + ")...");
+                    clickByCoordinates(enterX[0], enterY[0]);
+                    enterShopClicked = true;
+                    logD("✅ 已点击【进店】");
+                }
+            }
+
+            if (!enterShopClicked) {
+                logE("❌ 滚动" + MAX_SHOP_SCROLL + "次后OCR仍未找到【进店】，跳过截图3和店铺截图");
+            }
+
+            if (enterShopClicked) {
+                // 智能等待店铺页面加载（检测 hnd 或 hmw 出现，最多等5秒）
+                logD("⏱️ 智能等待店铺页面加载...");
+                boolean shopPageLoaded = false;
+                for (int waitCount = 0; waitCount < 25; waitCount++) {
+                    Thread.sleep(200);
+                    android.view.accessibility.AccessibilityNodeInfo waitRoot = getRootInActiveWindow();
+                    if (waitRoot != null) {
+                        // 检测方式1：店铺顶部信息栏 ID = hnd
+                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> hndNodes =
+                            waitRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/hnd");
+                        if (hndNodes != null && !hndNodes.isEmpty()) {
+                            for (android.view.accessibility.AccessibilityNodeInfo n : hndNodes) n.recycle();
+                            shopPageLoaded = true;
+                            logD("✅ 检测到店铺页面标志【hnd】，页面已加载 (等待" + (waitCount * 200) + "ms)");
+                        }
+                        // 检测方式2：店铺统计数据行 ID = hmw
+                        if (!shopPageLoaded) {
+                            java.util.List<android.view.accessibility.AccessibilityNodeInfo> hmwNodes =
+                                waitRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/hmw");
+                            if (hmwNodes != null && !hmwNodes.isEmpty()) {
+                                for (android.view.accessibility.AccessibilityNodeInfo n : hmwNodes) n.recycle();
+                                shopPageLoaded = true;
+                                logD("✅ 检测到店铺页面标志【hmw】，页面已加载 (等待" + (waitCount * 200) + "ms)");
+                            }
+                        }
+                        waitRoot.recycle();
+                    }
+                    if (shopPageLoaded) break;
+                }
+
+                if (!shopPageLoaded) {
+                    logD("⚠️ 等待5秒仍未检测到店铺页面标志，强制等待后截图");
+                    Thread.sleep(500);
+                }
+
+                // 截图：店铺主页
+                logD("📸 截取店铺主页取证截图...");
+                takeScreenshotWithPrefix("购物车取证_店铺", new ScreenshotCallback() {
+                    @Override public void onSuccess() { logD("✅ 店铺主页截图保存成功"); }
+                    @Override public void onFailure() { logE("❌ 店铺主页截图保存失败"); }
+                });
+                Thread.sleep(700);
+
+                logD("✅ 店铺主页截图完成，后续操作继续在店铺页进行");
+            }
+
+            // 智能返回视频页：持续按返回键，直到检测到视频播放页特征为止
+            // 视频播放页特征：ID=qde（播放/暂停覆盖层）或 ID=k9m（作者头像）
+            logD("🔙 开始智能返回视频页（最多返回6次）...");
+            boolean backToVideoPage = false;
+            for (int backCount = 0; backCount < 6 && !backToVideoPage; backCount++) {
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(1100);
+
+                // 检测是否已回到视频播放页
+                android.view.accessibility.AccessibilityNodeInfo checkRoot = getRootInActiveWindow();
+                if (checkRoot != null) {
+                    // 特征1：查找视频播放/暂停覆盖层 qde
+                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> qdeNodes =
+                        checkRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/qde");
+                    // 特征2：查找作者头像 k9m
+                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> k9mNodes =
+                        checkRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/k9m");
+                    checkRoot.recycle();
+
+                    boolean hasQde = qdeNodes != null && !qdeNodes.isEmpty();
+                    boolean hasK9m = k9mNodes != null && !k9mNodes.isEmpty();
+                    logD("🔍 返回检测第" + (backCount + 1) + "次: qde=" + hasQde + " k9m=" + hasK9m);
+
+                    if (hasQde || hasK9m) {
+                        backToVideoPage = true;
+                        logD("✅ 已回到视频播放页（第" + (backCount + 1) + "次返回后检测到）");
+                    }
+                }
+            }
+            if (!backToVideoPage) {
+                logE("⚠️ 返回6次后仍未检测到视频页特征，继续执行后续流程");
+            }
 
         } catch (Exception e) {
             logE("❌ 购物车取证失败: " + e.getMessage());
@@ -3765,6 +3995,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
             logD("👤 准备进入侵权作者主页...");
             Thread.sleep(1500); // 等待评论区关闭动画完成，视频播放界面出现
 
+            // ★ Step1: 点击作者头像（不再提前return，统一在下方等待+截图）
+            boolean clicked = false;
             android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
             if (rootNode != null) {
                 // Dump确认：作者头像ID = user_avatar，位于右侧 [915,911]→[1059,1055]
@@ -3784,39 +4016,85 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         if (node.isVisibleToUser() &&
                             node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) {
                             logD("✅ 点击作者头像成功 (ID: " + id + ")");
+                            clicked = true;
                             for (android.view.accessibility.AccessibilityNodeInfo n : nodes) n.recycle();
-                            rootNode.recycle();
-                            return;
+                            break;
                         }
                         for (android.view.accessibility.AccessibilityNodeInfo n : nodes) n.recycle();
                     }
+                    if (clicked) break;
                 }
 
-                // 尝试通过desc包含"头像"的节点
-                android.view.accessibility.AccessibilityNodeInfo avatarNode = findNodeByDescContains(rootNode, "头像");
-                if (avatarNode != null) {
-                    if (avatarNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) {
-                        logD("✅ 点击作者头像成功 (Desc含'头像')");
+                if (!clicked) {
+                    // 尝试通过desc包含"头像"的节点
+                    android.view.accessibility.AccessibilityNodeInfo avatarNode = findNodeByDescContains(rootNode, "头像");
+                    if (avatarNode != null) {
+                        if (avatarNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) {
+                            logD("✅ 点击作者头像成功 (Desc含'头像')");
+                            clicked = true;
+                        }
                         avatarNode.recycle();
-                        rootNode.recycle();
-                        return;
                     }
-                    avatarNode.recycle();
                 }
                 rootNode.recycle();
             }
 
-            // 兜底：坐标点击（Dump确认：user_avatar中心点约 x=987, y=983）
-            logD("⚠️ 未找到作者头像节点，使用坐标兜底点击...");
-            android.graphics.Path path = new android.graphics.Path();
-            path.moveTo(987, 983);
-            path.lineTo(987, 983);
-            android.accessibilityservice.GestureDescription gesture =
-                new android.accessibilityservice.GestureDescription.Builder()
-                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 100))
-                    .build();
-            boolean dispatched = dispatchGesture(gesture, null, null);
-            logD(dispatched ? "✅ 坐标点击作者头像成功" : "❌ 坐标点击作者头像失败");
+            if (!clicked) {
+                // 兜底：坐标点击（Dump确认：user_avatar中心点约 x=987, y=983）
+                logD("⚠️ 未找到作者头像节点，使用坐标兜底点击...");
+                android.graphics.Path path = new android.graphics.Path();
+                path.moveTo(987, 983);
+                path.lineTo(987, 983);
+                android.accessibilityservice.GestureDescription gesture =
+                    new android.accessibilityservice.GestureDescription.Builder()
+                        .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 100))
+                        .build();
+                boolean dispatched = dispatchGesture(gesture, null, null);
+                logD(dispatched ? "✅ 坐标点击作者头像成功" : "❌ 坐标点击作者头像失败");
+            }
+
+            // ★ Step2: 智能等待作者主页加载（最多轮询10次，每次500ms，共5秒）
+            // Dump确认：主页特征节点 k9m(用户头像大图) 或 v17(关注按钮)
+            logD("⏳ 等待作者主页加载...");
+            boolean profileLoaded = false;
+            for (int attempt = 0; attempt < 10; attempt++) {
+                Thread.sleep(500);
+                android.view.accessibility.AccessibilityNodeInfo checkRoot = getRootInActiveWindow();
+                if (checkRoot != null) {
+                    // 检测方法1：k9m（主页大头像，Dump确认 Desc="用户头像"）
+                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> markers =
+                        checkRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/k9m");
+                    if (markers != null && !markers.isEmpty()) {
+                        logD("✅ 检测到主页特征(k9m 用户头像大图)，主页已加载，耗时约 " + ((attempt + 1) * 500) + "ms");
+                        profileLoaded = true;
+                        for (android.view.accessibility.AccessibilityNodeInfo n : markers) n.recycle();
+                        checkRoot.recycle();
+                        break;
+                    }
+                    // 检测方法2：v17（主页"关注"按钮，Dump确认 Bounds=[48,1104]→[522,1248]）
+                    markers = checkRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/v17");
+                    if (markers != null && !markers.isEmpty()) {
+                        logD("✅ 检测到主页特征(v17 关注按钮)，主页已加载，耗时约 " + ((attempt + 1) * 500) + "ms");
+                        profileLoaded = true;
+                        for (android.view.accessibility.AccessibilityNodeInfo n : markers) n.recycle();
+                        checkRoot.recycle();
+                        break;
+                    }
+                    checkRoot.recycle();
+                }
+            }
+
+            if (!profileLoaded) {
+                logD("⚠️ 等待5秒后仍未检测到主页特征，继续执行截图（兜底）");
+            }
+
+            // ★ Step3: 截图取证
+            logD("📸 截取作者主页取证截图...");
+            takeScreenshotWithPrefix("作者主页取证", new ScreenshotCallback() {
+                @Override public void onSuccess() { logD("✅ 作者主页截图保存成功"); }
+                @Override public void onFailure() { logE("❌ 作者主页截图保存失败"); }
+            });
+            Thread.sleep(500);
 
         } catch (Exception e) {
             logE("进入作者主页失败: " + e.getMessage());
@@ -4613,6 +4891,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     final boolean[] ocrCompleted = {false};
                     OcrHelper ocrHelper = new OcrHelper(message -> logD(message));
 
+                    // 先尝试识别正确写法"资质规则公示"
                     ocrHelper.findTextPosition(screenshotBitmap[0], "资质规则公示", new OcrHelper.OcrCallback() {
                         @Override
                         public void onSuccess(OcrHelper.TextMatch match) {
@@ -4623,9 +4902,29 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                         @Override
                         public void onFailure(String error) {
-                            logD("⏳ 未检测到'资质规则公示',页面可能还在加载...");
-                            textFound[0] = false;
-                            ocrCompleted[0] = true;
+                            // OCR有时会把"规"误识别为"视",尝试模糊匹配
+                            logD("⏳ 未检测到'资质规则公示',尝试OCR容错匹配(规→视)...");
+                            OcrHelper fallbackOcr = new OcrHelper(message -> logD(message));
+                            final android.graphics.Bitmap fallbackBitmap = screenshotBitmap[0].copy(android.graphics.Bitmap.Config.ARGB_8888, false);
+                            fallbackOcr.findTextPosition(fallbackBitmap, "资质视则公示", new OcrHelper.OcrCallback() {
+                                @Override
+                                public void onSuccess(OcrHelper.TextMatch match2) {
+                                    logD("✅ OCR容错匹配成功: 识别到'资质视则公示'(规被误读为视),页面已加载!");
+                                    textFound[0] = true;
+                                    ocrCompleted[0] = true;
+                                    fallbackOcr.release();
+                                    fallbackBitmap.recycle();
+                                }
+
+                                @Override
+                                public void onFailure(String error2) {
+                                    logD("⏳ 未检测到'资质规则公示'或'资质视则公示',页面可能还在加载...");
+                                    textFound[0] = false;
+                                    ocrCompleted[0] = true;
+                                    fallbackOcr.release();
+                                    fallbackBitmap.recycle();
+                                }
+                            });
                         }
                     });
 

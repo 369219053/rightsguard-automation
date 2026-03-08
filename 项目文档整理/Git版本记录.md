@@ -12,6 +12,82 @@
 
 ## 🚀 版本历史
 
+### V3.7 (2026-03-08) 🛒 购物车"进店"OCR多匹配识别 + 智能返回视频页
+
+**✨ 核心更新 - 解决"进店"按钮无法识别点击 & 智能返回视频页两大问题**
+
+#### ✅ 完成内容
+
+**1. OCR多匹配支持 - OcrHelper.java**
+- ✅ **新增 `findAllTextPositions` 方法**: 返回屏幕中目标文字的所有匹配位置，而非只返回第一个
+- ✅ **新增 `OcrMultiCallback` 接口**: 回调 `List<TextMatch>`，支持调用方自行筛选
+- ✅ **问题根因**: 旧版 `findTextPosition` 只返回第一个匹配（底部导航栏"进店"，x≈78），导致内容区真正的"进店"按钮（x≈934）被永久忽略
+
+**2. X坐标过滤逻辑 - AutomationAccessibilityService.java**
+- ✅ **遍历所有OCR匹配**: 调用 `findAllTextPositions`，对每个匹配做坐标判断
+- ✅ **X坐标过滤规则**: `x < 200` → 底部导航栏小图标（跳过）；`x ≥ 200` → 内容区店铺卡片（选中点击）
+- ✅ **坐标差异说明**:
+  - 底部导航栏"进店": x≈78, y≈2283（左侧小图标，跳过）
+  - 内容区店铺卡片"进店": x≈934, y≈1370（右侧按钮，目标）
+- ✅ **详细日志**: 打印所有匹配坐标，清晰显示选中哪个
+
+**3. 智能返回视频页 - AutomationAccessibilityService.java**
+- ✅ **废弃固定返回次数**: 不再使用"进店返回2次/未进店返回1次"的硬编码逻辑
+- ✅ **检测循环**: 每次按返回键后等待1.1秒，检测 ID=`qde`（播放/暂停覆盖层）和 ID=`k9m`（作者头像）
+- ✅ **任一存在即停止**: 检测到视频页特征元素立即停止返回，最多返回6次
+- ✅ **适应任意层级**: 无论从店铺页还是商品详情页返回，均能准确判断到达视频页
+
+#### 🔧 技术关键代码
+
+**OcrHelper 新增多匹配方法**:
+```java
+// OcrHelper.java - 返回所有匹配
+public interface OcrMultiCallback {
+    void onResult(List<TextMatch> matches);
+}
+
+public void findAllTextPositions(Bitmap bitmap, String targetText, OcrMultiCallback callback) {
+    // ML Kit OCR → 遍历所有TextBlock/Line/Element → 收集所有匹配 → 回调
+}
+```
+
+**X坐标过滤逻辑**:
+```java
+// AutomationAccessibilityService.java
+ocrHelper.findAllTextPositions(bitmap, "进店", matches -> {
+    for (OcrHelper.TextMatch match : matches) {
+        if (match.center.x > 200) { // 跳过底部bar (x≈78)
+            enterX[0] = match.center.x;
+            enterY[0] = match.center.y;
+            break;
+        }
+    }
+});
+```
+
+**智能返回检测**:
+```java
+// 按返回键后检测是否回到视频页
+for (int i = 0; i < 6; i++) {
+    performGlobalAction(GLOBAL_ACTION_BACK);
+    Thread.sleep(1100);
+    boolean hasQde = findNodeById("qde") != null;
+    boolean hasK9m = findNodeById("k9m") != null;
+    if (hasQde || hasK9m) break; // 已回到视频页
+}
+```
+
+#### 📦 文件变更
+
+- `app/src/main/java/com/rightsguard/automation/OcrHelper.java`
+  - 新增 `OcrMultiCallback` 接口
+  - 新增 `findAllTextPositions(Bitmap, String, OcrMultiCallback)` 方法
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - `checkAndCaptureShoppingCart()`: 改用 `findAllTextPositions`，X坐标过滤选中目标"进店"
+  - 智能返回视频页: 检测 ID=`qde` / `k9m`，替代固定返回次数
+
+---
+
 ### V3.6 (2026-03-07) 🔧 人脸检测漏检修复 + 截图兜底补全 + 评论计数默认值
 
 **✨ 核心更新 - 修复截图数量不足 & 评论区不滚动两大问题**

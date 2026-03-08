@@ -138,6 +138,96 @@ public class OcrHelper {
     }
 
     /**
+     * 识别图片中的文字并返回所有匹配项（用于需要自行过滤多个结果的场景）
+     *
+     * @param bitmap     要识别的图片
+     * @param targetText 要查找的目标文字
+     * @param callback   回调接口（返回所有匹配列表）
+     */
+    public void findAllTextPositions(Bitmap bitmap, String targetText, OcrMultiCallback callback) {
+        if (bitmap == null) {
+            String msg = "❌ Bitmap为空,无法识别";
+            Log.e(TAG, msg);
+            if (logCallback != null) logCallback.onLog(msg);
+            callback.onFailure("Bitmap为空");
+            return;
+        }
+
+        String msg1 = "🔍 开始OCR识别(全量),查找文字: " + targetText;
+        String msg2 = "📐 图片尺寸: " + bitmap.getWidth() + "x" + bitmap.getHeight();
+        Log.d(TAG, msg1);
+        Log.d(TAG, msg2);
+        if (logCallback != null) {
+            logCallback.onLog(msg1);
+            logCallback.onLog(msg2);
+        }
+
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        recognizer.process(image)
+                .addOnSuccessListener(text -> {
+                    String msg = "✅ OCR识别成功,识别到 " + text.getTextBlocks().size() + " 个文本块";
+                    Log.d(TAG, msg);
+                    if (logCallback != null) logCallback.onLog(msg);
+
+                    List<TextMatch> matches = new ArrayList<>();
+                    for (Text.TextBlock block : text.getTextBlocks()) {
+                        String blockText = block.getText();
+                        if (blockText.contains(targetText)) {
+                            Rect bounds = block.getBoundingBox();
+                            if (bounds != null) {
+                                Point center = new Point(bounds.centerX(), bounds.centerY());
+                                matches.add(new TextMatch(blockText, bounds, center));
+                                String foundMsg = "🎯 [全量] 找到目标文字(块): " + blockText + " 位置: " + bounds.toShortString();
+                                Log.d(TAG, foundMsg);
+                                if (logCallback != null) logCallback.onLog(foundMsg);
+                            }
+                        }
+                        for (Text.Line line : block.getLines()) {
+                            String lineText = line.getText();
+                            if (lineText.contains(targetText)) {
+                                Rect bounds = line.getBoundingBox();
+                                if (bounds != null) {
+                                    Point center = new Point(bounds.centerX(), bounds.centerY());
+                                    // 去重：避免block和line都匹配时重复添加相同坐标
+                                    boolean duplicate = false;
+                                    for (TextMatch m : matches) {
+                                        if (Math.abs(m.center.x - center.x) < 20 && Math.abs(m.center.y - center.y) < 20) {
+                                            duplicate = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!duplicate) {
+                                        matches.add(new TextMatch(lineText, bounds, center));
+                                        String foundLineMsg = "🎯 [全量] 找到目标文字(行): " + lineText + " 位置: " + bounds.toShortString();
+                                        Log.d(TAG, foundLineMsg);
+                                        if (logCallback != null) logCallback.onLog(foundLineMsg);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (!matches.isEmpty()) {
+                        String successMsg = "✅ OCR全量识别完成,共找到 " + matches.size() + " 个匹配";
+                        Log.d(TAG, successMsg);
+                        if (logCallback != null) logCallback.onLog(successMsg);
+                        callback.onSuccess(matches);
+                    } else {
+                        String failMsg = "❌ 未找到目标文字: " + targetText;
+                        Log.e(TAG, failMsg);
+                        if (logCallback != null) logCallback.onLog(failMsg);
+                        callback.onFailure("未找到目标文字: " + targetText);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    String errorMsg = "❌ OCR识别失败: " + e.getMessage();
+                    Log.e(TAG, errorMsg);
+                    if (logCallback != null) logCallback.onLog(errorMsg);
+                    callback.onFailure("OCR识别失败: " + e.getMessage());
+                });
+    }
+
+    /**
      * 释放资源
      */
     public void release() {
@@ -147,10 +237,19 @@ public class OcrHelper {
     }
 
     /**
-     * OCR回调接口
+     * OCR回调接口（单个结果）
      */
     public interface OcrCallback {
         void onSuccess(TextMatch match);
+
+        void onFailure(String error);
+    }
+
+    /**
+     * OCR回调接口（全部结果，用于需要自行过滤的场景）
+     */
+    public interface OcrMultiCallback {
+        void onSuccess(List<TextMatch> matches);
 
         void onFailure(String error);
     }
