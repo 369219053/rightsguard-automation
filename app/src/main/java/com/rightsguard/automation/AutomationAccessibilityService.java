@@ -4285,6 +4285,128 @@ public class AutomationAccessibilityService extends AccessibilityService {
             });
             Thread.sleep(500);
 
+            // ★ Step4: 检查作者昵称下方是否有【店铺账号】标签，有则点击并截图
+            // Dump确认：s+x(昵称)[408,376→738,464]，店铺账号(clickable)[408,464→1032,512]
+            logD("🔍 检查作者主页是否有【店铺账号】标签...");
+            android.view.accessibility.AccessibilityNodeInfo profileRoot = getRootInActiveWindow();
+            if (profileRoot != null) {
+                android.view.accessibility.AccessibilityNodeInfo shopAccountNode = null;
+
+                // 优先通过Desc查找（"抖音组织认证：店铺账号"）
+                shopAccountNode = findNodeByDescContains(profileRoot, "店铺账号");
+
+                // 备用：通过文字查找（" 店铺账号"）
+                if (shopAccountNode == null) {
+                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> textNodes =
+                        profileRoot.findAccessibilityNodeInfosByText("店铺账号");
+                    if (textNodes != null && !textNodes.isEmpty()) {
+                        shopAccountNode = textNodes.get(0);
+                    }
+                }
+
+                if (shopAccountNode != null) {
+                    logD("✅ 检测到【店铺账号】标签，准备点击...");
+
+                    // 先尝试无障碍API直接点击
+                    boolean shopClicked = shopAccountNode.performAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+
+                    if (!shopClicked) {
+                        // 兜底：坐标点击（Dump确认中心约 (720, 488)）
+                        android.graphics.Rect bounds = new android.graphics.Rect();
+                        shopAccountNode.getBoundsInScreen(bounds);
+                        int cx = bounds.isEmpty() ? 720 : (bounds.left + bounds.right) / 2;
+                        int cy = bounds.isEmpty() ? 488 : (bounds.top + bounds.bottom) / 2;
+                        android.graphics.Path tapPath = new android.graphics.Path();
+                        tapPath.moveTo(cx, cy);
+                        tapPath.lineTo(cx, cy);
+                        android.accessibilityservice.GestureDescription tapGesture =
+                            new android.accessibilityservice.GestureDescription.Builder()
+                                .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                                    tapPath, 0, 50))
+                                .build();
+                        dispatchGesture(tapGesture, null, null);
+                        logD("✅ 坐标点击【店铺账号】坐标=(" + cx + "," + cy + ")");
+                    } else {
+                        logD("✅ 无障碍API点击【店铺账号】成功");
+                    }
+                    shopAccountNode.recycle();
+
+                    // ── OCR智能等待店铺账号详情页加载（最多6秒）──
+                    // Dump确认：纯WebView，用OCR检测"认证说明"/"企业认证详情"/"企业名称"/"资质证照"
+                    logD("⏳ 等待店铺账号详情页加载（OCR识别）...");
+                    String[] shopAccountKeywords = {"认证说明", "企业认证详情", "企业名称", "资质证照"};
+                    boolean shopPageLoaded = false;
+                    for (int sec = 1; sec <= 6; sec++) {
+                        Thread.sleep(1000);
+                        final boolean[] hit = {false};
+                        final String[] hitWord = {""};
+                        final boolean[] ocrDone = {false};
+                        takeScreenshot(new ScreenshotCallback() {
+                            @Override
+                            public void onSuccess(android.graphics.Bitmap bitmap) {
+                                if (bitmap == null) { ocrDone[0] = true; return; }
+                                OcrHelper saOcr = new OcrHelper(message -> logD(message));
+                                saOcr.findAnyTextPosition(bitmap, shopAccountKeywords, new OcrHelper.OcrAnyCallback() {
+                                    @Override
+                                    public void onSuccess(String keyword) {
+                                        hit[0] = true;
+                                        hitWord[0] = keyword;
+                                        ocrDone[0] = true;
+                                        saOcr.release();
+                                        bitmap.recycle();
+                                    }
+                                    @Override
+                                    public void onFailure(String error) {
+                                        ocrDone[0] = true;
+                                        saOcr.release();
+                                        bitmap.recycle();
+                                    }
+                                });
+                            }
+                            @Override public void onFailure() { ocrDone[0] = true; }
+                        });
+                        // 等待OCR回调完成（最多2秒）
+                        for (int w = 0; w < 20 && !ocrDone[0]; w++) Thread.sleep(100);
+                        if (hit[0]) {
+                            logD("✅ 店铺账号详情页已加载，检测到[" + hitWord[0] + "]（第" + sec + "秒），准备截图");
+                            shopPageLoaded = true;
+                            break;
+                        } else {
+                            logD("⌛ 第" + sec + "秒：店铺账号详情页未就绪，继续等待...");
+                        }
+                    }
+                    if (!shopPageLoaded) {
+                        logD("⚠️ 等待6秒后仍未检测到页面特征，强制截图");
+                    }
+
+                    // ── 截图取证 ──
+                    logD("📸 截取店铺账号详情页取证截图...");
+                    takeScreenshotWithPrefix("店铺账号取证", new ScreenshotCallback() {
+                        @Override public void onSuccess() { logD("✅ 店铺账号详情页截图保存成功"); }
+                        @Override public void onFailure() { logE("❌ 店铺账号详情页截图保存失败"); }
+                    });
+                    Thread.sleep(800);
+
+                    // ── 点击资质证照图片 ──
+                    // Dump确认：资质证照图片(clickable WebView节点) Bounds=[339,1071]→[633,1278]，中心=(486,1174)
+                    logD("🖼️ 点击资质证照图片坐标=(486,1174)...");
+                    android.graphics.Path imgTapPath = new android.graphics.Path();
+                    imgTapPath.moveTo(486, 1174);
+                    imgTapPath.lineTo(486, 1174);
+                    android.accessibilityservice.GestureDescription imgTapGesture =
+                        new android.accessibilityservice.GestureDescription.Builder()
+                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                                imgTapPath, 0, 50))
+                            .build();
+                    dispatchGesture(imgTapGesture, null, null);
+                    logD("✅ 已点击资质证照图片");
+                } else {
+                    logD("ℹ️ 作者主页无【店铺账号】标签，跳过");
+                }
+                profileRoot.recycle();
+            }
+
         } catch (Exception e) {
             logE("进入作者主页失败: " + e.getMessage());
         }

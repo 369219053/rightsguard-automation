@@ -12,6 +12,46 @@
 
 ## 🚀 版本历史
 
+### V3.9 (2026-03-08) 👤 作者主页店铺账号取证 + OCR智能等待修复
+
+**✨ 核心更新 - 实现作者主页店铺账号检测 + 详情页OCR智能等待 + 资质证照图片点击**
+
+#### ✅ 完成内容
+
+**1. 作者主页店铺账号检测 - AutomationAccessibilityService.java**
+- ✅ **双重策略检测**: 优先 Desc 包含"店铺账号"（"抖音组织认证：店铺账号"），备用 Text 包含"店铺账号"
+- ✅ **点击策略**: 优先无障碍API `performAction(ACTION_CLICK)`，兜底坐标点击 (720, 488)
+- ✅ **无店铺账号时**: 打日志跳过，不影响其他流程
+
+**2. 店铺账号详情页OCR智能等待 - AutomationAccessibilityService.java**
+- ✅ **页面类型**: 纯WebView（Dump确认），无法用无障碍节点检测内容，改用OCR轮询
+- ✅ **检测关键词**: "认证说明" / "企业认证详情" / "企业名称" / "资质证照"（任一命中即确认加载）
+- ✅ **轮询策略**: 每秒截图 + OCR识别，最多6秒，超时强制截图
+- ✅ **修复OCR调用方式**: 改为实例方法 `new OcrHelper(...).findAnyTextPosition()`，修正回调签名
+
+**3. 资质证照图片点击 - AutomationAccessibilityService.java**
+- ✅ **Dump分析**: 资质证照图片为 clickable WebView节点，Bounds=[339,1071]→[633,1278]，中心=(486,1174)
+- ✅ **点击方式**: 手势坐标点击 (486, 1174)
+
+#### 🔧 技术修复
+
+| 问题 | 原因 | 修复方案 |
+|------|------|---------|
+| `takeScreenshotBitmap()` 找不到符号 | 该方法不存在 | 改为 `takeScreenshot(ScreenshotCallback)` 异步回调模式 |
+| `OcrHelper.findAnyTextPosition()` 静态调用失败 | 是实例方法非静态 | 改为 `new OcrHelper(logger).findAnyTextPosition(...)` |
+| `onSuccess(String, float, float)` 编译错误 | 接口签名只有 `onSuccess(String)` | 修正为 `onSuccess(String keyword)` |
+| `onFailure()` 编译错误 | 接口签名要求 `onFailure(String)` | 修正为 `onFailure(String error)` |
+
+#### 📋 关键坐标/Dump依据
+- **店铺账号标签**: Dump `作者主页dump.md` → clickable，Text=" 店铺账号"，Bounds=[408,464]→[1032,512]
+- **资质证照图片**: Dump `店铺账号详情页dump.md` → clickable TextView，Bounds=[339,1071]→[633,1278]，中心=(486,1174)
+
+#### 📁 文件变更
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - `navigateToAuthorProfile()` 新增 Step4（店铺账号检测→OCR等待→截图→点击资质证照）
+
+---
+
 ### V3.8 (2026-03-09) 🏪 店铺详情页点击修复 + 完整资质证照取证流程
 
 **✨ 核心更新 - 修复进入店铺详情页失败 + 实现店铺详情→资质证照完整取证**
