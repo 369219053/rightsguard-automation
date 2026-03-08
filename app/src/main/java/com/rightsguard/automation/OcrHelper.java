@@ -228,6 +228,64 @@ public class OcrHelper {
     }
 
     /**
+     * 识别图片中的文字，检测是否包含候选关键词列表中的任意一个（只跑一次OCR，效率高）
+     *
+     * @param bitmap      要识别的图片
+     * @param candidates  候选关键词数组，任意命中一个即回调 onSuccess
+     * @param callback    回调接口，onSuccess 携带命中的关键词；onFailure 表示全部未命中
+     */
+    public void findAnyTextPosition(Bitmap bitmap, String[] candidates, OcrAnyCallback callback) {
+        if (bitmap == null) {
+            String msg = "❌ Bitmap为空,无法识别";
+            Log.e(TAG, msg);
+            if (logCallback != null) logCallback.onLog(msg);
+            callback.onFailure("Bitmap为空");
+            return;
+        }
+
+        String msg1 = "🔍 开始OCR识别(多关键词),候选: " + java.util.Arrays.toString(candidates);
+        Log.d(TAG, msg1);
+        if (logCallback != null) logCallback.onLog(msg1);
+
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        recognizer.process(image)
+                .addOnSuccessListener(text -> {
+                    String msg = "✅ OCR识别成功,识别到 " + text.getTextBlocks().size() + " 个文本块";
+                    Log.d(TAG, msg);
+                    if (logCallback != null) logCallback.onLog(msg);
+
+                    // 拼接全部识别文字，方便一次性匹配
+                    StringBuilder fullText = new StringBuilder();
+                    for (Text.TextBlock block : text.getTextBlocks()) {
+                        fullText.append(block.getText()).append("\n");
+                    }
+                    String fullStr = fullText.toString();
+
+                    // 逐一检查候选关键词
+                    for (String candidate : candidates) {
+                        if (fullStr.contains(candidate)) {
+                            String foundMsg = "🎯 检测到关键词: [" + candidate + "]";
+                            Log.d(TAG, foundMsg);
+                            if (logCallback != null) logCallback.onLog(foundMsg);
+                            callback.onSuccess(candidate);
+                            return;
+                        }
+                    }
+
+                    String failMsg = "❌ 候选关键词均未命中";
+                    Log.d(TAG, failMsg);
+                    if (logCallback != null) logCallback.onLog(failMsg);
+                    callback.onFailure(failMsg);
+                })
+                .addOnFailureListener(e -> {
+                    String errorMsg = "❌ OCR识别失败: " + e.getMessage();
+                    Log.e(TAG, errorMsg);
+                    if (logCallback != null) logCallback.onLog(errorMsg);
+                    callback.onFailure(errorMsg);
+                });
+    }
+
+    /**
      * 释放资源
      */
     public void release() {
@@ -250,6 +308,15 @@ public class OcrHelper {
      */
     public interface OcrMultiCallback {
         void onSuccess(List<TextMatch> matches);
+
+        void onFailure(String error);
+    }
+
+    /**
+     * OCR回调接口（多候选关键词，任意命中即回调 onSuccess）
+     */
+    public interface OcrAnyCallback {
+        void onSuccess(String matchedKeyword);
 
         void onFailure(String error);
     }

@@ -3836,9 +3836,16 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         for (OcrHelper.TextMatch m : matches) {
                             logD("   → x=" + m.center.x + " y=" + m.center.y + " (文字: " + m.text + ")");
                         }
-                        // 过滤：找第一个 x > 200 的（内容区店铺卡片"进店"）
+                        // 过滤规则：
+                        //   1. 文字必须精确等于"进店"（排除"进店 客服 购物车"这种合并块）
+                        //   2. x > 500（内容区按钮在右侧，底部导航栏整体中心 x≈210）
                         for (OcrHelper.TextMatch m : matches) {
-                            if (m.center.x > 200) {
+                            String trimmed = m.text.trim();
+                            boolean exactMatch = trimmed.equals("进店");
+                            boolean inContentArea = m.center.x > 500;
+                            logD("   → 过滤检查: text='" + trimmed + "' exactMatch=" + exactMatch
+                                    + " x=" + m.center.x + " inContentArea=" + inContentArea);
+                            if (exactMatch && inContentArea) {
                                 enterX[0] = m.center.x;
                                 enterY[0] = m.center.y;
                                 logD("✅ 选中内容区【进店】坐标=(" + enterX[0] + "," + enterY[0] + ")");
@@ -3846,7 +3853,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                             }
                         }
                         if (enterX[0] < 0) {
-                            logD("⚠️ 所有【进店】都是底部导航栏的(x < 200)，继续滚动...");
+                            logD("⚠️ 未找到有效的内容区【进店】（底部导航栏合并块已过滤），继续滚动...");
                         }
                         ocrDone[0] = true;
                         shopOcr.release();
@@ -3917,6 +3924,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 if (!shopPageLoaded) {
                     logD("⚠️ 等待5秒仍未检测到店铺页面标志，强制等待后截图");
                     Thread.sleep(500);
+                } else {
+                    // 头部已加载，额外等待1.5秒让下方商品列表也渲染完成
+                    logD("⏳ 店铺头部已加载，等待1.5秒让商品列表渲染完成...");
+                    Thread.sleep(1500);
                 }
 
                 // 截图：店铺主页
@@ -3928,6 +3939,184 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 Thread.sleep(700);
 
                 logD("✅ 店铺主页截图完成，后续操作继续在店铺页进行");
+
+                // === 点击店铺信息卡片区域，进入店铺详情页 ===
+                // 从dump分析：hk8内的店铺名称ViewGroup坐标约 [201,327]->[829,445]，中心≈(400,386)
+                // 注意：顶部hmz(84,175)是导航栏logo，不触发跳转；必须点击内容区店铺卡片
+                logD("🏪 点击店铺信息卡片，进入店铺详情页...");
+                clickByCoordinates(400, 386);
+
+                // 详情页是全屏 WebView（dump确认无可访问子节点），无法用无障碍ID检测加载
+                // 使用 OCR 轮询检测页面特征文字，任意命中即确认页面已渲染（最多等5秒）
+                logD("⏳ 等待店铺详情页（WebView）加载...");
+                final String[] detailKeywords = {"店铺口碑", "资质证照", "店铺人气", "店铺详情"};
+                boolean detailPageLoaded = false;
+                for (int detailWait = 0; detailWait < 5 && !detailPageLoaded; detailWait++) {
+                    Thread.sleep(1000);
+                    final boolean[] ocrDone = {false};
+                    final String[] matchedKw = {null};
+                    takeScreenshot(new ScreenshotCallback() {
+                        @Override
+                        public void onSuccess(android.graphics.Bitmap bitmap) {
+                            if (bitmap == null) { ocrDone[0] = true; return; }
+                            OcrHelper detailOcr = new OcrHelper(message -> logD(message));
+                            detailOcr.findAnyTextPosition(bitmap, detailKeywords, new OcrHelper.OcrAnyCallback() {
+                                @Override
+                                public void onSuccess(String keyword) {
+                                    matchedKw[0] = keyword;
+                                    ocrDone[0] = true;
+                                    detailOcr.release();
+                                    bitmap.recycle();
+                                }
+                                @Override
+                                public void onFailure(String error) {
+                                    ocrDone[0] = true;
+                                    detailOcr.release();
+                                    bitmap.recycle();
+                                }
+                            });
+                        }
+                        @Override
+                        public void onFailure() { ocrDone[0] = true; }
+                    });
+                    // 等OCR完成（最多2秒）
+                    long ocrStart = System.currentTimeMillis();
+                    while (!ocrDone[0] && System.currentTimeMillis() - ocrStart < 2000) {
+                        Thread.sleep(100);
+                    }
+                    if (matchedKw[0] != null) {
+                        logD("✅ 店铺详情页已检测到关键词[" + matchedKw[0] + "]（第" + (detailWait + 1) + "秒），准备截图");
+                        detailPageLoaded = true;
+                    } else {
+                        logD("⌛ 第" + (detailWait + 1) + "秒：详情页内容未就绪，继续等待...");
+                    }
+                }
+                if (!detailPageLoaded) {
+                    logD("⚠️ 5秒后仍未检测到详情页内容，强制继续截图");
+                }
+
+                // 截图：店铺详情页
+                logD("📸 截取店铺详情页取证截图...");
+                takeScreenshotWithPrefix("购物车取证_详情", new ScreenshotCallback() {
+                    @Override public void onSuccess() { logD("✅ 店铺详情页截图保存成功"); }
+                    @Override public void onFailure() { logE("❌ 店铺详情页截图保存失败"); }
+                });
+                Thread.sleep(700);
+                logD("✅ 店铺详情页截图完成");
+
+                // ─────────────────────────────────────────────────────────
+                // 步骤：OCR找"资质证照"→点击→等加载→截图
+                // 详情页是全量WebView，用OCR定位"资质证照"文字坐标，手势点击
+                // ─────────────────────────────────────────────────────────
+                logD("🔍 OCR查找'资质证照'入口...");
+                final boolean[] zizhiFound = {false};
+                final int[] zizhiX = {-1};
+                final int[] zizhiY = {-1};
+                final boolean[] zizhiOcrDone = {false};
+                takeScreenshot(new ScreenshotCallback() {
+                    @Override
+                    public void onSuccess(android.graphics.Bitmap bitmap) {
+                        if (bitmap == null) { zizhiOcrDone[0] = true; return; }
+                        OcrHelper zizhiOcr = new OcrHelper(message -> logD(message));
+                        zizhiOcr.findTextPosition(bitmap, "资质证照", new OcrHelper.OcrCallback() {
+                            @Override
+                            public void onSuccess(OcrHelper.TextMatch match) {
+                                zizhiFound[0] = true;
+                                zizhiX[0] = match.center.x;
+                                zizhiY[0] = match.center.y;
+                                logD("✅ 找到'资质证照'坐标=(" + zizhiX[0] + "," + zizhiY[0] + ")");
+                                zizhiOcrDone[0] = true;
+                                zizhiOcr.release();
+                                bitmap.recycle();
+                            }
+                            @Override
+                            public void onFailure(String error) {
+                                logD("⚠️ 未找到'资质证照': " + error);
+                                zizhiOcrDone[0] = true;
+                                zizhiOcr.release();
+                                bitmap.recycle();
+                            }
+                        });
+                    }
+                    @Override
+                    public void onFailure() { zizhiOcrDone[0] = true; }
+                });
+                long zizhiWait = System.currentTimeMillis();
+                while (!zizhiOcrDone[0] && System.currentTimeMillis() - zizhiWait < 2000) {
+                    Thread.sleep(100);
+                }
+
+                if (zizhiFound[0]) {
+                    // 手势点击"资质证照"
+                    logD("👆 点击'资质证照'坐标=(" + zizhiX[0] + "," + zizhiY[0] + ")...");
+                    android.graphics.Path zizhiPath = new android.graphics.Path();
+                    zizhiPath.moveTo(zizhiX[0], zizhiY[0]);
+                    zizhiPath.lineTo(zizhiX[0], zizhiY[0]);
+                    android.accessibilityservice.GestureDescription zizhiGesture =
+                        new android.accessibilityservice.GestureDescription.Builder()
+                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(zizhiPath, 0, 100))
+                            .build();
+                    dispatchGesture(zizhiGesture, null, null);
+                    Thread.sleep(500);
+
+                    // OCR轮询等待资质页加载：识别到任意关键词即确认
+                    logD("⏳ 等待资质页加载（OCR识别'商家资质'/'营业执照'/'企业类型'/'法人姓名'）...");
+                    final String[] zizhiPageKeywords = {"商家资质", "营业执照", "企业类型", "法人姓名"};
+                    boolean zizhiPageLoaded = false;
+                    for (int zw = 0; zw < 6 && !zizhiPageLoaded; zw++) {
+                        Thread.sleep(1000);
+                        final boolean[] zwDone = {false};
+                        final String[] zwMatched = {null};
+                        takeScreenshot(new ScreenshotCallback() {
+                            @Override
+                            public void onSuccess(android.graphics.Bitmap bitmap) {
+                                if (bitmap == null) { zwDone[0] = true; return; }
+                                OcrHelper zwOcr = new OcrHelper(message -> logD(message));
+                                zwOcr.findAnyTextPosition(bitmap, zizhiPageKeywords, new OcrHelper.OcrAnyCallback() {
+                                    @Override
+                                    public void onSuccess(String keyword) {
+                                        zwMatched[0] = keyword;
+                                        zwDone[0] = true;
+                                        zwOcr.release();
+                                        bitmap.recycle();
+                                    }
+                                    @Override
+                                    public void onFailure(String error) {
+                                        zwDone[0] = true;
+                                        zwOcr.release();
+                                        bitmap.recycle();
+                                    }
+                                });
+                            }
+                            @Override
+                            public void onFailure() { zwDone[0] = true; }
+                        });
+                        long zwStart = System.currentTimeMillis();
+                        while (!zwDone[0] && System.currentTimeMillis() - zwStart < 2000) {
+                            Thread.sleep(100);
+                        }
+                        if (zwMatched[0] != null) {
+                            logD("✅ 资质页已加载，检测到关键词[" + zwMatched[0] + "]（第" + (zw + 1) + "秒），准备截图");
+                            zizhiPageLoaded = true;
+                        } else {
+                            logD("⌛ 第" + (zw + 1) + "秒：资质页未就绪，继续等待...");
+                        }
+                    }
+                    if (!zizhiPageLoaded) {
+                        logD("⚠️ 6秒后仍未检测到资质页内容，强制继续截图");
+                    }
+
+                    // 截图：资质证照页
+                    logD("📸 截取资质证照页取证截图...");
+                    takeScreenshotWithPrefix("购物车取证_资质", new ScreenshotCallback() {
+                        @Override public void onSuccess() { logD("✅ 资质证照页截图保存成功"); }
+                        @Override public void onFailure() { logE("❌ 资质证照页截图保存失败"); }
+                    });
+                    Thread.sleep(700);
+                    logD("✅ 资质证照页截图完成");
+                } else {
+                    logD("⚠️ 未找到'资质证照'入口，跳过资质截图");
+                }
             }
 
             // 智能返回视频页：持续按返回键，直到检测到视频播放页特征为止
