@@ -49,6 +49,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private String videoKeywords = ""; // 🆕 视频文案关键词
     private int videoDurationSeconds = 60; // 🆕 视频时长(秒),默认60秒
 
+    // 🧪 测试模式标志
+    private boolean isTestMode = false; // 是否为测试模式(跳过权利卫士+录屏，直接打开抖音→历史→作者主页)
+
     // 权利卫士取证阶段标志位
     private boolean isRightsGuardEvidencePhase = false; // 是否处于权利卫士取证阶段(权利卫士打开抖音后)
     private boolean hasStartedDouyinAutomation = false; // 是否已开始抖音自动化
@@ -242,6 +245,89 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
+     * 🧪 启动测试模式
+     * 跳过权利卫士+录屏流程，直接: 打开抖音→我→观看历史→点击视频→作者主页→店铺账号→图片→放大截图
+     */
+    public void startTestMode() {
+        logD("🧪 启动测试模式...");
+        isTestMode = true;
+        isRunning = true;
+
+        new Thread(() -> {
+            try {
+                // Step1: 打开抖音
+                logD("📱 测试模式 Step1: 打开抖音");
+                switchToDouyin();
+
+                // 等待抖音启动，轮询验证（最多10秒）
+                logD("⏱️ 等待抖音到前台（最多10秒）...");
+                boolean douyinInFront = false;
+                for (int i = 0; i < 10; i++) {
+                    Thread.sleep(1000);
+                    android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+                    if (root != null) {
+                        // 判断当前包名是否为抖音
+                        android.view.accessibility.AccessibilityWindowInfo win = null;
+                        java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
+                        for (android.view.accessibility.AccessibilityWindowInfo w : windows) {
+                            if (w.isActive()) { win = w; break; }
+                        }
+                        // 通过根节点包名判断
+                        String pkg = "";
+                        try {
+                            android.view.accessibility.AccessibilityNodeInfo focused = root.findFocus(
+                                android.view.accessibility.AccessibilityNodeInfo.FOCUS_ACCESSIBILITY);
+                            if (focused != null) pkg = focused.getPackageName() != null ? focused.getPackageName().toString() : "";
+                        } catch (Exception ignored) {}
+
+                        // 兜底：检查根节点子树有没有抖音的特征节点
+                        if (root.getChildCount() > 0) {
+                            CharSequence rootPkg = root.getPackageName();
+                            if (rootPkg != null && rootPkg.toString().contains("aweme")) {
+                                douyinInFront = true;
+                                logD("✅ 第" + (i+1) + "秒检测到抖音已到前台");
+                                break;
+                            }
+                        }
+                        root.recycle();
+                    }
+                    logD("⏳ 第" + (i+1) + "秒：等待抖音...");
+                }
+
+                if (!douyinInFront) {
+                    logE("❌ 10秒内抖音未到前台，测试模式终止");
+                    isTestMode = false;
+                    isRunning = false;
+                    return;
+                }
+
+                // Step2: 点击"我"按钮
+                // 注意：URL Scheme打开抖音后落在全屏视频信息流，底部导航栏默认隐藏
+                // 需要先点击一次视频区域让底部导航栏显现，再点击"我"按钮
+                logD("📱 测试模式 Step2: 唤出底部导航栏（点击视频上方区域）");
+                clickByCoordinates(540, 800); // 点击视频上半部分，不触发暂停/播放区，只让导航栏显现
+                Thread.sleep(1000);          // 等待导航栏动画出现
+
+                logD("📱 测试模式 Step2: 点击'我'按钮");
+                clickMeButton();
+
+                // 等待"我"页面加载（3秒，确保页面内容完全渲染）
+                Thread.sleep(3000);
+
+                // Step3: 点击"观看历史"
+                logD("📺 测试模式 Step3: 点击'观看历史'");
+                clickViewHistory();
+                // clickViewHistory内部会调用findAndClickVideoInHistory
+                // findAndClickVideoInHistory在isTestMode=true时会跳过视频播放直接跳到navigateToAuthorProfile
+
+            } catch (Exception e) {
+                logE("测试模式启动失败: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    /**
      * 延迟打开应用
      */
     private void delayedOpenApp() {
@@ -288,6 +374,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
     public void stopAutomation() {
         Log.d(TAG, "停止自动化");
         isRunning = false;
+        isTestMode = false; // 重置测试模式标志
     }
 
     /**
@@ -1958,18 +2045,44 @@ public class AutomationAccessibilityService extends AccessibilityService {
      * 切换到抖音APP
      */
     private void switchToDouyin() {
+        // 方案1: URL Scheme 打开抖音（与正版流程 onDouyinSchemeDetected 一致，不依赖包可见性）
+        try {
+            android.content.Intent schemeIntent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+            schemeIntent.setData(android.net.Uri.parse("snssdk1128://"));
+            schemeIntent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(schemeIntent);
+            logD("✅ 已通过URL Scheme切换到抖音APP (方案1)");
+            return;
+        } catch (Exception e) {
+            logD("⚠️ URL Scheme打开抖音失败，尝试方案2: " + e.getMessage());
+        }
+
+        // 方案2: getLaunchIntentForPackage (需要 <queries> 声明，Android 11+)
         try {
             android.content.Intent intent = getPackageManager().getLaunchIntentForPackage(DOUYIN_PACKAGE);
             if (intent != null) {
                 intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK |
                               android.content.Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
                 startActivity(intent);
-                logD("✅ 已切换到抖音APP");
-            } else {
-                logE("❌ 无法获取抖音启动Intent");
+                logD("✅ 已切换到抖音APP (方案2)");
+                return;
             }
         } catch (Exception e) {
-            logE("切换到抖音失败: " + e.getMessage());
+            logD("⚠️ getLaunchIntentForPackage失败: " + e.getMessage());
+        }
+
+        // 方案3: 直接构造 MAIN/LAUNCHER Intent
+        try {
+            logD("⚠️ 尝试方案3: 直接构造MAIN Intent...");
+            android.content.Intent fallback = new android.content.Intent(android.content.Intent.ACTION_MAIN);
+            fallback.addCategory(android.content.Intent.CATEGORY_LAUNCHER);
+            fallback.setPackage(DOUYIN_PACKAGE);
+            fallback.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK |
+                              android.content.Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            startActivity(fallback);
+            logD("✅ 已切换到抖音APP (方案3)");
+        } catch (Exception e) {
+            logE("❌ 切换到抖音全部方案均失败: " + e.getMessage());
         }
     }
 
@@ -2910,8 +3023,13 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         // 等待视频播放页面加载
                         Thread.sleep(2000);
 
-                        // 🆕 播放视频并截图
-                        playVideoAndTakeScreenshots();
+                        if (isTestMode) {
+                            logD("🧪 测试模式: 跳过视频播放，直接进入作者主页流程");
+                            navigateToAuthorProfile();
+                        } else {
+                            // 🆕 播放视频并截图
+                            playVideoAndTakeScreenshots();
+                        }
 
                         logD("🎉 抖音自动化流程完成!");
                         rootNode.recycle();
@@ -2934,8 +3052,13 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                 logD("✅ 成功点击侵权视频(通过父节点)");
                                 Thread.sleep(2000);
 
-                                // 🆕 播放视频并截图
-                                playVideoAndTakeScreenshots();
+                                if (isTestMode) {
+                                    logD("🧪 测试模式: 跳过视频播放，直接进入作者主页流程");
+                                    navigateToAuthorProfile();
+                                } else {
+                                    // 🆕 播放视频并截图
+                                    playVideoAndTakeScreenshots();
+                                }
 
                                 logD("🎉 抖音自动化流程完成!");
                                 rootNode.recycle();
@@ -2956,8 +3079,13 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         logD("✅ 已执行坐标点击侵权视频");
                         Thread.sleep(2000);
 
-                        // 🆕 播放视频并截图
-                        playVideoAndTakeScreenshots();
+                        if (isTestMode) {
+                            logD("🧪 测试模式: 跳过视频播放，直接进入作者主页流程");
+                            navigateToAuthorProfile();
+                        } else {
+                            // 🆕 播放视频并截图
+                            playVideoAndTakeScreenshots();
+                        }
 
                         logD("🎉 抖音自动化流程完成!");
                     }
@@ -4401,6 +4529,112 @@ public class AutomationAccessibilityService extends AccessibilityService {
                             .build();
                     dispatchGesture(imgTapGesture, null, null);
                     logD("✅ 已点击资质证照图片");
+
+                    // ── 智能等待图片查看器打开（检测"认证说明"消失）──
+                    // 策略：店铺账号页有"认证说明"文字(16个文本块)，进入图片查看器后只剩1个(关闭按钮)
+                    // 检测"认证说明"消失即确认已切换到图片查看器，再等2秒让图片内容渲染完成
+                    logD("⏳ 等待图片查看器打开（检测页面切换）...");
+                    final String[] shopPageFlag = {"认证说明"};
+                    boolean imageViewerOpened = false;
+                    for (int ivSec = 0; ivSec < 8 && !imageViewerOpened; ivSec++) {
+                        Thread.sleep(1000);
+                        final boolean[] ivDone = {false};
+                        final boolean[] stillOnShopPage = {true}; // true=还在店铺页，false=已进入图片查看器
+                        takeScreenshot(new ScreenshotCallback() {
+                            @Override
+                            public void onSuccess(android.graphics.Bitmap bitmap) {
+                                if (bitmap == null) { ivDone[0] = true; return; }
+                                OcrHelper ivOcr = new OcrHelper(message -> {});
+                                ivOcr.findAnyTextPosition(bitmap, shopPageFlag, new OcrHelper.OcrAnyCallback() {
+                                    @Override
+                                    public void onSuccess(String keyword) {
+                                        // 还能检测到"认证说明"，说明还在店铺账号页
+                                        stillOnShopPage[0] = true;
+                                        ivDone[0] = true;
+                                        ivOcr.release();
+                                        bitmap.recycle();
+                                    }
+                                    @Override
+                                    public void onFailure(String error) {
+                                        // 检测不到"认证说明"，说明已进入图片查看器
+                                        stillOnShopPage[0] = false;
+                                        ivDone[0] = true;
+                                        ivOcr.release();
+                                        bitmap.recycle();
+                                    }
+                                });
+                            }
+                            @Override
+                            public void onFailure() { ivDone[0] = true; }
+                        });
+                        // 等待OCR回调完成（最多2秒）
+                        long ivStart = System.currentTimeMillis();
+                        while (!ivDone[0] && System.currentTimeMillis() - ivStart < 2000) {
+                            Thread.sleep(100);
+                        }
+                        if (!stillOnShopPage[0]) {
+                            logD("✅ 图片查看器已打开（第" + (ivSec + 1) + "秒检测到页面切换），等待2秒让图片渲染...");
+                            imageViewerOpened = true;
+                            Thread.sleep(2000); // 图片内容渲染缓冲
+                        } else {
+                            logD("⌛ 第" + (ivSec + 1) + "秒：还在店铺账号页，等待图片查看器打开...");
+                        }
+                    }
+                    if (!imageViewerOpened) {
+                        logD("⚠️ 等待8秒后页面未切换，强制执行（可能已打开但OCR未能判断）");
+                    }
+
+                    // ── 截图1：图片原始状态 ──
+                    logD("📸 截取资质证照图片（原始状态）...");
+                    takeScreenshotWithPrefix("资质证照原图", new ScreenshotCallback() {
+                        @Override public void onSuccess() { logD("✅ 资质证照原图截图保存成功"); }
+                        @Override public void onFailure() { logE("❌ 资质证照原图截图保存失败"); }
+                    });
+                    Thread.sleep(800);
+
+                    // ── 双指捏合放大（Pinch-Out Zoom In）──
+                    // 屏幕中心=(540,1200)，两指从内侧(±200px)向外侧(±400px)展开，持续600ms
+                    logD("🔍 执行双指放大手势...");
+                    android.graphics.Path zoomFinger1 = new android.graphics.Path();
+                    zoomFinger1.moveTo(340, 1200);  // 左指起点（中心左200px）
+                    zoomFinger1.lineTo(100, 1200);  // 左指终点（向左展开）
+                    android.graphics.Path zoomFinger2 = new android.graphics.Path();
+                    zoomFinger2.moveTo(740, 1200);  // 右指起点（中心右200px）
+                    zoomFinger2.lineTo(980, 1200);  // 右指终点（向右展开）
+                    android.accessibilityservice.GestureDescription zoomGesture =
+                        new android.accessibilityservice.GestureDescription.Builder()
+                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                                zoomFinger1, 0, 600))
+                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                                zoomFinger2, 0, 600))
+                            .build();
+                    dispatchGesture(zoomGesture, null, null);
+                    logD("✅ 双指放大手势执行完成");
+                    Thread.sleep(1000); // 等待缩放动画完成
+
+                    // ── 单指向右拖动（向右平移，显示图片左侧内容）──
+                    // 从屏幕左侧(250,1200)拖到右侧(800,1200)，持续500ms
+                    logD("👆 执行向右拖动手势，显示证照详细信息...");
+                    android.graphics.Path dragPath = new android.graphics.Path();
+                    dragPath.moveTo(250, 1200);  // 拖动起点
+                    dragPath.lineTo(800, 1200);  // 拖动终点（向右）
+                    android.accessibilityservice.GestureDescription dragGesture =
+                        new android.accessibilityservice.GestureDescription.Builder()
+                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                                dragPath, 0, 500))
+                            .build();
+                    dispatchGesture(dragGesture, null, null);
+                    logD("✅ 向右拖动手势执行完成");
+                    Thread.sleep(800); // 等待拖动稳定
+
+                    // ── 截图2：放大并平移后，完整展示证照信息 ──
+                    logD("📸 截取资质证照详情（放大后）...");
+                    takeScreenshotWithPrefix("资质证照详情", new ScreenshotCallback() {
+                        @Override public void onSuccess() { logD("✅ 资质证照详情截图保存成功"); }
+                        @Override public void onFailure() { logE("❌ 资质证照详情截图保存失败"); }
+                    });
+                    Thread.sleep(500);
+
                 } else {
                     logD("ℹ️ 作者主页无【店铺账号】标签，跳过");
                 }

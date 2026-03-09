@@ -199,6 +199,18 @@
                     android:stateListAnimator="@null"
                     android:translationZ="4dp" />
 
+                <!-- 测试模式按钮 -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_test_mode"
+                    style="@style/SecondaryButtonStyle"
+                    android:text="🧪 测试模式"
+                    android:textSize="14sp"
+                    app:cornerRadius="16dp"
+                    android:layout_marginBottom="12dp"
+                    android:elevation="8dp"
+                    android:stateListAnimator="@null"
+                    android:translationZ="4dp" />
+
                 <!-- 停止按钮 -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_stop"

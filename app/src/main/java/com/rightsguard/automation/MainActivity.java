@@ -24,6 +24,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvStatusDetail;
     private View viewStatusIndicator;
     private MaterialButton btnStart;
+    private MaterialButton btnTestMode;
     private MaterialButton btnStop;
     private MaterialButton btnViewLog;
     private ImageView ivSettings;
@@ -49,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
         tvStatusDetail = findViewById(R.id.tv_status_detail);
         viewStatusIndicator = findViewById(R.id.view_status_indicator);
         btnStart = findViewById(R.id.btn_start);
+        btnTestMode = findViewById(R.id.btn_test_mode);
         btnStop = findViewById(R.id.btn_stop);
         btnViewLog = findViewById(R.id.btn_view_log);
         ivSettings = findViewById(R.id.iv_settings);
@@ -61,6 +63,9 @@ public class MainActivity extends AppCompatActivity {
     private void setupListeners() {
         // 开始按钮
         btnStart.setOnClickListener(v -> startAutomation());
+
+        // 测试模式按钮
+        btnTestMode.setOnClickListener(v -> startTestMode());
 
         // 停止按钮
         btnStop.setOnClickListener(v -> stopAutomation());
@@ -253,6 +258,48 @@ public class MainActivity extends AppCompatActivity {
         String remark;
         String videoKeywords; // 🆕 视频文案关键词
         int videoDurationSeconds; // 🆕 视频时长(秒)
+    }
+
+    /**
+     * 🧪 测试模式：跳过权利卫士取证流程，直接打开抖音→观看历史→视频→作者主页→店铺账号→放大截图
+     */
+    private void startTestMode() {
+        if (!AutomationAccessibilityService.isServiceAvailable()) {
+            Toast.makeText(this, R.string.toast_accessibility_required, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // 读取输入框内容，解析视频关键词
+        String evidenceInfo = "";
+        if (etRemark != null && etRemark.getText() != null) {
+            evidenceInfo = etRemark.getText().toString().trim();
+        }
+
+        if (evidenceInfo.isEmpty()) {
+            Toast.makeText(this, "请先输入取证信息（用于匹配观看历史中的视频）", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        AutomationAccessibilityService service = AutomationAccessibilityService.getInstance();
+        if (service == null) {
+            Toast.makeText(this, "无障碍服务未启动", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 解析关键词（和正常模式一样）
+        ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
+        if (parseResult.videoKeywords != null && !parseResult.videoKeywords.isEmpty()) {
+            service.setVideoKeywords(parseResult.videoKeywords);
+            Toast.makeText(this, "🧪 测试模式启动，关键词: " + parseResult.videoKeywords, Toast.LENGTH_LONG).show();
+        } else {
+            // 没解析到关键词，把整个输入当关键词
+            service.setVideoKeywords(evidenceInfo);
+            Toast.makeText(this, "🧪 测试模式启动，关键词: " + evidenceInfo, Toast.LENGTH_LONG).show();
+        }
+
+        service.startTestMode();
+        isRunning = true;
+        updateStatus(STATUS_RUNNING);
     }
 
     /**

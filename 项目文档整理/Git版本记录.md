@@ -12,6 +12,88 @@
 
 ## 🚀 版本历史
 
+### V4.0 (2026-03-09) 🧪 测试模式 + 资质证照图片智能取证完整实现
+
+**✨ 核心更新 - 新增测试模式 + 负向OCR检测图片查看器 + 双指放大手势**
+
+#### ✅ 完成内容
+
+**1. 新增「🧪 测试模式」按钮 - MainActivity.java / activity_main.xml**
+- ✅ 在"开始自动化"按钮下方新增 `btn_test_mode` 按钮
+- ✅ `MainActivity.java` 新增按钮初始化与监听器，调用 `AutomationAccessibilityService.startTestMode()`
+- ✅ **设计原则**: 正版流程每次测试需60秒录屏+权利卫士全套操作，耗时极长；测试模式跳过录屏阶段，将单次测试时间缩短至约30秒
+
+**2. 测试模式核心流程 - `startTestMode()` - AutomationAccessibilityService.java**
+- ✅ URL Scheme 打开抖音: `snssdk1128://`（与正版流程完全一致，无包可见性限制）
+- ✅ 轮询等待抖音进入前台（最多10秒，检测根节点包名含 `aweme`）
+- ✅ 点击 `(540, 800)` 唤出底部导航栏（全屏视频流默认隐藏底部栏，直接点「我」会打到视频上）
+- ✅ 点击「我」→ 点击「观看历史」→ 关键词匹配侵权视频 → 三级点击策略打开视频
+- ✅ **跳过录屏**，直接调用 `navigateToAuthorProfile()`
+
+**3. 代码一致性保证 - 关键设计决策**
+- ✅ `navigateToAuthorProfile()` 是测试模式与正版流程的**共同出口**
+- ✅ 测试模式: 找到侵权视频 → 跳过播放 → **调用 `navigateToAuthorProfile()`**
+- ✅ 正版流程: `playVideoAndTakeScreenshots()` → 完整录制截图 → **调用 `navigateToAuthorProfile()`**
+- ✅ 在测试模式验证通过的所有逻辑，零改动即在正版流程生效
+
+**4. 负向OCR检测图片查看器 - `navigateToAuthorProfile()` - AutomationAccessibilityService.java**
+- ✅ **问题根因**: 图片查看器为 WebView 覆盖层，正向OCR检测证照文字（文字小/加载慢）经常12秒超时
+- ✅ **解决方案 - 负向OCR**: 每秒检测「认证说明」文字，**消失**即确认已进入图片查看器
+- ✅ 检测成功后等待2秒渲染缓冲，再执行手势
+- ✅ 最多等待8秒，超时强制继续
+
+**5. 双指放大 + 向右拖动手势 - AutomationAccessibilityService.java**
+- ✅ 使用 `GestureDescription.Builder` 构建双路径同时执行的捏合手势（600ms）
+- ✅ 放大后执行向右拖动手势（500ms），将统一社会信用代码拖入屏幕可见区域
+- ✅ 截图放大后的资质证照详情
+
+#### 🔧 技术关键代码
+
+**负向OCR检测图片查看器**:
+```java
+// 每秒检测「认证说明」是否消失
+final boolean[] stillOnShopPage = {true};
+final boolean[] ocrDone = {false};
+ivOcr.findAnyTextPosition(bitmap, new String[]{"认证说明"}, new OcrHelper.OcrAnyCallback() {
+    @Override public void onSuccess(String keyword) { stillOnShopPage[0] = true; ocrDone[0] = true; }
+    @Override public void onFailure(String error)   { stillOnShopPage[0] = false; ocrDone[0] = true; } // 消失 = 已切换!
+});
+while (!ocrDone[0]) Thread.sleep(100);
+if (!stillOnShopPage[0]) { /* 进入图片查看器 */ break; }
+```
+
+**双指捏合放大**:
+```java
+GestureDescription.Builder builder = new GestureDescription.Builder();
+// 手指1: 向左
+Path path1 = new Path(); path1.moveTo(340, 1200); path1.lineTo(100, 1200);
+builder.addStroke(new GestureDescription.StrokeDescription(path1, 0, 600));
+// 手指2: 向右
+Path path2 = new Path(); path2.moveTo(740, 1200); path2.lineTo(980, 1200);
+builder.addStroke(new GestureDescription.StrokeDescription(path2, 0, 600));
+dispatchGesture(builder.build(), null, null);
+```
+
+#### 📊 关键坐标（1080×2400分辨率）
+
+| 操作 | 坐标/路径 | 说明 |
+|------|---------|------|
+| 唤出底部导航栏 | (540, 800) | 全屏视频信息流，底部栏默认隐藏 |
+| 点击「我」按钮 | (972, 2273) | 底部导航栏最右侧 |
+| 点击资质证照图片 | (486, 1174) | Dump确认范围 [339,1071]→[633,1278] |
+| 放大 手指1 | (340,1200)→(100,1200) 600ms | 向左拉 |
+| 放大 手指2 | (740,1200)→(980,1200) 600ms | 向右拉 |
+| 向右拖动 | (250,1200)→(800,1200) 500ms | 展示信用代码 |
+
+#### 📁 文件变更
+- `app/src/main/res/layout/activity_main.xml` — 新增 `btn_test_mode` 按钮
+- `app/src/main/java/com/rightsguard/automation/MainActivity.java` — 新增测试按钮监听器
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - 新增 `isTestMode` 标志位与 `startTestMode()` 方法
+  - `navigateToAuthorProfile()` 新增负向OCR检测 + 双指放大 + 拖动手势 + 截图
+
+---
+
 ### V3.9 (2026-03-08) 👤 作者主页店铺账号取证 + OCR智能等待修复
 
 **✨ 核心更新 - 实现作者主页店铺账号检测 + 详情页OCR智能等待 + 资质证照图片点击**
