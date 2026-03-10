@@ -12,6 +12,154 @@
 
 ## 🚀 版本历史
 
+### V4.2 (2026-03-10) 📤 QQ分享取证 + 停止录屏 + PDF生成完整闭环
+
+**✨ 核心更新 - 实现完整取证闭环：分享链接到QQ → 停止录屏 → 生成取证PDF**
+
+#### ✅ 完成内容
+
+**1. QQ分享链接完整流程 - `clickShareLinkButton()` / `clickQQButton()` / `clickMyComputerInQQ()` / `pasteAndSendInQQ()` - AutomationAccessibilityService.java**
+- ✅ 点击【分享链接】: `findAccessibilityNodeInfosByText("分享链接")` → 点击父节点
+- ✅ 等待1.5s → 点击【QQ】: 精确匹配 `text.equals("QQ")` 过滤掉"QQ空间" → 点击父 LinearLayout → 兜底坐标 (588, 2006)
+- ✅ 等待2s → 点击【我的电脑】: 文本检索 → 兜底坐标 (540, 498)（来自 qq首页dump.md）
+- ✅ 纯坐标3步粘贴发送（绕过 Android 12+ 剪贴板限制）:
+  - (466, 2165) → 点击输入框，触发键盘+粘贴浮窗
+  - (484, 1503) → 点击粘贴浮窗，填入链接
+  - (956, 1244) → 点击发送按钮
+
+**2. 发送后取证截图 + 返回权利卫士 - `pasteAndSendInQQ()` - AutomationAccessibilityService.java**
+- ✅ 等待1s → 截图"QQ发送取证"（保存相册，追踪 sessionScreenshotUris）
+- ✅ `performGlobalAction(GLOBAL_ACTION_HOME)` 最小化QQ
+- ✅ Intent 显式启动权利卫士 (com.unitrust.tsa)
+
+**3. 停止录屏取证 - `clickStopRecording()` - AutomationAccessibilityService.java**
+- ✅ 等待3s权利卫士加载完成
+- ✅ 策略1: `findAccessibilityNodeInfosByText("停止录屏取证")` → 找可点击父节点 → 点击
+- ✅ 策略2: ID查找 `com.unitrust.tsa:id/rl_btn_end`
+- ✅ 策略3: 坐标兜底 (540, 727)（来自 权利卫士dump.md）
+
+**4. 生成取证PDF - `generateEvidencePdf()` - AutomationAccessibilityService.java**
+- ✅ 等待3s录屏停止完成
+- ✅ 遍历 `sessionScreenshotUris`（全程追踪的所有截图URI）
+- ✅ 使用 `android.graphics.pdf.PdfDocument` API 逐页绘制 Bitmap
+- ✅ 每页尺寸 1080×2400，等比缩放适配
+- ✅ **PDF命名格式**: `原创名称-抖音：侵权人账号名称.pdf`
+- ✅ **保存位置**: `Download/权利卫士取证/`（MediaStore Downloads API，Scoped Storage兼容）
+- ✅ 名称从 `remark` 自动解析: `setRemark()` 拆分 `-抖音:` 分隔符提取原创名和侵权人名
+
+**5. 移除多余截图 - `clickQualificationButton()` - AutomationAccessibilityService.java**
+- ✅ 删除滑动前（页面未滚到位时）的多余截图: `takeScreenshotWithPrefix("抖音设置", ...)`
+- ✅ 只保留滑动后找到并点击"资质证照"进入详情页后的那张截图
+
+#### 📋 完整取证10步闭环流程
+
+```
+① 截图作者主页
+② 点击【更多】→ 截图更多菜单
+③ 返回视频播放页
+④ 点击【分享】→ 右滑弹窗 → 点击【分享链接】（链接自动复制到剪贴板）
+⑤ 点击【QQ】→ 进入QQ → 点击【我的电脑】
+⑥ 坐标3步粘贴发送 → 截图QQ发送取证
+⑦ HOME键最小化QQ → 打开权利卫士
+⑧ 等待3s → 点击【停止录屏取证】
+⑨ 等待3s → 收集所有截图 → 生成取证PDF
+```
+
+#### 📊 关键坐标（1080×2400分辨率，来自dump）
+
+| 操作 | 坐标 | 说明 |
+|------|------|------|
+| 点击输入框 | (466, 2165) | 触发键盘+粘贴浮窗 |
+| 点击粘贴浮窗 | (484, 1503) | 填入剪贴板链接 |
+| 点击发送 | (956, 1244) | 键盘弹出后发送按钮位置 |
+| 点击QQ（兜底） | (588, 2006) | 来自分享链接弹窗dump |
+| 点击我的电脑（兜底） | (540, 498) | 来自qq首页dump |
+| 停止录屏（兜底） | (540, 727) | 来自权利卫士dump |
+
+#### 📁 文件变更
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - 新增 `clickShareLinkButton()`: 等待弹窗 → 右滑 → 点击分享链接
+  - 新增 `clickQQButton()`: 精确匹配QQ → 兜底坐标
+  - 新增 `clickMyComputerInQQ()`: 文本查找我的电脑 → 兜底坐标
+  - 重写 `pasteAndSendInQQ()`: 纯坐标3步粘贴 + 截图 + 返回权利卫士
+  - 新增 `clickStopRecording()`: 3级兜底停止录屏
+  - 新增 `generateEvidencePdf()`: 收集截图 → PdfDocument → MediaStore保存
+  - 修改 `setRemark()`: 解析 originalName / infringerName 用于PDF命名
+  - 修改 `clickQualificationButton()`: 删除滑动前多余截图
+
+---
+
+### V4.1 (2026-03-10) 🔍 智能页面检测重构 + 作者主页三个点截图 + 分享按钮点击
+
+**✨ 核心更新 - 抖音页面检测全面重构，依赖稳定文字而非易变混淆ID**
+
+#### ✅ 完成内容
+
+**1. 页面检测策略重构 - `isOnAuthorProfilePage()` - AutomationAccessibilityService.java**
+- ✅ **废弃混淆ID检测（`t4q`、`wlv`、`wdf`）**: 抖音每次发版都会随机重新生成这些ID，完全不可靠
+- ✅ **新策略1（主）**: 同时找到文字"获赞"+"粉丝"且有正常bounds → 最稳定标志，抖音不可能改这些中文标签
+- ✅ **新策略2（辅）**: 单独找到"获赞"文字且bounds有效 → 单独兜底
+- ✅ **新策略3（兜底）**: desc="更多" 位于屏幕顶部 → 仅作最后保障
+- ✅ **dump依据**: `作者主页dump.md` (2026-03-10 09:58) 确认："获赞" text=[189,703]→[273,760]，"粉丝" text=[624,703]→[708,760]
+
+**2. 页面检测策略重构 - `isOnVideoPlaybackPage()` - AutomationAccessibilityService.java**
+- ✅ **排除逻辑更新**: 改用"获赞"+"粉丝"文字判断（替代旧的 `ue7`/`wlu` ID），更稳定
+- ✅ **新策略1**: `zzf` ID（分享按钮）有正值bounds → dump确认的新ID
+- ✅ **新策略2**: desc含"分享"且位于右侧（right > 800）
+- ✅ **新策略3**: 进度条 `6n0`（SeekBar）存在 → dump确认的新ID
+
+**3. 抖音混淆ID更新映射（来自 2026-03-10 dump）**
+
+| 功能 | 旧ID | 新ID | 说明 |
+|------|------|------|------|
+| 统计区（获赞/关注/粉丝）| `t4q` | `ue7` | bounds=[0,648]→[1080,804] ✅ |
+| 作品/商品标签栏 | `wlv` | `wlu` | bounds=[0,1257]→[1080,1377] ✅ |
+| 分享按钮 | `zh0` | `zzf` | desc="分享XXX，按钮" |
+| 进度条 SeekBar | `58h` | `6n0` | desc="进度条" |
+
+**4. 导航逻辑从"固定步数"恢复为"智能检测循环" - `enterAuthorProfile()` - AutomationAccessibilityService.java**
+- ✅ **步骤①返回作者主页**: 循环最多8次，每次调用 `isOnAuthorProfilePage()` 检测，检测到立即停止
+- ✅ **步骤②点击【更多】**: 无障碍API精确匹配 desc="更多" → 找可点击父节点 → 兜底坐标 (984,192)
+- ✅ **步骤③截图取证**: 等待800ms弹窗出现后截图，前缀"作者主页_更多菜单"
+- ✅ **步骤④返回视频播放页**: 先按1次返回关闭菜单，再循环最多8次，每次调用 `isOnVideoPlaybackPage()` 检测
+- ✅ **步骤⑤点击【分享】**: zzf ID无障碍API → desc含"分享"右侧按钮 → 兜底坐标 (1044,1700)
+
+**5. 删除图片查看器步骤 - `navigateToAuthorProfile()` - AutomationAccessibilityService.java**
+- ✅ 删除: 点击资质证照图片 (486,1174)
+- ✅ 删除: 负向OCR等待图片查看器打开（最多8秒）
+- ✅ 删除: 双指捏合放大手势 (600ms)
+- ✅ 删除: 向右拖动手势 (500ms)
+- ✅ 删除: 截图放大后资质证照
+- ✅ **原因**: 取证逻辑简化，店铺账号详情页截图已足够取证
+
+#### 📊 关键坐标（1080×2400分辨率，来自最新dump）
+
+| 操作 | 坐标/方式 | 说明 |
+|------|---------|------|
+| 点击"更多"（优先） | desc="更多"，无障碍API | bounds=[936,144]→[1032,240] |
+| 点击"更多"（兜底） | (984, 192) | 坐标中心点 |
+| 点击"分享"（优先） | zzf ID，无障碍API | 视频页有正值bounds |
+| 点击"分享"（兜底） | (1044, 1700) | 固定坐标 |
+
+#### 🔑 技术核心思想
+
+**ID稳定性分级**（从高到低）:
+```
+Level 1 ✅ 永久稳定: text="获赞"、text="粉丝"（中文UI标签，抖音不会改）
+Level 2 ✅ 相对稳定: contentDescription="更多"、"分享"（功能描述，变化少）
+Level 3 ⚠️ 版本间变化: 混淆ID（t4q→ue7，zh0→zzf，每次发版必变）
+Level 4 ❌ 最不稳定: 固定坐标（设备分辨率不同就会失效）
+```
+
+#### 📁 文件变更
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - `isOnAuthorProfilePage()`: 改用"获赞"+"粉丝"文字检测，废弃混淆ID
+  - `isOnVideoPlaybackPage()`: 排除逻辑改用文字检测，zzf替代zh0，6n0替代58h
+  - `enterAuthorProfile()`: 固定步数→智能检测循环，新增5步作者主页取证流程
+  - `navigateToAuthorProfile()`: 删除图片查看器取证步骤（4步）
+
+---
+
 ### V4.0 (2026-03-09) 🧪 测试模式 + 资质证照图片智能取证完整实现
 
 **✨ 核心更新 - 新增测试模式 + 负向OCR检测图片查看器 + 双指放大手势**

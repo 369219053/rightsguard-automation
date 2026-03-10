@@ -1,11 +1,11 @@
 # UI结构 Dump
 
-**生成时间**: 2026-03-09 00:58:29
+**生成时间**: 2026-03-10 09:58:03
 
 ---
 
 === UI结构 Dump (所有窗口) ===
-时间: 2026-03-09 00:58:29
+时间: 2026-03-10 09:58:02
 
 窗口总数: 4
 
@@ -38,35 +38,32 @@
 │     📐 **Bounds**: [0,0] → [1080,114] (1080x114)
 │   ├─ **[android.widget.TextView]** `enabled visible `
 │   │     🆔 **ID**: `com.android.systemui:id/clock`
-│   │     📝 **Text**: "00:58"
-│   │     💬 **Desc**: "00:58"
-│   │     📐 **Bounds**: [60,47] → [188,94] (128x47)
+│   │     📝 **Text**: "09:58"
+│   │     💬 **Desc**: "09:58"
+│   │     📐 **Bounds**: [62,49] → [189,96] (127x47)
 │   ├─ **[]** `enabled visible `
-│   │     💬 **Desc**: "应用商店通知："
-│   │     📐 **Bounds**: [188,45] → [223,96] (35x51)
+│   │     💬 **Desc**: "电池通知："
+│   │     📐 **Bounds**: [189,47] → [224,98] (35x51)
+│   ├─ **[]** `enabled visible `
+│   │     💬 **Desc**: "vivo账号通知："
+│   │     📐 **Bounds**: [236,47] → [271,98] (35x51)
 │   ├─ **[]** `enabled visible `
 │   │     💬 **Desc**: "信息通知："
-│   │     📐 **Bounds**: [235,45] → [270,96] (35x51)
-│   ├─ **[]** `enabled visible `
-│   │     💬 **Desc**: "浏览器通知："
-│   │     📐 **Bounds**: [281,45] → [316,96] (35x51)
-│   ├─ **[]** `enabled visible `
-│   │     💬 **Desc**: "手机管家通知："
-│   │     📐 **Bounds**: [328,45] → [363,96] (35x51)
+│   │     📐 **Bounds**: [282,47] → [317,98] (35x51)
 │   ├─ **[android.widget.LinearLayout]** `enabled visible `
 │   │     🆔 **ID**: `com.android.systemui:id/system_icons`
-│   │     📐 **Bounds**: [585,28] → [1020,114] (435x86)
+│   │     📐 **Bounds**: [587,30] → [1022,114] (435x84)
 │   │   ├─ **[android.widget.LinearLayout]** `enabled visible `
 │   │   │     🆔 **ID**: `com.android.systemui:id/networkspeed_vertical`
-│   │   │     💬 **Desc**: "640KB/s"
-│   │   │     📐 **Bounds**: [826,51] → [883,90] (57x39)
+│   │   │     💬 **Desc**: "0.10KB/s"
+│   │   │     📐 **Bounds**: [828,53] → [885,92] (57x39)
 │   │   ├─ **[android.widget.FrameLayout]** `enabled visible `
 │   │   │     🆔 **ID**: `com.android.systemui:id/mobile_combo`
 │   │   │     💬 **Desc**: "中国移动 5G 信号强度四格，共四格"
-│   │   │     📐 **Bounds**: [892,32] → [948,110] (56x78)
+│   │   │     📐 **Bounds**: [894,34] → [950,112] (56x78)
 │   │   ├─ **[]** `enabled visible `
-│   │   │     💬 **Desc**: "电池电量为百分之 45。"
-│   │   │     📐 **Bounds**: [957,53] → [1020,89] (63x36)
+│   │   │     💬 **Desc**: "电池电量为百分之 100。"
+│   │   │     📐 **Bounds**: [959,55] → [1022,91] (63x36)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🪟 窗口 #3
 类型: 系统窗口
@@ -99,81 +96,115 @@
 **[android.widget.FrameLayout]** `enabled visible `
   📐 **Bounds**: [0,0] → [1080,2400] (1080x2400)
 ├─ **[android.widget.FrameLayout]** `enabled `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/whi`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ww_`
 │     📐 **Bounds**: [0,0] → [0,0] (0x0)
 │   ├─ **[android.widget.Button]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/jvd`
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/j1_`
 │   │     💬 **Desc**: "关注"
-│   │     📐 **Bounds**: [0,0] → [0,-1111] (0x-1111)
+│   │     📐 **Bounds**: [0,0] → [0,-1090] (0x-1090)
 │   ├─ **[android.widget.ImageView]** `clickable enabled focusable `
 │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/user_avatar`
-│   │     💬 **Desc**: "黄金比利四十七"
-│   │     📐 **Bounds**: [0,0] → [-21,-1156] (-21x-1156)
+│   │     💬 **Desc**: "白茶清欢。"
+│   │     📐 **Bounds**: [0,0] → [-21,-1135] (-21x-1135)
 │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/ghs`
-│   │     💬 **Desc**: "未点赞，喜欢4.5万，按钮"
-│   │     📐 **Bounds**: [0,0] → [0,-910] (0x-910)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/gl-`
+│   │     💬 **Desc**: "未点赞，喜欢421，按钮"
+│   │     📐 **Bounds**: [0,0] → [0,-889] (0x-889)
 │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/err`
-│   │     💬 **Desc**: "评论1777，按钮"
-│   │     📐 **Bounds**: [0,0] → [0,-709] (0x-709)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/evc`
+│   │     💬 **Desc**: "评论101，按钮"
+│   │     📐 **Bounds**: [0,0] → [0,-688] (0x-688)
 │   │   ├─ **[android.widget.ImageView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/el6`
-│   │   │     💬 **Desc**: "评论1777，按钮"
-│   │   │     📐 **Bounds**: [0,0] → [-36,-778] (-36x-778)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/epn`
+│   │   │     💬 **Desc**: "评论101，按钮"
+│   │   │     📐 **Bounds**: [0,0] → [-36,-757] (-36x-757)
 │   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     📝 **Text**: "1777"
-│   │   │     📐 **Bounds**: [0,0] → [-52,-736] (-52x-736)
+│   │   │     📝 **Text**: "101"
+│   │   │     📐 **Bounds**: [0,0] → [-62,-715] (-62x-715)
 │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
 │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/d-c`
-│   │     💬 **Desc**: "未选中，收藏3591，按钮"
-│   │     📐 **Bounds**: [0,0] → [0,-513] (0x-513)
+│   │     💬 **Desc**: "未选中，收藏105，按钮"
+│   │     📐 **Bounds**: [0,0] → [0,-492] (0x-492)
 │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/zh0`
-│   │     💬 **Desc**: "分享1.8万，按钮"
-│   │     📐 **Bounds**: [0,0] → [0,-312] (0x-312)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/zzf`
+│   │     💬 **Desc**: "分享128，按钮"
+│   │     📐 **Bounds**: [0,0] → [0,-291] (0x-291)
+│   ├─ **[android.widget.TextView]** `enabled `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/tgg`
+│   │     📝 **Text**: "拍同款"
+│   │     📐 **Bounds**: [0,0] → [-39,-135] (-39x-135)
 │   ├─ **[android.widget.FrameLayout]** `enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/sqs`
-│   │     📐 **Bounds**: [0,0] → [-27,-156] (-27x-156)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s4s`
+│   │     📐 **Bounds**: [0,0] → [-27,-135] (-27x-135)
 │   │   ├─ **[android.widget.FrameLayout]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/sqw`
-│   │   │     💬 **Desc**: "音乐，@黄金比利四十七创作的原声，按钮"
-│   │   │     📐 **Bounds**: [0,0] → [-27,-156] (-27x-156)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s4v`
+│   │   │     💬 **Desc**: "音乐，@旅行摄影师卓越创作的原声，按钮"
+│   │   │     📐 **Bounds**: [0,0] → [-27,-135] (-27x-135)
 │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/nt+`
-│   │     📐 **Bounds**: [0,0] → [-419,-289] (-419x-289)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/nua`
+│   │     📐 **Bounds**: [0,0] → [-207,-361] (-207x-361)
 │   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
 │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/title`
-│   │   │     📝 **Text**: "@黄金比利四十七"
-│   │   │     📐 **Bounds**: [0,0] → [-638,-289] (-638x-289)
+│   │   │     📝 **Text**: "@白茶清欢。"
+│   │   │     📐 **Bounds**: [0,0] → [-740,-361] (-740x-361)
 │   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/56-`
-│   │   │     📐 **Bounds**: [0,0] → [-419,-300] (-419x-300)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/0eg`
+│   │   │     📐 **Bounds**: [0,0] → [-565,-368] (-565x-368)
+│   │   │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/1tk`
+│   │   │   │     📐 **Bounds**: [0,0] → [-565,-368] (-565x-368)
+│   │   │   │   ├─ **[android.widget.TextView]** `enabled `
+│   │   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/0ed`
+│   │   │   │   │     📝 **Text**: "动图"
+│   │   │   │   │     📐 **Bounds**: [0,0] → [-577,-374] (-577x-374)
+│   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6mr`
+│   │   │     📐 **Bounds**: [0,0] → [-397,-372] (-397x-372)
 │   │   │   ├─ **[android.widget.TextView]** `enabled focusable `
-│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/4i3`
-│   │   │   │     📝 **Text**: " · 8小时前"
-│   │   │   │     💬 **Desc**: "发布时间：8小时前"
-│   │   │   │     📐 **Bounds**: [0,0] → [-419,-300] (-419x-300)
-│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/f_l`
-│   │     📐 **Bounds**: [0,0] → [-279,-162] (-279x-162)
-│   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/desc`
-│   │   │     📝 **Text**: "提问：情侣出门要准备多久 @陶四七- #抽象 #情侣日常 #看到最..."
-│   │   │     📐 **Bounds**: [0,0] → [-279,-162] (-279x-162)
-│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/fb2`
-│   │     📐 **Bounds**: [0,0] → [-360,-156] (-360x-156)
-│   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/44r`
-│   │   │     📝 **Text**: "展开"
-│   │   │     📐 **Bounds**: [0,0] → [-378,-162] (-378x-162)
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/41w`
+│   │   │   │     📝 **Text**: " · 4天前"
+│   │   │   │     💬 **Desc**: "发布时间：4天前"
+│   │   │   │     📐 **Bounds**: [0,0] → [-397,-372] (-397x-372)
 │   ├─ **[android.widget.FrameLayout]** `enabled `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/szc`
-│   │     📐 **Bounds**: [0,0] → [-1044,-156] (-1044x-156)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6p4`
+│   │     📐 **Bounds**: [0,0] → [0,-221] (0x-221)
+│   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/ga5`
+│   │   │     📐 **Bounds**: [0,0] → [-279,-221] (-279x-221)
+│   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/gb6`
+│   │   │     📐 **Bounds**: [0,0] → [-279,-233] (-279x-233)
+│   │   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/desc`
+│   │   │   │     📝 **Text**: "河南事业编上岸濮阳的一点真实感受 
+上岸真实感受：... 展开"
+│   │   │   │     📐 **Bounds**: [0,0] → [-279,-233] (-279x-233)
+│   │   ├─ **[android.widget.FrameLayout]** `enabled `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s+n`
+│   │   │     📐 **Bounds**: [0,0] → [-1044,-221] (-1044x-221)
+│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/cec`
+│   │     📐 **Bounds**: [0,0] → [-849,-144] (-849x-144)
+│   │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qt1`
+│   │   │     📐 **Bounds**: [0,0] → [-849,-145] (-849x-145)
+│   │   │   ├─ **[android.widget.ImageView]** `enabled `
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qtw`
+│   │   │   │     💬 **Desc**: "汽水音乐按钮"
+│   │   │   │     📐 **Bounds**: [0,0] → [-849,-145] (-849x-145)
+│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/jmf`
+│   │     📐 **Bounds**: [0,0] → [-411,-147] (-411x-147)
+│   │   ├─ **[android.view.View]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s9h`
+│   │   │     💬 **Desc**: "音乐，最好的状态 - 程子柒，按钮"
+│   │   │     📐 **Bounds**: [0,0] → [-411,-148] (-411x-148)
 │   ├─ **[android.widget.FrameLayout]** `enabled `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/szc`
-│   │     📐 **Bounds**: [0,0] → [-1044,-138] (-1044x-138)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s+n`
+│   │     📐 **Bounds**: [0,0] → [-1044,-135] (-1044x-135)
+│   ├─ **[android.view.View]** `clickable enabled focusable `
+│   │     💬 **Desc**: "图片1，按钮"
+│   │     📐 **Bounds**: [0,0] → [-36,-120] (-36x-120)
 │   ├─ **[android.view.ViewGroup]** `clickable enabled focusable `
 │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/container`
 │   │     📐 **Bounds**: [0,0] → [0,0] (0x0)
@@ -183,230 +214,220 @@
 │   │   │     📐 **Bounds**: [0,0] → [-816,-34] (-816x-34)
 │   │   ├─ **[android.widget.TextView]** `enabled `
 │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/content`
-│   │   │     📝 **Text**: "男生出门前为什么要拉屎"
-│   │   │     📐 **Bounds**: [0,0] → [-348,-34] (-348x-34)
+│   │   │     📝 **Text**: "考事业编怎么备考"
+│   │   │     📐 **Bounds**: [0,0] → [-465,-34] (-465x-34)
 │   │   ├─ **[android.widget.ImageView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/h5s`
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/h=_`
 │   │   │     💬 **Desc**: "点击查看更多，按钮"
 │   │   │     📐 **Bounds**: [0,0] → [-36,-30] (-36x-30)
 │   ├─ **[android.view.View]** `clickable enabled focusable `
 │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
 │   │     📐 **Bounds**: [0,0] → [0,0] (0x0)
+│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │     📐 **Bounds**: [0,0] → [0,0] (0x0)
 ├─ **[android.widget.FrameLayout]** `enabled `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/whi`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ww_`
 │     📐 **Bounds**: [0,0] → [0,2199] (0x2199)
 │   ├─ **[android.widget.Button]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/jvd`
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/j1_`
 │   │     💬 **Desc**: "关注"
-│   │     📐 **Bounds**: [0,1133] → [0,1220] (0x87)
+│   │     📐 **Bounds**: [0,1136] → [0,1223] (0x87)
 │   ├─ **[android.widget.ImageView]** `clickable enabled focusable `
 │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/user_avatar`
-│   │     💬 **Desc**: "文文工艺品"
-│   │     📐 **Bounds**: [0,1031] → [-21,1175] (-21x144)
+│   │     💬 **Desc**: "耀选百货"
+│   │     📐 **Bounds**: [0,1034] → [-21,1178] (-21x144)
 │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/ghs`
-│   │     💬 **Desc**: "未点赞，喜欢4298，按钮"
-│   │     📐 **Bounds**: [0,1220] → [0,1421] (0x201)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/gl-`
+│   │     💬 **Desc**: "未点赞，喜欢6643，按钮"
+│   │     📐 **Bounds**: [0,1223] → [0,1424] (0x201)
 │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/err`
-│   │     💬 **Desc**: "评论128，按钮"
-│   │     📐 **Bounds**: [0,1421] → [0,1622] (0x201)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/evc`
+│   │     💬 **Desc**: "评论55，按钮"
+│   │     📐 **Bounds**: [0,1424] → [0,1625] (0x201)
 │   │   ├─ **[android.widget.ImageView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/el6`
-│   │   │     💬 **Desc**: "评论128，按钮"
-│   │   │     📐 **Bounds**: [0,1445] → [-36,1553] (-36x108)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/epn`
+│   │   │     💬 **Desc**: "评论55，按钮"
+│   │   │     📐 **Bounds**: [0,1448] → [-36,1556] (-36x108)
 │   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     📝 **Text**: "128"
-│   │   │     📐 **Bounds**: [0,1553] → [-61,1595] (-61x42)
+│   │   │     📝 **Text**: "55"
+│   │   │     📐 **Bounds**: [0,1556] → [-69,1598] (-69x42)
 │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
 │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/d-c`
-│   │     💬 **Desc**: "未选中，收藏1428，按钮"
-│   │     📐 **Bounds**: [0,1622] → [0,1818] (0x196)
+│   │     💬 **Desc**: "未选中，收藏4445，按钮"
+│   │     📐 **Bounds**: [0,1625] → [0,1821] (0x196)
 │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/zh0`
-│   │     💬 **Desc**: "分享398，按钮"
-│   │     📐 **Bounds**: [0,1818] → [0,2019] (0x201)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/zzf`
+│   │     💬 **Desc**: "分享1289，按钮"
+│   │     📐 **Bounds**: [0,1821] → [0,2022] (0x201)
 │   ├─ **[android.widget.FrameLayout]** `enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/sqs`
-│   │     📐 **Bounds**: [0,2043] → [-27,2175] (-27x132)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s4s`
+│   │     📐 **Bounds**: [0,2046] → [-27,2178] (-27x132)
 │   │   ├─ **[android.widget.FrameLayout]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/sqw`
-│   │   │     💬 **Desc**: "音乐，@文文工艺品创作的原声，按钮"
-│   │   │     📐 **Bounds**: [0,2043] → [-27,2175] (-27x132)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s4v`
+│   │   │     💬 **Desc**: "音乐，@耀选百货创作的原声，按钮"
+│   │   │     📐 **Bounds**: [0,2046] → [-27,2178] (-27x132)
 │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/p+8`
-│   │     💬 **Desc**: "购物视频同款已售4.2w"
-│   │     📐 **Bounds**: [0,1785] → [-450,1931] (-450x146)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qmc`
+│   │     📐 **Bounds**: [0,1793] → [-451,1939] (-451x146)
+│   │   ├─ **[android.widget.ImageView]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/nwo`
+│   │   │     📐 **Bounds**: [0,1811] → [-966,1871] (-966x60)
+│   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/2jr`
+│   │   │     📝 **Text**: "购物"
+│   │   │     📐 **Bounds**: [0,1812] → [-864,1869] (-864x57)
+│   │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qmd`
+│   │   │     📐 **Bounds**: [0,1812] → [-649,1869] (-649x57)
+│   │   │   ├─ **[android.widget.TextView]** `enabled `
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/3z+`
+│   │   │   │     📝 **Text**: "|"
+│   │   │   │     📐 **Bounds**: [0,1816] → [-835,1864] (-835x48)
 │   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/3h1`
-│   │   │     📝 **Text**: "|"
-│   │   │     📐 **Bounds**: [0,1808] → [-835,1856] (-835x48)
-│   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/3h7`
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/30f`
 │   │   │     📝 **Text**: "·"
-│   │   │     📐 **Bounds**: [0,1809] → [-625,1857] (-625x48)
+│   │   │     📐 **Bounds**: [0,1817] → [-625,1865] (-625x48)
 │   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/3h5`
-│   │   │     📝 **Text**: "已售4.2w"
-│   │   │     📐 **Bounds**: [0,1809] → [-468,1857] (-468x48)
-│   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/3h4`
-│   │   │     📝 **Text**: "5天内发货 | 评价2132"
-│   │   │     📐 **Bounds**: [0,1869] → [-634,1913] (-634x44)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/30d`
+│   │   │     📝 **Text**: "已售3.8w"
+│   │   │     📐 **Bounds**: [0,1817] → [-469,1865] (-469x48)
+│   │   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qmh`
+│   │   │     📐 **Bounds**: [0,1877] → [-587,1921] (-587x44)
+│   │   │   ├─ **[android.widget.TextView]** `enabled `
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/30c`
+│   │   │   │     📝 **Text**: "预计明天送达 | 评价2231"
+│   │   │   │     📐 **Bounds**: [0,1877] → [-587,1921] (-587x44)
 │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/nt+`
-│   │     📐 **Bounds**: [0,1949] → [-346,2024] (-346x75)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/nua`
+│   │     📐 **Bounds**: [0,1957] → [-549,2032] (-549x75)
 │   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
 │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/title`
-│   │   │     📝 **Text**: "@文文工艺品"
-│   │   │     📐 **Bounds**: [0,1949] → [-740,2024] (-740x75)
+│   │   │     📝 **Text**: "@耀选百货"
+│   │   │     📐 **Bounds**: [0,1957] → [-791,2032] (-791x75)
 │   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/56-`
-│   │   │     📐 **Bounds**: [0,1960] → [-346,2013] (-346x53)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6mr`
+│   │   │     📐 **Bounds**: [0,1968] → [-549,2021] (-549x53)
 │   │   │   ├─ **[android.widget.TextView]** `enabled focusable `
-│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/4i3`
-│   │   │   │     📝 **Text**: " · 2025年12月29日"
-│   │   │   │     💬 **Desc**: "发布时间：2025年12月29日"
-│   │   │   │     📐 **Bounds**: [0,1960] → [-346,2013] (-346x53)
-│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/f_l`
-│   │     📐 **Bounds**: [0,2024] → [-279,2151] (-279x127)
-│   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/desc`
-│   │   │     📝 **Text**: "花开富贵檀香，燃起来就会开花，寓意美好#檀香 #会开花的檀香 #..."
-│   │   │     📐 **Bounds**: [0,2024] → [-279,2151] (-279x127)
-│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/fb2`
-│   │     📐 **Bounds**: [0,2090] → [-318,2157] (-318x67)
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/41w`
+│   │   │   │     📝 **Text**: " · 01月12日"
+│   │   │   │     💬 **Desc**: "发布时间：01月12日"
+│   │   │   │     📐 **Bounds**: [0,1968] → [-549,2021] (-549x53)
+│   ├─ **[android.widget.FrameLayout]** `enabled `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6p4`
+│   │     📐 **Bounds**: [0,2032] → [0,2172] (0x140)
+│   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/ga5`
+│   │   │     📐 **Bounds**: [0,2032] → [-279,2172] (-279x140)
+│   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/gb6`
+│   │   │     📐 **Bounds**: [0,2032] → [-279,2160] (-279x128)
+│   │   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/desc`
+│   │   │   │     📝 **Text**: "这香氛做到我的心坎里了，太香太好看了#居家好物 #倒置香氛 #香... 展开"
+│   │   │   │     📐 **Bounds**: [0,2032] → [-279,2160] (-279x128)
+│   │   ├─ **[android.widget.FrameLayout]** `enabled `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s+n`
+│   │   │     📐 **Bounds**: [0,2202] → [-1044,2172] (-1044x-30)
+│   ├─ **[android.widget.FrameLayout]** `enabled `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s+n`
+│   │     📐 **Bounds**: [0,2208] → [-1044,2178] (-1044x-30)
+│   ├─ **[android.view.View]** `clickable enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
+│   │     💬 **Desc**: "暂停视频，按钮"
+│   │     📐 **Bounds**: [0,0] → [0,2199] (0x2199)
+├─ **[android.widget.FrameLayout]** `enabled `
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ww_`
+│     📐 **Bounds**: [0,2199] → [0,2199] (0x0)
+│   ├─ **[android.widget.ImageView]** `clickable enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/user_avatar`
+│   │     💬 **Desc**: "可爱的广告君"
+│   │     📐 **Bounds**: [0,3233] → [-21,2199] (-21x-1034)
+│   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/gl-`
+│   │     💬 **Desc**: "未点赞，喜欢121，按钮"
+│   │     📐 **Bounds**: [0,3422] → [0,2199] (0x-1223)
+│   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/evc`
+│   │     💬 **Desc**: "评论10，按钮"
+│   │     📐 **Bounds**: [0,3623] → [0,2199] (0x-1424)
+│   │   ├─ **[android.widget.ImageView]** `enabled `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/epn`
+│   │   │     💬 **Desc**: "评论10，按钮"
+│   │   │     📐 **Bounds**: [0,3647] → [-36,2199] (-36x-1448)
 │   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/44r`
-│   │   │     📝 **Text**: "展开"
-│   │   │     📐 **Bounds**: [0,2090] → [-336,2151] (-336x61)
+│   │   │     📝 **Text**: "10"
+│   │   │     📐 **Bounds**: [0,3755] → [-71,2199] (-71x-1556)
+│   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/d-c`
+│   │     💬 **Desc**: "未选中，收藏61，按钮"
+│   │     📐 **Bounds**: [0,3824] → [0,2199] (0x-1625)
+│   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/zzf`
+│   │     💬 **Desc**: "分享14，按钮"
+│   │     📐 **Bounds**: [0,4020] → [0,2199] (0x-1821)
+│   ├─ **[android.widget.FrameLayout]** `enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s4s`
+│   │     📐 **Bounds**: [0,4245] → [-27,2199] (-27x-2046)
+│   │   ├─ **[android.widget.FrameLayout]** `enabled `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s4v`
+│   │   │     💬 **Desc**: "音乐，@可爱的广告君创作的原声，按钮"
+│   │   │     📐 **Bounds**: [0,4245] → [-27,2199] (-27x-2046)
+│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/nua`
+│   │     📐 **Bounds**: [0,4156] → [-440,2199] (-440x-1957)
+│   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/title`
+│   │   │     📝 **Text**: "@可爱的广告君"
+│   │   │     📐 **Bounds**: [0,4156] → [-689,2199] (-689x-1957)
+│   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6mr`
+│   │   │     📐 **Bounds**: [0,4167] → [-440,2199] (-440x-1968)
+│   │   │   ├─ **[android.widget.TextView]** `enabled focusable `
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/41w`
+│   │   │   │     📝 **Text**: " · 03月01日"
+│   │   │   │     💬 **Desc**: "发布时间：03月01日"
+│   │   │   │     📐 **Bounds**: [0,4167] → [-440,2199] (-440x-1968)
 │   ├─ **[android.widget.FrameLayout]** `enabled `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/szc`
-│   │     📐 **Bounds**: [0,2187] → [-1044,2157] (-1044x-30)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6p4`
+│   │     📐 **Bounds**: [0,4231] → [0,2199] (0x-2032)
+│   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/ga5`
+│   │   │     📐 **Bounds**: [0,4231] → [-279,2199] (-279x-2032)
+│   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/gb6`
+│   │   │     📐 **Bounds**: [0,4231] → [-279,2199] (-279x-2032)
+│   │   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/desc`
+│   │   │   │     📝 **Text**: "限量供应9.9元抢夏威夷果五斤，奶香浓郁薄皮好剥！ "
+│   │   │   │     📐 **Bounds**: [0,4231] → [-279,2199] (-279x-2032)
+│   │   ├─ **[android.widget.FrameLayout]** `enabled `
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s+n`
+│   │   │     📐 **Bounds**: [0,4401] → [-1044,2199] (-1044x-2202)
 │   ├─ **[android.widget.FrameLayout]** `enabled `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/szc`
-│   │     📐 **Bounds**: [0,2205] → [-1044,2175] (-1044x-30)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/s+n`
+│   │     📐 **Bounds**: [0,4407] → [-1044,2199] (-1044x-2208)
 │   ├─ **[android.view.View]** `clickable enabled focusable `
 │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
 │   │     💬 **Desc**: "播放视频，按钮"
-│   │     📐 **Bounds**: [0,0] → [0,2199] (0x2199)
-├─ **[android.widget.FrameLayout]** `enabled `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/whi`
-│     📐 **Bounds**: [0,2199] → [0,2199] (0x0)
-│   ├─ **[android.widget.Button]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/jvd`
-│   │     💬 **Desc**: "关注"
-│   │     📐 **Bounds**: [0,3212] → [0,2199] (0x-1013)
-│   ├─ **[android.widget.ImageView]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/user_avatar`
-│   │     💬 **Desc**: "叁叁🧀"
-│   │     📐 **Bounds**: [0,3110] → [-21,2199] (-21x-911)
-│   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/ghs`
-│   │     💬 **Desc**: "未点赞，喜欢15.7万，按钮"
-│   │     📐 **Bounds**: [0,3299] → [0,2199] (0x-1100)
-│   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/err`
-│   │     💬 **Desc**: "评论3.0万，按钮"
-│   │     📐 **Bounds**: [0,3500] → [0,2199] (0x-1301)
-│   │   ├─ **[android.widget.ImageView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/el6`
-│   │   │     💬 **Desc**: "评论3.0万，按钮"
-│   │   │     📐 **Bounds**: [0,3524] → [-36,2199] (-36x-1325)
-│   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     📝 **Text**: "3.0万"
-│   │   │     📐 **Bounds**: [0,3632] → [-47,2199] (-47x-1433)
-│   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/d-c`
-│   │     💬 **Desc**: "未选中，收藏9833，按钮"
-│   │     📐 **Bounds**: [0,3701] → [0,2199] (0x-1502)
-│   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/zh0`
-│   │     💬 **Desc**: "分享36.0万，按钮"
-│   │     📐 **Bounds**: [0,3897] → [0,2199] (0x-1698)
-│   ├─ **[android.widget.FrameLayout]** `enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/sqs`
-│   │     📐 **Bounds**: [0,4122] → [-27,2199] (-27x-1923)
-│   │   ├─ **[android.widget.FrameLayout]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/sqw`
-│   │   │     💬 **Desc**: "音乐，@薰衣草的夏天_创作的原声，按钮"
-│   │   │     📐 **Bounds**: [0,4122] → [-27,2199] (-27x-1923)
-│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/nt+`
-│   │     📐 **Bounds**: [0,3947] → [-591,2199] (-591x-1748)
-│   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/title`
-│   │   │     📝 **Text**: "@叁叁🧀"
-│   │   │     📐 **Bounds**: [0,3947] → [-829,2199] (-829x-1748)
-│   │   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/56-`
-│   │   │     📐 **Bounds**: [0,3958] → [-591,2199] (-591x-1759)
-│   │   │   ├─ **[android.widget.TextView]** `enabled focusable `
-│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/4i3`
-│   │   │   │     📝 **Text**: " · 12小时前"
-│   │   │   │     💬 **Desc**: "发布时间：12小时前"
-│   │   │   │     📐 **Bounds**: [0,3958] → [-591,2199] (-591x-1759)
-│   ├─ **[android.widget.FrameLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/f_l`
-│   │     📐 **Bounds**: [0,4022] → [-279,2199] (-279x-1823)
-│   │   ├─ **[android.widget.TextView]** `clickable enabled focusable `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/desc`
-│   │   │     📝 **Text**: "大人饭还没整明白又整上孩子的了#捕捉身边手艺人"
-│   │   │     📐 **Bounds**: [0,4022] → [-279,2199] (-279x-1823)
-│   ├─ **[android.widget.FrameLayout]** `enabled `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/szc`
-│   │     📐 **Bounds**: [0,4185] → [-1044,2199] (-1044x-1986)
-│   ├─ **[android.widget.LinearLayout]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qhs`
-│   │     📐 **Bounds**: [0,4191] → [-849,2199] (-849x-1992)
-│   │   ├─ **[android.widget.ImageView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qhn`
-│   │   │     💬 **Desc**: "汽水音乐按钮"
-│   │   │     📐 **Bounds**: [0,4191] → [-849,2199] (-849x-1992)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/su+`
-│   │     💬 **Desc**: "音乐，捣蛋的一天专用配乐 - 点灯生活，按钮"
-│   │     📐 **Bounds**: [0,4193] → [-411,2199] (-411x-1994)
-│   ├─ **[android.widget.FrameLayout]** `enabled `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/szc`
-│   │     📐 **Bounds**: [0,4284] → [-1044,2199] (-1044x-2085)
-│   ├─ **[android.view.ViewGroup]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/container`
-│   │     📐 **Bounds**: [0,4278] → [0,2199] (0x-2079)
-│   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/title`
-│   │   │     📝 **Text**: "相关搜索"
-│   │   │     📐 **Bounds**: [0,4312] → [-816,2199] (-816x-2113)
-│   │   ├─ **[android.widget.TextView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/content`
-│   │   │     📝 **Text**: "宝宝第一次吃香蕉表情绝了"
-│   │   │     📐 **Bounds**: [0,4312] → [-309,2199] (-309x-2113)
-│   │   ├─ **[android.widget.ImageView]** `enabled `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/h5s`
-│   │   │     💬 **Desc**: "点击查看更多，按钮"
-│   │   │     📐 **Bounds**: [0,4308] → [-36,2199] (-36x-2109)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
 │   │     📐 **Bounds**: [0,2199] → [0,2199] (0x0)
 ├─ **[android.widget.EditText]** `clickable enabled `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ekb`
-│     📝 **Text**: "发条评论，说说你的感受"
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/eny`
+│     📝 **Text**: "爱评论的人，运气不会差"
 │     📐 **Bounds**: [0,2238] → [-414,2310] (-414x72)
 ├─ **[android.widget.LinearLayout]** `enabled `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ej6`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/enq`
 │     📐 **Bounds**: [0,2238] → [-36,2310] (-36x72)
 │   ├─ **[android.widget.ImageView]** `clickable enabled focusable `
 │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/iv_image`
 │   │     💬 **Desc**: "插入图片"
 │   │     📐 **Bounds**: [0,2238] → [-288,2310] (-288x72)
 │   ├─ **[android.widget.ImageView]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/a-5`
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/bak`
 │   │     💬 **Desc**: "at"
 │   │     📐 **Bounds**: [0,2238] → [-162,2310] (-162x72)
 │   ├─ **[android.widget.ImageView]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/nrq`
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/n1v`
 │   │     💬 **Desc**: "表情"
 │   │     📐 **Bounds**: [0,2238] → [-36,2310] (-36x72)
 ├─ **[android.widget.ImageView]** `clickable enabled focusable `
@@ -418,182 +439,143 @@
 │     💬 **Desc**: "搜索"
 │     📐 **Bounds**: [0,138] → [-20,234] (-20x96)
 ├─ **[android.widget.SeekBar]** `enabled focusable `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/58h`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/6n0`
 │     💬 **Desc**: "进度条"
-│     📐 **Bounds**: [0,2169] → [0,2229] (0x60)
+│     📐 **Bounds**: [0,2175] → [0,2229] (0x54)
 ├─ **[android.widget.FrameLayout]** `enabled visible `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/t4l`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ue2`
 │     📐 **Bounds**: [0,0] → [1080,648] (1080x648)
 ├─ **[android.widget.FrameLayout]** `enabled visible `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/t4d`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ueu`
 │     📐 **Bounds**: [48,288] → [360,600] (312x312)
 │   ├─ **[android.widget.ImageView]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/k9m`
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/ldg`
 │   │     💬 **Desc**: "用户头像"
 │   │     📐 **Bounds**: [48,288] → [360,600] (312x312)
 ├─ **[android.widget.TextView]** `clickable enabled visible focusable `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/s+x`
-│     📝 **Text**: "文文工艺品"
-│     💬 **Desc**: "文文工艺品，复制名字和修改备注"
-│     📐 **Bounds**: [408,376] → [738,464] (330x88)
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/tn1`
+│     📝 **Text**: "耀选百货"
+│     💬 **Desc**: "耀选百货，复制名字和修改备注"
+│     📐 **Bounds**: [408,376] → [672,464] (264x88)
 ├─ **[android.widget.TextView]** `clickable enabled visible focusable `
 │     📝 **Text**: " 店铺账号"
 │     💬 **Desc**: "抖音组织认证：店铺账号"
 │     📐 **Bounds**: [408,464] → [1032,512] (624x48)
 ├─ **[android.widget.LinearLayout]** `enabled visible `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/t4q`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ue7`
 │     📐 **Bounds**: [0,648] → [1080,804] (1080x156)
 │   ├─ **[com.bytedance.highperformanceview.layout.MeasureOnceRelativeLayout2]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/5xh`
-│   │     📐 **Bounds**: [48,696] → [295,768] (247x72)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6cx`
+│   │     📐 **Bounds**: [48,696] → [273,768] (225x72)
 │   │   ├─ **[android.widget.TextView]** `enabled visible `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/5xi`
-│   │   │     📝 **Text**: "13.5万"
-│   │   │     📐 **Bounds**: [48,696] → [202,768] (154x72)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6cy`
+│   │   │     📝 **Text**: "3.4万"
+│   │   │     📐 **Bounds**: [48,696] → [180,768] (132x72)
 │   │   ├─ **[android.widget.TextView]** `enabled visible `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/5xj`
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6cz`
 │   │   │     📝 **Text**: "获赞"
-│   │   │     📐 **Bounds**: [211,703] → [295,760] (84x57)
+│   │   │     📐 **Bounds**: [189,703] → [273,760] (84x57)
 │   ├─ **[com.bytedance.highperformanceview.layout.MeasureOnceRelativeLayout2]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/5xk`
-│   │     📐 **Bounds**: [343,703] → [467,760] (124x57)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6c0`
+│   │     📐 **Bounds**: [321,703] → [447,760] (126x57)
 │   │   ├─ **[android.widget.TextView]** `enabled visible `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/5xl`
-│   │   │     📝 **Text**: "9"
-│   │   │     📐 **Bounds**: [343,704] → [374,759] (31x55)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6c1`
+│   │   │     📝 **Text**: "0"
+│   │   │     📐 **Bounds**: [321,704] → [354,759] (33x55)
 │   │   ├─ **[android.widget.TextView]** `enabled visible `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/5xn`
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6c3`
 │   │   │     📝 **Text**: "关注"
-│   │   │     📐 **Bounds**: [383,703] → [467,760] (84x57)
+│   │   │     📐 **Bounds**: [363,703] → [447,760] (84x57)
 │   ├─ **[com.bytedance.highperformanceview.layout.MeasureOnceRelativeLayout2]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/5xo`
-│   │     📐 **Bounds**: [515,696] → [739,768] (224x72)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6c4`
+│   │     📐 **Bounds**: [495,703] → [708,760] (213x57)
 │   │   ├─ **[android.widget.TextView]** `enabled visible `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/5xp`
-│   │   │     📝 **Text**: "6.3万"
-│   │   │     📐 **Bounds**: [515,696] → [646,768] (131x72)
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6c5`
+│   │   │     📝 **Text**: "4272"
+│   │   │     📐 **Bounds**: [495,704] → [615,759] (120x55)
 │   │   ├─ **[android.widget.TextView]** `enabled visible `
-│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/5xr`
+│   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/6c7`
 │   │   │     📝 **Text**: "粉丝"
-│   │   │     📐 **Bounds**: [655,703] → [739,760] (84x57)
+│   │   │     📐 **Bounds**: [624,703] → [708,760] (84x57)
 ├─ **[android.widget.LinearLayout]** `enabled visible `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/t4m`
-│     📐 **Bounds**: [0,804] → [1080,1001] (1080x197)
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ue3`
+│     📐 **Bounds**: [0,804] → [1080,891] (1080x87)
 │   ├─ **[android.widget.TextView]** `enabled visible focusable `
-│   │     📝 **Text**: "专注黄铜工艺品
-黄铜产品实力源头厂家
-位于浙江 接批量订单及代发"
-│   │     📐 **Bounds**: [45,804] → [1035,971] (990x167)
+│   │     📝 **Text**: "分享好货、干货、品质货"
+│   │     📐 **Bounds**: [45,804] → [1035,861] (990x57)
 ├─ **[android.widget.LinearLayout]** `enabled visible `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/t3+`
-│     📐 **Bounds**: [0,1001] → [1080,1349] (1080x348)
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ueq`
+│     📐 **Bounds**: [0,891] → [1080,1239] (1080x348)
 │   ├─ **[android.widget.HorizontalScrollView]** `enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/t39`
-│   │     📐 **Bounds**: [0,1007] → [1080,1175] (1080x168)
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/uem`
+│   │     📐 **Bounds**: [0,897] → [1080,1065] (1080x168)
 │   │   ├─ **[android.widget.FrameLayout]** `clickable enabled visible focusable `
-│   │   │     📐 **Bounds**: [48,1031] → [362,1151] (314x120)
+│   │   │     📐 **Bounds**: [48,921] → [360,1041] (312x120)
 │   │   │   ├─ **[android.widget.TextView]** `enabled visible `
-│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/v2i`
+│   │   │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/wdt`
 │   │   │   │     📝 **Text**: "进入店铺"
-│   │   │   │     📐 **Bounds**: [192,1034] → [360,1091] (168x57)
+│   │   │   │     📐 **Bounds**: [192,924] → [360,981] (168x57)
 │   │   │   ├─ **[android.widget.TextView]** `enabled visible `
-│   │   │   │     📝 **Text**: "324件好物"
-│   │   │   │     📐 **Bounds**: [192,1100] → [362,1148] (170x48)
+│   │   │   │     📝 **Text**: "17件好物"
+│   │   │   │     📐 **Bounds**: [192,990] → [337,1038] (145x48)
 │   ├─ **[android.widget.TextView]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/v17`
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/wdf`
 │   │     📝 **Text**: "关注"
-│   │     📐 **Bounds**: [48,1193] → [522,1337] (474x144)
+│   │     📐 **Bounds**: [48,1083] → [522,1227] (474x144)
 │   ├─ **[android.widget.TextView]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/y61`
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/zkc`
 │   │     📝 **Text**: "发私信"
 │   │     💬 **Desc**: "私信"
-│   │     📐 **Bounds**: [540,1193] → [1014,1337] (474x144)
+│   │     📐 **Bounds**: [540,1083] → [1014,1227] (474x144)
 ├─ **[android.widget.HorizontalScrollView]** `enabled visible focusable `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/wlv`
-│     📐 **Bounds**: [0,1367] → [1080,1487] (1080x120)
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/wlu`
+│     📐 **Bounds**: [0,1257] → [1080,1377] (1080x120)
 │   ├─ **[androidx.appcompat.app.ActionBar$Tab]** `clickable enabled visible focusable `
-│   │     💬 **Desc**: "作品 633,按钮,当前作品按最新发布排序,"
-│   │     📐 **Bounds**: [0,1367] → [540,1487] (540x120)
+│   │     💬 **Desc**: "作品 1,按钮,当前作品按最新发布排序,"
+│   │     📐 **Bounds**: [0,1257] → [540,1377] (540x120)
 │   │   ├─ **[android.widget.TextView]** `enabled visible `
 │   │   │     🆔 **ID**: `android:id/text1`
-│   │   │     📝 **Text**: "作品 633"
-│   │   │     💬 **Desc**: "作品 633"
-│   │   │     📐 **Bounds**: [184,1397] → [357,1458] (173x61)
+│   │   │     📝 **Text**: "作品 1"
+│   │   │     💬 **Desc**: "作品 1"
+│   │   │     📐 **Bounds**: [212,1287] → [329,1348] (117x61)
 │   ├─ **[androidx.appcompat.app.ActionBar$Tab]** `clickable enabled visible focusable `
 │   │     💬 **Desc**: "商品,按钮,,"
-│   │     📐 **Bounds**: [540,1367] → [1080,1487] (540x120)
+│   │     📐 **Bounds**: [540,1257] → [1080,1377] (540x120)
 │   │   ├─ **[android.widget.TextView]** `enabled visible `
 │   │   │     🆔 **ID**: `android:id/text1`
 │   │   │     📝 **Text**: "商品"
 │   │   │     💬 **Desc**: "商品"
-│   │   │     📐 **Bounds**: [765,1397] → [855,1458] (90x61)
+│   │   │     📐 **Bounds**: [765,1287] → [855,1348] (90x61)
 ├─ **[androidx.recyclerview.widget.RecyclerView]** `enabled visible focusable `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/ix_`
-│     📐 **Bounds**: [0,1487] → [1080,2346] (1080x859)
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/i3_`
+│     📐 **Bounds**: [0,1377] → [1080,2037] (1080x660)
 │   ├─ **[android.view.View]** `clickable enabled visible focusable `
 │   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [0,1490] → [358,1967] (358x477)
-│   ├─ **[android.view.View]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [361,1490] → [719,1967] (358x477)
-│   ├─ **[android.view.View]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [722,1490] → [1080,1967] (358x477)
-│   ├─ **[android.view.View]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [0,1970] → [358,2346] (358x376)
-│   ├─ **[android.view.View]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [361,1970] → [719,2346] (358x376)
-│   ├─ **[android.view.View]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [722,1970] → [1080,2346] (358x376)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [0,2450] → [358,2346] (358x-104)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [361,2450] → [719,2346] (358x-104)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [722,2450] → [1080,2346] (358x-104)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [0,2930] → [358,2346] (358x-584)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [361,2930] → [719,2346] (358x-584)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [722,2930] → [1080,2346] (358x-584)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [0,3410] → [358,2346] (358x-1064)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [361,3410] → [719,2346] (358x-1064)
-│   ├─ **[android.view.View]** `clickable enabled focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/qde`
-│   │     📐 **Bounds**: [722,3410] → [1080,2346] (358x-1064)
+│   │     📐 **Bounds**: [0,1380] → [358,1857] (358x477)
+│   ├─ **[android.widget.FrameLayout]** `enabled visible `
+│   │     📐 **Bounds**: [0,1857] → [1080,2037] (1080x180)
+│   │   ├─ **[android.widget.TextView]** `enabled visible `
+│   │   │     📝 **Text**: "暂时没有更多了"
+│   │   │     📐 **Bounds**: [0,1857] → [1080,2037] (1080x180)
 ├─ **[android.widget.FrameLayout]** `enabled visible `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/v28`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/wee`
 │     📐 **Bounds**: [0,0] → [1080,607] (1080x607)
 │   ├─ **[android.view.ViewGroup]** `clickable enabled visible focusable `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/v29`
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/wef`
 │   │     💬 **Desc**: "背景图片"
 │   │     📐 **Bounds**: [0,0] → [1080,607] (1080x607)
 ├─ **[android.view.View]** ``
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/166`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/2kz`
 │     💬 **Desc**: "返回顶部"
 │     📐 **Bounds**: [0,114] → [1080,270] (1080x156)
 ├─ **[android.view.ViewGroup]** `clickable enabled visible focusable `
 │     💬 **Desc**: "返回"
 │     📐 **Bounds**: [48,144] → [144,240] (96x96)
 ├─ **[android.widget.RelativeLayout]** `clickable enabled focusable `
-│     🆔 **ID**: `com.ss.android.ugc.aweme:id/17v`
+│     🆔 **ID**: `com.ss.android.ugc.aweme:id/2lq`
 │     📐 **Bounds**: [144,144] → [414,240] (270x96)
 │   ├─ **[android.widget.TextView]** `enabled `
-│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/ju_`
+│   │     🆔 **ID**: `com.ss.android.ugc.aweme:id/j15`
 │   │     📝 **Text**: "关注"
 │   │     📐 **Bounds**: [300,154] → [384,229] (84x75)
 ├─ **[android.widget.FrameLayout]** `clickable enabled visible focusable `

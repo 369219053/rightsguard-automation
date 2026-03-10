@@ -48,6 +48,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private String infringementUrl = ""; // 侵权链接
     private String videoKeywords = ""; // 🆕 视频文案关键词
     private int videoDurationSeconds = 60; // 🆕 视频时长(秒),默认60秒
+    // 📄 PDF生成相关
+    private java.util.List<android.net.Uri> sessionScreenshotUris = new java.util.ArrayList<>();
+    private String originalName = ""; // 原创名称
+    private String infringerName = ""; // 侵权人账号名称
 
     // 🧪 测试模式标志
     private boolean isTestMode = false; // 是否为测试模式(跳过权利卫士+录屏，直接打开抖音→历史→作者主页)
@@ -193,7 +197,19 @@ public class AutomationAccessibilityService extends AccessibilityService {
      */
     public void setRemark(String remark) {
         this.remark = remark != null ? remark : "";
+        // 解析原创名称和侵权人账号名称（格式: 原创名称-抖音:侵权人账号名称）
+        int douyinIndex = this.remark.indexOf("-抖音:");
+        if (douyinIndex > 0) {
+            this.originalName = this.remark.substring(0, douyinIndex).trim();
+            this.infringerName = this.remark.substring(douyinIndex + 4).trim();
+        } else {
+            this.originalName = this.remark;
+            this.infringerName = "";
+        }
+        // 清空本次取证截图URI列表
+        this.sessionScreenshotUris.clear();
         logD("📝 设置备注: " + this.remark);
+        logD("  原创名称: " + this.originalName + " | 侵权人: " + this.infringerName);
     }
 
     /**
@@ -1537,6 +1553,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                         logD("✅ 截图已保存到相册: Pictures/权利卫士取证/" + fileName);
                         logD("📂 可以在相册中查看");
+                        // 记录URI，供PDF生成使用
+                        sessionScreenshotUris.add(imageUri);
                     }
                 } else {
                     logE("❌ 创建MediaStore URI失败");
@@ -1573,6 +1591,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                 logD("✅ 截图已保存: " + file.getAbsolutePath());
                 logD("📂 可以在相册中查看");
+                // 记录URI，供PDF生成使用
+                sessionScreenshotUris.add(android.net.Uri.fromFile(file));
             }
 
         } catch (Exception e) {
@@ -2591,23 +2611,6 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
             // 等待滑动完成和页面稳定
             Thread.sleep(1000); // 等待1秒即可
-
-            // 🆕 先截图保存"设置"页面(显示"资质证照"按钮)
-            logD("📸 准备截屏保存抖音设置页面...");
-            takeScreenshotWithPrefix("抖音设置", new ScreenshotCallback() {
-                @Override
-                public void onSuccess() {
-                    logD("✅ 抖音设置页面截屏成功");
-                }
-
-                @Override
-                public void onFailure() {
-                    logE("❌ 抖音设置页面截屏失败");
-                }
-            });
-
-            // 等待截屏完成
-            Thread.sleep(1000);
 
             android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
             if (rootNode == null) {
@@ -4510,135 +4513,226 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                     // ── 截图取证 ──
                     logD("📸 截取店铺账号详情页取证截图...");
+                    final boolean[] shopDone = {false};
                     takeScreenshotWithPrefix("店铺账号取证", new ScreenshotCallback() {
-                        @Override public void onSuccess() { logD("✅ 店铺账号详情页截图保存成功"); }
-                        @Override public void onFailure() { logE("❌ 店铺账号详情页截图保存失败"); }
-                    });
-                    Thread.sleep(800);
-
-                    // ── 点击资质证照图片 ──
-                    // Dump确认：资质证照图片(clickable WebView节点) Bounds=[339,1071]→[633,1278]，中心=(486,1174)
-                    logD("🖼️ 点击资质证照图片坐标=(486,1174)...");
-                    android.graphics.Path imgTapPath = new android.graphics.Path();
-                    imgTapPath.moveTo(486, 1174);
-                    imgTapPath.lineTo(486, 1174);
-                    android.accessibilityservice.GestureDescription imgTapGesture =
-                        new android.accessibilityservice.GestureDescription.Builder()
-                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
-                                imgTapPath, 0, 50))
-                            .build();
-                    dispatchGesture(imgTapGesture, null, null);
-                    logD("✅ 已点击资质证照图片");
-
-                    // ── 智能等待图片查看器打开（检测"认证说明"消失）──
-                    // 策略：店铺账号页有"认证说明"文字(16个文本块)，进入图片查看器后只剩1个(关闭按钮)
-                    // 检测"认证说明"消失即确认已切换到图片查看器，再等2秒让图片内容渲染完成
-                    logD("⏳ 等待图片查看器打开（检测页面切换）...");
-                    final String[] shopPageFlag = {"认证说明"};
-                    boolean imageViewerOpened = false;
-                    for (int ivSec = 0; ivSec < 8 && !imageViewerOpened; ivSec++) {
-                        Thread.sleep(1000);
-                        final boolean[] ivDone = {false};
-                        final boolean[] stillOnShopPage = {true}; // true=还在店铺页，false=已进入图片查看器
-                        takeScreenshot(new ScreenshotCallback() {
-                            @Override
-                            public void onSuccess(android.graphics.Bitmap bitmap) {
-                                if (bitmap == null) { ivDone[0] = true; return; }
-                                OcrHelper ivOcr = new OcrHelper(message -> {});
-                                ivOcr.findAnyTextPosition(bitmap, shopPageFlag, new OcrHelper.OcrAnyCallback() {
-                                    @Override
-                                    public void onSuccess(String keyword) {
-                                        // 还能检测到"认证说明"，说明还在店铺账号页
-                                        stillOnShopPage[0] = true;
-                                        ivDone[0] = true;
-                                        ivOcr.release();
-                                        bitmap.recycle();
-                                    }
-                                    @Override
-                                    public void onFailure(String error) {
-                                        // 检测不到"认证说明"，说明已进入图片查看器
-                                        stillOnShopPage[0] = false;
-                                        ivDone[0] = true;
-                                        ivOcr.release();
-                                        bitmap.recycle();
-                                    }
-                                });
-                            }
-                            @Override
-                            public void onFailure() { ivDone[0] = true; }
-                        });
-                        // 等待OCR回调完成（最多2秒）
-                        long ivStart = System.currentTimeMillis();
-                        while (!ivDone[0] && System.currentTimeMillis() - ivStart < 2000) {
-                            Thread.sleep(100);
+                        @Override
+                        public void onSuccess(android.graphics.Bitmap bitmap) {
+                            logD("✅ 店铺账号详情页截图保存成功");
+                            if (bitmap != null) bitmap.recycle();
+                            shopDone[0] = true;
                         }
-                        if (!stillOnShopPage[0]) {
-                            logD("✅ 图片查看器已打开（第" + (ivSec + 1) + "秒检测到页面切换），等待2秒让图片渲染...");
-                            imageViewerOpened = true;
-                            Thread.sleep(2000); // 图片内容渲染缓冲
-                        } else {
-                            logD("⌛ 第" + (ivSec + 1) + "秒：还在店铺账号页，等待图片查看器打开...");
+                        @Override
+                        public void onFailure() {
+                            logE("❌ 店铺账号详情页截图保存失败");
+                            shopDone[0] = true;
                         }
-                    }
-                    if (!imageViewerOpened) {
-                        logD("⚠️ 等待8秒后页面未切换，强制执行（可能已打开但OCR未能判断）");
-                    }
-
-                    // ── 截图1：图片原始状态 ──
-                    logD("📸 截取资质证照图片（原始状态）...");
-                    takeScreenshotWithPrefix("资质证照原图", new ScreenshotCallback() {
-                        @Override public void onSuccess() { logD("✅ 资质证照原图截图保存成功"); }
-                        @Override public void onFailure() { logE("❌ 资质证照原图截图保存失败"); }
                     });
-                    Thread.sleep(800);
-
-                    // ── 双指捏合放大（Pinch-Out Zoom In）──
-                    // 屏幕中心=(540,1200)，两指从内侧(±200px)向外侧(±400px)展开，持续600ms
-                    logD("🔍 执行双指放大手势...");
-                    android.graphics.Path zoomFinger1 = new android.graphics.Path();
-                    zoomFinger1.moveTo(340, 1200);  // 左指起点（中心左200px）
-                    zoomFinger1.lineTo(100, 1200);  // 左指终点（向左展开）
-                    android.graphics.Path zoomFinger2 = new android.graphics.Path();
-                    zoomFinger2.moveTo(740, 1200);  // 右指起点（中心右200px）
-                    zoomFinger2.lineTo(980, 1200);  // 右指终点（向右展开）
-                    android.accessibilityservice.GestureDescription zoomGesture =
-                        new android.accessibilityservice.GestureDescription.Builder()
-                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
-                                zoomFinger1, 0, 600))
-                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
-                                zoomFinger2, 0, 600))
-                            .build();
-                    dispatchGesture(zoomGesture, null, null);
-                    logD("✅ 双指放大手势执行完成");
-                    Thread.sleep(1000); // 等待缩放动画完成
-
-                    // ── 单指向右拖动（向右平移，显示图片左侧内容）──
-                    // 从屏幕左侧(250,1200)拖到右侧(800,1200)，持续500ms
-                    logD("👆 执行向右拖动手势，显示证照详细信息...");
-                    android.graphics.Path dragPath = new android.graphics.Path();
-                    dragPath.moveTo(250, 1200);  // 拖动起点
-                    dragPath.lineTo(800, 1200);  // 拖动终点（向右）
-                    android.accessibilityservice.GestureDescription dragGesture =
-                        new android.accessibilityservice.GestureDescription.Builder()
-                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
-                                dragPath, 0, 500))
-                            .build();
-                    dispatchGesture(dragGesture, null, null);
-                    logD("✅ 向右拖动手势执行完成");
-                    Thread.sleep(800); // 等待拖动稳定
-
-                    // ── 截图2：放大并平移后，完整展示证照信息 ──
-                    logD("📸 截取资质证照详情（放大后）...");
-                    takeScreenshotWithPrefix("资质证照详情", new ScreenshotCallback() {
-                        @Override public void onSuccess() { logD("✅ 资质证照详情截图保存成功"); }
-                        @Override public void onFailure() { logE("❌ 资质证照详情截图保存失败"); }
-                    });
-                    Thread.sleep(500);
+                    // 等待截图+裁剪完成（最多4秒）
+                    long shopStart = System.currentTimeMillis();
+                    while (!shopDone[0] && System.currentTimeMillis() - shopStart < 4000) {
+                        Thread.sleep(100);
+                    }
+                    Thread.sleep(300);
 
                 } else {
                     logD("ℹ️ 作者主页无【店铺账号】标签，跳过");
                 }
                 profileRoot.recycle();
+
+                // ══════════════════════════════════════════════════════════
+                // 步骤：智能返回作者主页 → 点击【更多】→ 截图
+                //       → 智能返回视频播放页 → 点击【分享】按钮
+                // ══════════════════════════════════════════════════════════
+
+                // ① 智能返回作者主页
+                // 通过检测"获赞"+"粉丝"文字（最稳定标志）判断是否到达作者主页
+                logD("🔙 开始智能返回作者主页（最多返回8次）...");
+                boolean onAuthorPage = false;
+                for (int bi = 0; bi < 8; bi++) {
+                    if (isOnAuthorProfilePage()) {
+                        onAuthorPage = true;
+                        logD("✅ 第" + bi + "次检测：已在作者主页，停止返回");
+                        break;
+                    }
+                    logD("🔙 第" + (bi + 1) + "次返回...");
+                    performGlobalAction(GLOBAL_ACTION_BACK);
+                    Thread.sleep(1000);
+                }
+                if (!onAuthorPage) {
+                    // 最后再检测一次
+                    onAuthorPage = isOnAuthorProfilePage();
+                    if (onAuthorPage) {
+                        logD("✅ 最终检测：已在作者主页");
+                    } else {
+                        logE("⚠️ 返回8次后仍未检测到作者主页，继续尝试点击【更多】");
+                    }
+                }
+                Thread.sleep(500); // 额外等待页面稳定
+
+                // ② 点击右上角【更多】按钮
+                // 优先通过 desc="更多" 无障碍API点击，兜底坐标 (984,192)
+                logD("🔘 尝试点击右上角【更多】按钮...");
+                {
+                    boolean moreClicked = false;
+                    android.view.accessibility.AccessibilityNodeInfo rootForMore = getRootInActiveWindow();
+                    if (rootForMore != null) {
+                        android.view.accessibility.AccessibilityNodeInfo moreNode = findNodeByExactDesc(rootForMore, "更多");
+                        if (moreNode != null) {
+                            android.graphics.Rect moreRect = new android.graphics.Rect();
+                            moreNode.getBoundsInScreen(moreRect);
+                            if (moreRect.top >= 100 && moreRect.top < 300 && moreRect.width() > 0) {
+                                // 找可点击的父节点
+                                android.view.accessibility.AccessibilityNodeInfo clickable = moreNode;
+                                while (clickable != null && !clickable.isClickable()) {
+                                    android.view.accessibility.AccessibilityNodeInfo parent = clickable.getParent();
+                                    if (clickable != moreNode) clickable.recycle();
+                                    clickable = parent;
+                                }
+                                if (clickable != null && clickable.isClickable()) {
+                                    moreClicked = clickable.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                                    logD("⚡ 无障碍API点击【更多】: " + moreClicked);
+                                    if (clickable != moreNode) clickable.recycle();
+                                }
+                            }
+                            moreNode.recycle();
+                        }
+                        rootForMore.recycle();
+                    }
+                    if (!moreClicked) {
+                        // 兜底：坐标点击 (984, 192)
+                        android.graphics.Path morePath = new android.graphics.Path();
+                        morePath.moveTo(984, 192);
+                        android.accessibilityservice.GestureDescription moreTap =
+                            new android.accessibilityservice.GestureDescription.Builder()
+                                .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                                    morePath, 0, 50))
+                                .build();
+                        dispatchGesture(moreTap, null, null);
+                        logD("⚡ 坐标兜底点击【更多】(984,192)");
+                    }
+                }
+
+                // 等待【更多】弹出菜单出现
+                Thread.sleep(800);
+
+                // ③ 截图：更多菜单取证
+                logD("📸 截取【更多】菜单取证截图...");
+                final boolean[] moreDone = {false};
+                takeScreenshotWithPrefix("作者主页_更多菜单", new ScreenshotCallback() {
+                    @Override
+                    public void onSuccess(android.graphics.Bitmap bitmap) {
+                        logD("✅ 【更多】菜单截图保存成功");
+                        if (bitmap != null) bitmap.recycle();
+                        moreDone[0] = true;
+                    }
+                    @Override
+                    public void onFailure() {
+                        logE("❌ 【更多】菜单截图保存失败");
+                        moreDone[0] = true;
+                    }
+                });
+                // 等待截图完成（最多4秒）
+                long moreStart = System.currentTimeMillis();
+                while (!moreDone[0] && System.currentTimeMillis() - moreStart < 4000) {
+                    Thread.sleep(100);
+                }
+                Thread.sleep(300);
+
+                // ④ 智能返回视频播放页
+                // 先按1次返回关闭【更多】菜单，再循环检测直到进入视频播放页
+                logD("🔙 按返回键关闭【更多】菜单...");
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(800);
+                logD("🔙 开始智能返回视频播放页（最多返回8次）...");
+                boolean onVideoPage = false;
+                for (int vi = 0; vi < 8; vi++) {
+                    if (isOnVideoPlaybackPage()) {
+                        onVideoPage = true;
+                        logD("✅ 第" + vi + "次检测：已在视频播放页，停止返回");
+                        break;
+                    }
+                    logD("🔙 第" + (vi + 1) + "次返回...");
+                    performGlobalAction(GLOBAL_ACTION_BACK);
+                    Thread.sleep(1000);
+                }
+                if (!onVideoPage) {
+                    onVideoPage = isOnVideoPlaybackPage();
+                    if (onVideoPage) {
+                        logD("✅ 最终检测：已在视频播放页");
+                    } else {
+                        logE("⚠️ 返回8次后仍未检测到视频播放页，继续尝试点击【分享】");
+                    }
+                }
+                Thread.sleep(500); // 额外等待页面稳定
+
+                // ⑤ 点击视频页【分享】按钮
+                // 优先通过 zzf ID 无障碍API点击，其次 desc含"分享"，兜底坐标 (1044,1700)
+                logD("📤 尝试点击视频页【分享】按钮...");
+                {
+                    boolean shareClicked = false;
+                    android.view.accessibility.AccessibilityNodeInfo rootForShare = getRootInActiveWindow();
+                    if (rootForShare != null) {
+                        // 方案A: zzf ID（dump确认的新ID）
+                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> zzfNodes =
+                            rootForShare.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/zzf");
+                        if (zzfNodes != null) {
+                            for (android.view.accessibility.AccessibilityNodeInfo n : zzfNodes) {
+                                android.graphics.Rect r = new android.graphics.Rect();
+                                n.getBoundsInScreen(r);
+                                if (r.width() > 0 && r.height() > 0) {
+                                    shareClicked = n.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                                    logD("⚡ 无障碍API点击【分享】zzf: " + shareClicked + " bounds=" + r);
+                                }
+                                n.recycle();
+                                if (shareClicked) break;
+                            }
+                        }
+                        // 方案B: desc含"分享"且位于右侧
+                        if (!shareClicked) {
+                            android.view.accessibility.AccessibilityNodeInfo shareDescNode = findNodeByDescContains(rootForShare, "分享");
+                            if (shareDescNode != null) {
+                                android.graphics.Rect r = new android.graphics.Rect();
+                                shareDescNode.getBoundsInScreen(r);
+                                if (r.width() > 0 && r.height() > 0 && r.right > 800) {
+                                    shareClicked = shareDescNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                                    logD("⚡ 无障碍API点击【分享】desc: " + shareClicked + " bounds=" + r);
+                                }
+                                shareDescNode.recycle();
+                            }
+                        }
+                        rootForShare.recycle();
+                    }
+                    // 方案C: 坐标兜底 (1044, 1700)
+                    if (!shareClicked) {
+                        android.graphics.Path sharePath = new android.graphics.Path();
+                        sharePath.moveTo(1044, 1700);
+                        android.accessibilityservice.GestureDescription shareGesture =
+                            new android.accessibilityservice.GestureDescription.Builder()
+                                .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                                    sharePath, 0, 50))
+                                .build();
+                        dispatchGesture(shareGesture, null, null);
+                        logD("⚡ 坐标兜底点击【分享】(1044,1700)");
+                    }
+                }
+                logD("🎉 分享按钮已点击，等待分享弹窗出现...");
+
+                // ⑥ 等待分享弹窗出现，向右滑动底部操作行，点击【分享链接】
+                Thread.sleep(1500);
+                clickShareLinkInPopup();
+
+                // ⑦ 等待"链接已复制"弹窗出现，点击【QQ】
+                Thread.sleep(1500);
+                clickQQButton();
+
+                // ⑧ 等待QQ打开，点击【我的电脑】
+                Thread.sleep(2000);
+                clickMyComputerInQQ();
+
+                // ⑨ 等待聊天界面打开，粘贴链接并点击【发送】
+                Thread.sleep(2000);
+                pasteAndSendInQQ();
+
             }
 
         } catch (Exception e) {
@@ -4666,6 +4760,159 @@ public class AutomationAccessibilityService extends AccessibilityService {
             if (child != null) child.recycle();
         }
         return null;
+    }
+
+    /**
+     * 在节点树中递归查找 contentDescription 精确匹配指定字符串的节点
+     */
+    private android.view.accessibility.AccessibilityNodeInfo findNodeByExactDesc(
+            android.view.accessibility.AccessibilityNodeInfo root, String exactDesc) {
+        if (root == null) return null;
+        CharSequence desc = root.getContentDescription();
+        if (desc != null && desc.toString().equals(exactDesc)) {
+            return root;
+        }
+        for (int i = 0; i < root.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = root.getChild(i);
+            android.view.accessibility.AccessibilityNodeInfo result = findNodeByExactDesc(child, exactDesc);
+            if (result != null) {
+                if (child != result) child.recycle();
+                return result;
+            }
+            if (child != null) child.recycle();
+        }
+        return null;
+    }
+
+    /**
+     * 多策略检测当前是否在抖音【作者主页】
+     * 策略1: 同时找到文字"获赞"和"粉丝" → 最稳定，中文标签抖音不会改
+     * 策略2: 找到文字"获赞"且有正常bounds → 单独兜底
+     * 策略3: desc="更多" 位于屏幕顶部 → 辅助确认
+     */
+    private boolean isOnAuthorProfilePage() {
+        android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        try {
+            // 策略1: 同时找到 "获赞" 和 "粉丝" 文字节点，且bounds有效
+            // dump确认：统计区 text="获赞" bounds=[189,703]→[273,760]，text="粉丝" bounds=[624,703]→[708,760]
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> likeNodes =
+                root.findAccessibilityNodeInfosByText("获赞");
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> fansNodes =
+                root.findAccessibilityNodeInfosByText("粉丝");
+            boolean hasLike = false, hasFans = false;
+            if (likeNodes != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo n : likeNodes) {
+                    android.graphics.Rect r = new android.graphics.Rect();
+                    n.getBoundsInScreen(r);
+                    n.recycle();
+                    if (r.width() > 0 && r.height() > 0) { hasLike = true; break; }
+                }
+            }
+            if (fansNodes != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo n : fansNodes) {
+                    android.graphics.Rect r = new android.graphics.Rect();
+                    n.getBoundsInScreen(r);
+                    n.recycle();
+                    if (r.width() > 0 && r.height() > 0) { hasFans = true; break; }
+                }
+            }
+            if (hasLike && hasFans) {
+                logD("  [主页检测] 策略1命中: 同时找到'获赞'+'粉丝'文字");
+                return true;
+            }
+            // 策略2: 至少找到 "获赞" 文字且bounds有效（单独兜底）
+            if (hasLike) {
+                logD("  [主页检测] 策略2命中: 找到'获赞'文字");
+                return true;
+            }
+            // 策略3: desc="更多" 按钮位于屏幕顶部 (top 100~300，宽度>0)
+            // dump确认: ViewGroup desc="更多" bounds=[936,144]→[1032,240]
+            android.view.accessibility.AccessibilityNodeInfo moreBtn = findNodeByExactDesc(root, "更多");
+            if (moreBtn != null) {
+                android.graphics.Rect r = new android.graphics.Rect();
+                moreBtn.getBoundsInScreen(r);
+                if (r.top >= 100 && r.top < 300 && r.width() > 0) {
+                    logD("  [主页检测] 策略3命中: 更多按钮 bounds=" + r);
+                    return true;
+                }
+            }
+            return false;
+        } finally {
+            root.recycle();
+        }
+    }
+
+    /**
+     * 多策略检测当前是否在抖音【视频播放页】
+     * 先排除作者主页，再检测视频页特有元素
+     * 策略1: zzf (分享按钮) 有正常正值宽高  ← dump确认的新ID
+     * 策略2: 找到 desc 含"分享" 且位于右侧的按钮
+     * 策略3: 进度条 SeekBar (6n0) 存在      ← dump确认的新ID
+     */
+    private boolean isOnVideoPlaybackPage() {
+        android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        try {
+            // 先排除作者主页：若找到"获赞"+"粉丝"文字且bounds有效，则肯定不是视频页
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> likeNodes =
+                root.findAccessibilityNodeInfosByText("获赞");
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> fansNodes =
+                root.findAccessibilityNodeInfosByText("粉丝");
+            boolean hasLike = false, hasFans = false;
+            if (likeNodes != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo n : likeNodes) {
+                    android.graphics.Rect r = new android.graphics.Rect();
+                    n.getBoundsInScreen(r);
+                    n.recycle();
+                    if (r.width() > 0 && r.height() > 0) { hasLike = true; break; }
+                }
+            }
+            if (fansNodes != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo n : fansNodes) {
+                    android.graphics.Rect r = new android.graphics.Rect();
+                    n.getBoundsInScreen(r);
+                    n.recycle();
+                    if (r.width() > 0 && r.height() > 0) { hasFans = true; break; }
+                }
+            }
+            if (hasLike && hasFans) return false; // 是作者主页，不是视频页
+            // 策略1: zzf (分享按钮) 有正常宽高 (dump确认的新ID，视频页上有正值bounds)
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> zzfList =
+                root.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/zzf");
+            if (zzfList != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo n : zzfList) {
+                    android.graphics.Rect r = new android.graphics.Rect();
+                    n.getBoundsInScreen(r);
+                    n.recycle();
+                    if (r.width() > 0 && r.height() > 0) {
+                        logD("  [视频页检测] 策略1命中: zzf bounds=" + r);
+                        return true;
+                    }
+                }
+            }
+            // 策略2: desc 含"分享"，且按钮位于屏幕右侧 (right > 800)
+            android.view.accessibility.AccessibilityNodeInfo shareNode = findNodeByDescContains(root, "分享");
+            if (shareNode != null) {
+                android.graphics.Rect r = new android.graphics.Rect();
+                shareNode.getBoundsInScreen(r);
+                if (r.width() > 0 && r.height() > 0 && r.right > 800) {
+                    logD("  [视频页检测] 策略2命中: 分享按钮 bounds=" + r);
+                    return true;
+                }
+            }
+            // 策略3: 进度条 SeekBar (6n0) 存在 (dump确认的新ID)
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> seekList =
+                root.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/6n0");
+            if (seekList != null && !seekList.isEmpty()) {
+                logD("  [视频页检测] 策略3命中: 进度条(6n0)存在");
+                for (android.view.accessibility.AccessibilityNodeInfo n : seekList) n.recycle();
+                return true;
+            }
+            return false;
+        } finally {
+            root.recycle();
+        }
     }
 
     /**
@@ -5510,6 +5757,477 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 }
             }
         }).start();
+    }
+
+    /**
+     * 在分享弹窗中向右滑动底部操作行，找到并点击"分享链接"
+     * 弹窗结构（来自dump）:
+     *   egv 容器 [0,1509]→[1080,2346]
+     *   ├── recycler_view 好友行 [0,1671]→[1080,1969]
+     *   └── kdm 操作行 [0,2002]→[1080,2291]
+     *       └── zva TextView "分享链接" [628,2211]→[815,2255]
+     */
+    private void clickShareLinkInPopup() {
+        try {
+            logD("🔍 开始处理分享弹窗，查找【分享链接】...");
+
+            // 方案A: 直接通过 zva ID + 文本 查找"分享链接"
+            boolean found = tryClickShareLink();
+
+            if (!found) {
+                // 方案B: 向右滑动弹窗底部操作行，再次查找
+                logD("📜 未直接找到【分享链接】，向右滑动弹窗底部操作行...");
+                swipeSharePopupRow();
+                Thread.sleep(600);
+                found = tryClickShareLink();
+            }
+
+            if (!found) {
+                // 方案C: 坐标兜底 — dump确认坐标 (721, 2146)
+                logD("⚡ 坐标兜底点击【分享链接】(721, 2146)");
+                android.graphics.Path path = new android.graphics.Path();
+                path.moveTo(721, 2146);
+                android.accessibilityservice.GestureDescription gesture =
+                    new android.accessibilityservice.GestureDescription.Builder()
+                        .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                            path, 0, 50))
+                        .build();
+                dispatchGesture(gesture, null, null);
+            }
+
+        } catch (Exception e) {
+            logE("处理分享弹窗失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 尝试查找并点击"分享链接"按钮
+     * 直接通过文本内容递归遍历节点树，完全不依赖混淆ID（如zva/kdm），版本兼容性好
+     */
+    private boolean tryClickShareLink() {
+        try {
+            android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root == null) return false;
+
+            // 直接按文本"分享链接"查找，不依赖任何混淆ID
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
+                root.findAccessibilityNodeInfosByText("分享链接");
+
+            if (nodes != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
+                    CharSequence text = node.getText();
+                    if (text != null && text.toString().equals("分享链接")) {
+                        // 优先点击父节点 ViewGroup（可点击区域更大）
+                        android.view.accessibility.AccessibilityNodeInfo parent = node.getParent();
+                        boolean clicked = false;
+                        if (parent != null) {
+                            clicked = parent.performAction(
+                                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            logD("✅ 点击【分享链接】父节点: " + clicked);
+                            parent.recycle();
+                        }
+                        if (!clicked) {
+                            clicked = node.performAction(
+                                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            logD("✅ 点击【分享链接】文本节点: " + clicked);
+                        }
+                        node.recycle();
+                        root.recycle();
+                        return clicked;
+                    }
+                    node.recycle();
+                }
+            }
+            root.recycle();
+        } catch (Exception e) {
+            logE("查找【分享链接】失败: " + e.getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * 在QQ首页消息列表中点击【我的电脑】
+     * dump结构: aua RelativeLayout desc="我的电脑, ,,01/15,置顶聊天" [0,401]→[1080,595]
+     * 中心坐标: (540, 498)
+     * 策略1: 找到 contentDescription 包含"我的电脑"的节点并点击
+     * 策略2: 坐标兜底 (540, 498)
+     */
+    private void clickMyComputerInQQ() {
+        try {
+            logD("🔍 开始查找QQ【我的电脑】...");
+
+            android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root == null) {
+                logE("❌ 获取根节点失败");
+                return;
+            }
+
+            // 策略1: 按 contentDescription 包含"我的电脑"查找
+            boolean clicked = false;
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
+                root.findAccessibilityNodeInfosByText("我的电脑");
+            root.recycle();
+
+            if (nodes != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
+                    // 优先检查自身 desc 或 text
+                    CharSequence desc = node.getContentDescription();
+                    CharSequence text = node.getText();
+                    boolean match = (desc != null && desc.toString().contains("我的电脑"))
+                                 || (text != null && text.toString().contains("我的电脑"));
+                    if (match) {
+                        // 找可点击的节点（自身或父节点）
+                        android.view.accessibility.AccessibilityNodeInfo target = node;
+                        while (target != null && !target.isClickable()) {
+                            android.view.accessibility.AccessibilityNodeInfo p = target.getParent();
+                            if (target != node) target.recycle();
+                            target = p;
+                        }
+                        if (target != null) {
+                            clicked = target.performAction(
+                                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            android.graphics.Rect boundsRect = new android.graphics.Rect();
+                            target.getBoundsInScreen(boundsRect);
+                            logD("✅ 点击【我的电脑】: " + clicked + " bounds=" + boundsRect);
+                            if (target != node) target.recycle();
+                        }
+                        node.recycle();
+                        if (clicked) break;
+                    } else {
+                        node.recycle();
+                    }
+                }
+            }
+
+            if (!clicked) {
+                // 策略2: 坐标兜底 (540, 498) — 来自dump [0,401]→[1080,595] 中心
+                logD("⚡ 坐标兜底点击【我的电脑】(540, 498)");
+                android.graphics.Path path = new android.graphics.Path();
+                path.moveTo(540, 498);
+                android.accessibilityservice.GestureDescription gesture =
+                    new android.accessibilityservice.GestureDescription.Builder()
+                        .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                            path, 0, 50))
+                        .build();
+                dispatchGesture(gesture, null, null);
+            }
+
+        } catch (Exception e) {
+            logE("点击【我的电脑】失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 在QQ【我的电脑】聊天界面，粘贴剪贴板内容并点击【发送】，
+     * 发送成功后截图取证，然后最小化QQ，最后打开权利卫士。
+     * 采用纯坐标点击三步法，绕过Android 12+剪贴板读取限制：
+     *   第1步: 点击输入框 (466, 2165) → 触发键盘弹出 + 粘贴浮窗出现
+     *   第2步: 点击粘贴浮窗 (484, 1503) → 内容从系统剪贴板粘贴进输入框
+     *   第3步: 点击发送按钮 (956, 1244) → 发送消息（键盘弹出后坐标）
+     *   第4步: 等待消息出现 → 截图取证
+     *   第5步: 按HOME最小化QQ → 打开权利卫士
+     */
+    private void pasteAndSendInQQ() {
+        try {
+            logD("📋 开始粘贴链接并发送到【我的电脑】...");
+
+            // 第1步：点击输入框，触发键盘弹出和粘贴浮窗
+            logD("👆 第1步: 点击输入框 (466, 2165)");
+            clickByCoordinates(466, 2165);
+            Thread.sleep(800); // 等待键盘弹出和粘贴浮窗出现
+
+            // 第2步：点击粘贴浮窗（系统级粘贴，不需要读剪贴板）
+            logD("👆 第2步: 点击粘贴浮窗 (484, 1503)");
+            clickByCoordinates(484, 1503);
+            Thread.sleep(500); // 等待文字填入输入框
+
+            // 第3步：点击发送按钮（键盘弹出后坐标）
+            logD("👆 第3步: 点击发送按钮 (956, 1244)");
+            clickByCoordinates(956, 1244);
+
+            logD("✅ 链接已发送到【我的电脑】！");
+
+            // 第4步：等待消息出现在聊天气泡中，截图取证
+            Thread.sleep(1000);
+            logD("📸 第4步: 截图保存QQ发送记录...");
+            final boolean[] screenshotDone = {false};
+            takeScreenshotWithPrefix("QQ发送取证", new ScreenshotCallback() {
+                @Override
+                public void onSuccess() {
+                    logD("✅ QQ发送截图保存成功");
+                    screenshotDone[0] = true;
+                }
+                @Override
+                public void onFailure() {
+                    logE("❌ QQ发送截图失败，继续后续流程");
+                    screenshotDone[0] = true;
+                }
+            });
+
+            // 等待截图回调完成（最多3秒）
+            for (int i = 0; i < 30; i++) {
+                if (screenshotDone[0]) break;
+                Thread.sleep(100);
+            }
+
+            // 第5步：按HOME键最小化QQ
+            Thread.sleep(500);
+            logD("🏠 第5步: 按HOME键最小化QQ...");
+            performGlobalAction(GLOBAL_ACTION_HOME);
+            Thread.sleep(1000); // 等待桌面出现
+
+            // 第6步：打开权利卫士
+            logD("🚀 第6步: 打开权利卫士...");
+            try {
+                android.content.Intent intent = new android.content.Intent();
+                intent.setClassName(TARGET_PACKAGE, TARGET_ACTIVITY);
+                intent.setAction(android.content.Intent.ACTION_MAIN);
+                intent.addCategory(android.content.Intent.CATEGORY_LAUNCHER);
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(intent);
+                logD("✅ 权利卫士已启动");
+            } catch (Exception e) {
+                logE("❌ 打开权利卫士失败: " + e.getMessage());
+            }
+
+            // 第7步：等待权利卫士加载，点击【停止录屏取证】
+            Thread.sleep(3000); // 等待录屏取证界面加载
+            logD("🛑 第7步: 点击【停止录屏取证】...");
+            clickStopRecording();
+
+            // 第8步：等待录屏停止，生成取证PDF
+            Thread.sleep(3000); // 等待录屏停止完成
+            logD("📄 第8步: 生成取证PDF...");
+            generateEvidencePdf();
+
+        } catch (Exception e) {
+            logE("粘贴并发送失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 点击权利卫士界面中的【停止录屏取证】按钮
+     * dump确认: com.unitrust.tsa:id/rl_btn_end clickable [54,646]→[1026,808]
+     *   内含 tv_type_end text="停止录屏取证"
+     */
+    private void clickStopRecording() {
+        try {
+            android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root != null) {
+                // 策略1：通过文本 "停止录屏取证" 查找，点击可点击父节点
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
+                    root.findAccessibilityNodeInfosByText("停止录屏取证");
+                if (nodes != null && !nodes.isEmpty()) {
+                    android.view.accessibility.AccessibilityNodeInfo node = nodes.get(0);
+                    android.view.accessibility.AccessibilityNodeInfo parent = node.getParent();
+                    if (parent != null && parent.isClickable()) {
+                        boolean clicked = parent.performAction(
+                            android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                        logD("✅ 策略1: 文本找到并点击【停止录屏取证】: " + clicked);
+                        parent.recycle();
+                        node.recycle();
+                        root.recycle();
+                        return;
+                    }
+                    node.recycle();
+                }
+                // 策略2：通过ID查找
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> idNodes =
+                    root.findAccessibilityNodeInfosByViewId("com.unitrust.tsa:id/rl_btn_end");
+                if (idNodes != null && !idNodes.isEmpty()) {
+                    boolean clicked = idNodes.get(0).performAction(
+                        android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                    logD("✅ 策略2: ID找到并点击【停止录屏取证】: " + clicked);
+                    idNodes.get(0).recycle();
+                    root.recycle();
+                    return;
+                }
+                root.recycle();
+            }
+            // 策略3：坐标兜底，dump确认中心点(540, 727)
+            logD("⚠️ 文本/ID策略失败，坐标兜底点击 (540, 727)");
+            clickByCoordinates(540, 727);
+            logD("✅ 坐标点击【停止录屏取证】完成");
+        } catch (Exception e) {
+            logE("❌ 点击【停止录屏取证】失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 将本次取证的所有截图整合成PDF
+     * PDF命名格式: 原创名称-平台（抖音）：侵权人账号名称.pdf
+     * 保存到: Download/权利卫士取证/
+     */
+    private void generateEvidencePdf() {
+        try {
+            if (sessionScreenshotUris.isEmpty()) {
+                logE("❌ 没有截图，无法生成PDF");
+                return;
+            }
+            logD("📄 开始生成PDF，共" + sessionScreenshotUris.size() + "张截图...");
+
+            android.graphics.pdf.PdfDocument pdfDocument = new android.graphics.pdf.PdfDocument();
+            int pageWidth = 1080;
+            int pageHeight = 2400;
+
+            for (int i = 0; i < sessionScreenshotUris.size(); i++) {
+                try {
+                    android.net.Uri uri = sessionScreenshotUris.get(i);
+                    android.graphics.Bitmap bitmap =
+                        android.provider.MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
+                    if (bitmap == null) {
+                        logE("  ⚠️ 第" + (i + 1) + "张图片解码失败，跳过");
+                        continue;
+                    }
+                    android.graphics.pdf.PdfDocument.PageInfo pageInfo =
+                        new android.graphics.pdf.PdfDocument.PageInfo.Builder(pageWidth, pageHeight, i + 1).create();
+                    android.graphics.pdf.PdfDocument.Page page = pdfDocument.startPage(pageInfo);
+                    android.graphics.Canvas canvas = page.getCanvas();
+                    android.graphics.RectF destRect = new android.graphics.RectF(0, 0, pageWidth, pageHeight);
+                    canvas.drawBitmap(bitmap, null, destRect, null);
+                    pdfDocument.finishPage(page);
+                    bitmap.recycle();
+                    logD("  ✅ 第" + (i + 1) + "页已添加");
+                } catch (Exception e) {
+                    logE("  ❌ 第" + (i + 1) + "页处理失败: " + e.getMessage());
+                }
+            }
+
+            // 构造PDF文件名
+            String safeName = originalName.isEmpty() ? "取证" : originalName;
+            String safeInfringer = infringerName.isEmpty() ? remark : infringerName;
+            String pdfName = safeName + "-抖音：" + safeInfringer + ".pdf";
+            // 替换文件名中不允许的字符
+            pdfName = pdfName.replace("/", "_").replace("\\", "_");
+
+            // 保存PDF
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                android.content.ContentValues values = new android.content.ContentValues();
+                values.put(android.provider.MediaStore.Downloads.DISPLAY_NAME, pdfName);
+                values.put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/pdf");
+                values.put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/权利卫士取证");
+                android.net.Uri pdfUri = getContentResolver().insert(
+                    android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                if (pdfUri != null) {
+                    java.io.OutputStream os = getContentResolver().openOutputStream(pdfUri);
+                    if (os != null) {
+                        pdfDocument.writeTo(os);
+                        os.flush();
+                        os.close();
+                        logD("✅ PDF已保存: Download/权利卫士取证/" + pdfName);
+                    }
+                } else {
+                    logE("❌ 创建PDF MediaStore URI失败");
+                }
+            } else {
+                java.io.File dir = new java.io.File(
+                    android.os.Environment.getExternalStoragePublicDirectory(
+                        android.os.Environment.DIRECTORY_DOWNLOADS), "权利卫士取证");
+                if (!dir.exists()) dir.mkdirs();
+                java.io.File pdfFile = new java.io.File(dir, pdfName);
+                java.io.FileOutputStream fos = new java.io.FileOutputStream(pdfFile);
+                pdfDocument.writeTo(fos);
+                fos.flush();
+                fos.close();
+                logD("✅ PDF已保存: " + pdfFile.getAbsolutePath());
+            }
+
+            pdfDocument.close();
+            logD("🎉 取证PDF生成完成！文件名: " + pdfName);
+        } catch (Exception e) {
+            logE("❌ 生成PDF失败: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * 在"链接已复制"弹窗中点击【QQ】按钮
+     * dump结构: zy7 RecyclerView [0,1886]→[1080,2186]
+     *   ├── 微信    LinearLayout [30,1886]→[234,2126]
+     *   ├── 微信朋友圈 LinearLayout [258,1886]→[462,2126]
+     *   ├── QQ     LinearLayout [486,1886]→[690,2126]  ← 目标，中心(588,2006)
+     *   └── QQ空间  LinearLayout [714,1886]→[918,2126]
+     * 注意：文本标签ID=zy=为混淆ID，不依赖，直接按文本精确匹配"QQ"
+     */
+    private void clickQQButton() {
+        try {
+            logD("🔍 开始查找分享弹窗中的【QQ】按钮...");
+
+            android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root == null) {
+                logE("❌ 获取根节点失败");
+                return;
+            }
+
+            // 按文本查找，精确匹配"QQ"（过滤"QQ空间"）
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
+                root.findAccessibilityNodeInfosByText("QQ");
+
+            boolean clicked = false;
+            if (nodes != null) {
+                for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
+                    CharSequence text = node.getText();
+                    if (text != null && text.toString().equals("QQ")) {
+                        // 点击父节点 LinearLayout（可点击区域）
+                        android.view.accessibility.AccessibilityNodeInfo parent = node.getParent();
+                        if (parent != null) {
+                            clicked = parent.performAction(
+                                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            logD("✅ 点击【QQ】父节点: " + clicked);
+                            parent.recycle();
+                        }
+                        if (!clicked) {
+                            clicked = node.performAction(
+                                android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            logD("✅ 点击【QQ】文本节点: " + clicked);
+                        }
+                        node.recycle();
+                        break;
+                    }
+                    node.recycle();
+                }
+            }
+            root.recycle();
+
+            if (!clicked) {
+                // 坐标兜底：QQ LinearLayout 中心点 (588, 2006)，来自dump
+                logD("⚡ 坐标兜底点击【QQ】(588, 2006)");
+                android.graphics.Path path = new android.graphics.Path();
+                path.moveTo(588, 2006);
+                android.accessibilityservice.GestureDescription gesture =
+                    new android.accessibilityservice.GestureDescription.Builder()
+                        .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                            path, 0, 50))
+                        .build();
+                dispatchGesture(gesture, null, null);
+            }
+
+        } catch (Exception e) {
+            logE("点击【QQ】按钮失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 向右滑动分享弹窗底部操作行 (kdm RecyclerView)
+     * dump: kdm [0,2002]→[1080,2291]，中心 Y≈2146
+     * 手势: 从 x=200 向右滑至 x=800（向右滑动，揭示操作行中更多选项）
+     */
+    private void swipeSharePopupRow() {
+        try {
+            android.graphics.Path path = new android.graphics.Path();
+            path.moveTo(200, 2146);   // 起点：偏左
+            path.lineTo(800, 2146);   // 终点：偏右（向右滑动）
+            android.accessibilityservice.GestureDescription gesture =
+                new android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                        path, 0, 350))
+                    .build();
+            boolean dispatched = dispatchGesture(gesture, null, null);
+            logD(dispatched ? "✅ 向右滑动弹窗底部操作行成功" : "❌ 向右滑动手势发送失败");
+        } catch (Exception e) {
+            logE("向右滑动弹窗失败: " + e.getMessage());
+        }
     }
 
 }
