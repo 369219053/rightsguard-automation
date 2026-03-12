@@ -92,7 +92,7 @@ public class OcrHelper {
                             }
                         }
 
-                        // 也检查每一行
+                        // 也检查每一行和每个词(Element)
                         for (Text.Line line : block.getLines()) {
                             String lineText = line.getText();
                             if (lineText.contains(targetText)) {
@@ -103,6 +103,21 @@ public class OcrHelper {
                                     String foundLineMsg = "🎯 找到目标文字(行): " + lineText + " 位置: " + bounds.toShortString();
                                     Log.d(TAG, foundLineMsg);
                                     if (logCallback != null) logCallback.onLog(foundLineMsg);
+                                }
+                            }
+                            // Element级别搜索，精准定位单词/短语坐标
+                            for (Text.Element element : line.getElements()) {
+                                String elementText = element.getText();
+                                if (elementText.contains(targetText)) {
+                                    Rect bounds = element.getBoundingBox();
+                                    if (bounds != null) {
+                                        Point center = new Point(bounds.centerX(), bounds.centerY());
+                                        // Element级别优先级最高，插入到最前面
+                                        matches.add(0, new TextMatch(elementText, bounds, center));
+                                        String foundElemMsg = "🎯 找到目标文字(词): " + elementText + " 位置: " + bounds.toShortString();
+                                        Log.d(TAG, foundElemMsg);
+                                        if (logCallback != null) logCallback.onLog(foundElemMsg);
+                                    }
                                 }
                             }
                         }
@@ -201,6 +216,21 @@ public class OcrHelper {
                                         String foundLineMsg = "🎯 [全量] 找到目标文字(行): " + lineText + " 位置: " + bounds.toShortString();
                                         Log.d(TAG, foundLineMsg);
                                         if (logCallback != null) logCallback.onLog(foundLineMsg);
+                                    }
+                                }
+                            }
+                            // Element级别搜索，精准定位单词/短语坐标
+                            for (Text.Element element : line.getElements()) {
+                                String elementText = element.getText();
+                                if (elementText.contains(targetText)) {
+                                    Rect bounds = element.getBoundingBox();
+                                    if (bounds != null) {
+                                        Point center = new Point(bounds.centerX(), bounds.centerY());
+                                        // Element级别优先级最高，插入到最前面
+                                        matches.add(0, new TextMatch(elementText, bounds, center));
+                                        String foundElemMsg = "🎯 [全量] 找到目标文字(词): " + elementText + " 位置: " + bounds.toShortString();
+                                        Log.d(TAG, foundElemMsg);
+                                        if (logCallback != null) logCallback.onLog(foundElemMsg);
                                     }
                                 }
                             }

@@ -25,6 +25,7 @@ public class MainActivity extends AppCompatActivity {
     private View viewStatusIndicator;
     private MaterialButton btnStart;
     private MaterialButton btnTestMode;
+    private MaterialButton btnShoppingTest;
     private MaterialButton btnStop;
     private MaterialButton btnViewLog;
     private ImageView ivSettings;
@@ -51,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
         viewStatusIndicator = findViewById(R.id.view_status_indicator);
         btnStart = findViewById(R.id.btn_start);
         btnTestMode = findViewById(R.id.btn_test_mode);
+        btnShoppingTest = findViewById(R.id.btn_shopping_test);
         btnStop = findViewById(R.id.btn_stop);
         btnViewLog = findViewById(R.id.btn_view_log);
         ivSettings = findViewById(R.id.iv_settings);
@@ -66,6 +68,9 @@ public class MainActivity extends AppCompatActivity {
 
         // 测试模式按钮
         btnTestMode.setOnClickListener(v -> startTestMode());
+
+        // 购物测试按钮
+        btnShoppingTest.setOnClickListener(v -> startShoppingTestMode());
 
         // 停止按钮
         btnStop.setOnClickListener(v -> stopAutomation());
@@ -298,6 +303,28 @@ public class MainActivity extends AppCompatActivity {
         }
 
         service.startTestMode();
+        isRunning = true;
+        updateStatus(STATUS_RUNNING);
+    }
+
+    /**
+     * 🛒 购物测试模式：直接执行购物车取证（三个点→选品带货→进店）
+     * 使用前请手动在抖音停在有购物锚点的视频播放页
+     */
+    private void startShoppingTestMode() {
+        if (!AutomationAccessibilityService.isServiceAvailable()) {
+            Toast.makeText(this, R.string.toast_accessibility_required, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        AutomationAccessibilityService service = AutomationAccessibilityService.getInstance();
+        if (service == null) {
+            Toast.makeText(this, "无障碍服务未启动", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(this, "🛒 购物测试模式启动，请确保抖音已在有购物锚点的视频页", Toast.LENGTH_LONG).show();
+        service.startShoppingTestMode();
         isRunning = true;
         updateStatus(STATUS_RUNNING);
     }

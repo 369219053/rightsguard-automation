@@ -12,6 +12,85 @@
 
 ## 🚀 版本历史
 
+### V4.3 (2026-03-12) 🛒 带货数据时间筛选 + 无障碍上下文点击 + 测试模式修复
+
+**✨ 核心更新 - 带货数据90天时间筛选 + 精准上下文节点导航**
+
+#### ✅ 完成内容
+
+**1. 带货数据滚动OCR检测 - `checkAndCaptureShoppingCart()` - AutomationAccessibilityService.java**
+- ✅ **替换旧TODO**: 将原来的占位逻辑替换为真实的OCR滚动检测循环
+- ✅ **滚动策略**: 手势 (540,1400)→(540,900)，每次移动500px，最多10次
+- ✅ **OCR轮询**: 每次滚动后截图 → ML Kit OCR检测"带货数据" → 找到立即截图存档 → 退出循环
+- ✅ **isRunning守门**: 每次循环前检查 `if (!isRunning) return`，停止按钮立即生效
+
+**2. 时间筛选双策略点击 - `checkAndCaptureShoppingCart()` - AutomationAccessibilityService.java**
+- ✅ **策略①无障碍上下文定位（优先）**:
+  - `findAccessibilityNodeInfosByText("带货数据")` 找到标题节点
+  - `bdNode.getParent()` 取父容器，遍历子节点
+  - 精确匹配 `text="30天" AND clickable=true` → `performAction(ACTION_CLICK)`
+  - 避免点到"受众数据"旁的同名按钮（不同父容器）
+- ✅ **策略②OCR兜底**（仅①失败时）: OCR识别 ["近30日","30天"] → `findTextPosition` → 坐标点击
+- ✅ **共同路径**: 两条路径成功后都走 OCR识别"近90天" → 点击 → 等待1秒 → 截图"带货数据_90天"
+
+**3. OCR Element级别精确坐标 - OcrHelper.java**
+- ✅ **问题根因**: ML Kit把"带货数据 30天 ▼ 全部 视频..."整行识别为一个Block，返回整行中心 x≈526，而"30天"实际在 x≈291
+- ✅ **修复方案**: `findTextPosition` 和 `findAllTextPositions` 均新增 Element 级别（词级）搜索
+- ✅ **优先级**: Element（插入列表最前）→ Line → Block，词级坐标最精确
+
+**4. 测试模式线程竞争修复 - `startTestMode()` - AutomationAccessibilityService.java**
+- ✅ **问题根因**: `clickViewHistory()` 内部 `new Thread()` 立即返回，`finally: isTestMode=false` 在子线程执行前就已重置，导致购物车流程走视频播放分支
+- ✅ **修复方案**: 观看历史点击逻辑内联到 `testModeThread` 同一线程，全程同步执行
+- ✅ **效果**: 整个测试流程在同一线程顺序完成，`isTestMode` 标志全程有效
+
+#### 🔧 技术关键代码
+
+**无障碍上下文定位（精准区分同名按钮）**:
+```java
+List<AccessibilityNodeInfo> bdNodes = freshRoot.findAccessibilityNodeInfosByText("带货数据");
+if (bdNodes != null && !bdNodes.isEmpty()) {
+    AccessibilityNodeInfo parent = bdNodes.get(0).getParent();
+    for (int i = 0; i < parent.getChildCount(); i++) {
+        AccessibilityNodeInfo child = parent.getChild(i);
+        if (child != null && "30天".equals(child.getText()) && child.isClickable()) {
+            child.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        }
+    }
+}
+```
+
+**OCR Element级别搜索**:
+```java
+// OcrHelper.java - Element优先于 Line / Block
+for (Text.TextBlock block : visionText.getTextBlocks()) {
+    for (Text.Line line : block.getLines()) {
+        for (Text.Element element : line.getElements()) {
+            if (element.getText().contains(targetText)) {
+                results.add(0, new TextMatch(...)); // 插入最前，最高优先级
+            }
+        }
+    }
+}
+```
+
+#### 📊 关键坐标（1080×2400分辨率）
+
+| 操作 | 方式 | 说明 |
+|------|------|------|
+| 带货数据滚动 | 手势 (540,1400)→(540,900) | 每次500px，最多10次 |
+| 点击"30天" | 无障碍API优先，OCR兜底 | 带货数据父节点下的30天子节点 |
+| 选"近90天" | OCR识别坐标点击 | 弹窗渲染1秒后点击 |
+
+#### 📁 文件变更
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - `checkAndCaptureShoppingCart()`: 新增带货数据滚动OCR检测 + 时间筛选双策略
+  - `startTestMode()`: 内联观看历史点击逻辑，修复线程竞争
+  - 各循环新增 `isRunning` 守门判断
+- `app/src/main/java/com/rightsguard/automation/OcrHelper.java`
+  - `findTextPosition()` / `findAllTextPositions()`: 新增 Element 级别搜索，优先返回词级精确坐标
+
+---
+
 ### V4.2 (2026-03-10) 📤 QQ分享取证 + 停止录屏 + PDF生成完整闭环
 
 **✨ 核心更新 - 实现完整取证闭环：分享链接到QQ → 停止录屏 → 生成取证PDF**
