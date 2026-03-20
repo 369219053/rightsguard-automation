@@ -148,6 +148,14 @@ public class MainActivity extends AppCompatActivity {
             service.setVideoDurationSeconds(parseResult.videoDurationSeconds);
             Log.d("MainActivity", "✅ 已设置视频时长: " + parseResult.videoDurationSeconds + "秒");
 
+            // 🆕 设置封面URL（用于创作灵感MD5封面对比）
+            if (parseResult.coverImageUrl != null && !parseResult.coverImageUrl.isEmpty()) {
+                service.setCoverImageUrl(parseResult.coverImageUrl);
+                Log.d("MainActivity", "✅ 已设置封面URL: " + parseResult.coverImageUrl);
+            } else {
+                Log.d("MainActivity", "⚠️ 未提供封面URL，跳过创作灵感封面对比");
+            }
+
             service.startAutomation();
             isRunning = true;
             updateStatus(STATUS_RUNNING);
@@ -165,13 +173,27 @@ public class MainActivity extends AppCompatActivity {
         try {
             Log.d("MainActivity", "🔍 开始解析: " + info);
 
-            // 🆕 新格式: 原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接+侵权视频标题+侵权视频时长
-            // 示例: 花开富贵-抖音:文文工艺品-https://v.douyin.com/xxx/+https://v.douyin.com/iFLNKJNj/+花开富贵檀香，燃起来就会开花+106
+            // 格式: 原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接+侵权视频标题+侵权视频时长[+封面URL]
+            // 示例(含封面): 花开富贵-抖音:文文工艺品-https://v.douyin.com/xxx/+https://v.douyin.com/iFLNKJNj/+花开富贵檀香，燃起来就会开花+106+https://p3-aio.ecombdimg.com/jpeg_m_xxx
 
-            // 1. 提取视频时长 (最后一个+号之后的内容)
-            int lastPlusIndex = info.lastIndexOf("+");
-            if (lastPlusIndex > 0 && lastPlusIndex < info.length() - 1) {
-                String durationStr = info.substring(lastPlusIndex + 1).trim();
+            // 🆕 先检查最后一段是否为封面URL（以http开头则为新格式，剥离后再解析其余字段）
+            String effectiveInfo = info;
+            {
+                int lastIdx = info.lastIndexOf("+");
+                if (lastIdx > 0) {
+                    String lastSeg = info.substring(lastIdx + 1).trim();
+                    if (lastSeg.startsWith("http")) {
+                        result.coverImageUrl = lastSeg;
+                        Log.d("MainActivity", "✅ 封面URL: " + lastSeg);
+                        effectiveInfo = info.substring(0, lastIdx); // 剥离封面URL，后续解析用短字符串
+                    }
+                }
+            }
+
+            // 1. 提取视频时长 (effectiveInfo中最后一个+号之后的内容)
+            int lastPlusIndex = effectiveInfo.lastIndexOf("+");
+            if (lastPlusIndex > 0 && lastPlusIndex < effectiveInfo.length() - 1) {
+                String durationStr = effectiveInfo.substring(lastPlusIndex + 1).trim();
                 try {
                     result.videoDurationSeconds = Integer.parseInt(durationStr);
                     Log.d("MainActivity", "✅ 视频时长: " + result.videoDurationSeconds + "秒");
@@ -186,7 +208,7 @@ public class MainActivity extends AppCompatActivity {
 
             // 2. 提取视频标题 (倒数第二个+号和最后一个+号之间的内容)
             if (lastPlusIndex > 0) {
-                String beforeLastPlus = info.substring(0, lastPlusIndex);
+                String beforeLastPlus = effectiveInfo.substring(0, lastPlusIndex);
                 int secondLastPlusIndex = beforeLastPlus.lastIndexOf("+");
 
                 if (secondLastPlusIndex > 0) {
@@ -199,7 +221,7 @@ public class MainActivity extends AppCompatActivity {
 
             // 3. 提取侵权链接 (倒数第三个+号和倒数第二个+号之间的内容)
             if (lastPlusIndex > 0) {
-                String beforeLastPlus = info.substring(0, lastPlusIndex);
+                String beforeLastPlus = effectiveInfo.substring(0, lastPlusIndex);
                 int secondLastPlusIndex = beforeLastPlus.lastIndexOf("+");
 
                 if (secondLastPlusIndex > 0) {
@@ -263,6 +285,7 @@ public class MainActivity extends AppCompatActivity {
         String remark;
         String videoKeywords; // 🆕 视频文案关键词
         int videoDurationSeconds; // 🆕 视频时长(秒)
+        String coverImageUrl; // 🆕 侵权视频封面URL（用于创作灵感MD5对比）
     }
 
     /**
@@ -291,7 +314,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // 解析关键词（和正常模式一样）
+        // 解析关键词和封面URL（和正常模式一样）
         ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
         if (parseResult.videoKeywords != null && !parseResult.videoKeywords.isEmpty()) {
             service.setVideoKeywords(parseResult.videoKeywords);
@@ -300,6 +323,20 @@ public class MainActivity extends AppCompatActivity {
             // 没解析到关键词，把整个输入当关键词
             service.setVideoKeywords(evidenceInfo);
             Toast.makeText(this, "🧪 测试模式启动，关键词: " + evidenceInfo, Toast.LENGTH_LONG).show();
+        }
+
+        // 🆕 设置封面URL（购物车取证创作灵感封面对比所需）
+        if (parseResult.coverImageUrl != null && !parseResult.coverImageUrl.isEmpty()) {
+            service.setCoverImageUrl(parseResult.coverImageUrl);
+            Log.d("MainActivity", "✅ [测试模式] 已设置封面URL: " + parseResult.coverImageUrl);
+        } else {
+            Log.d("MainActivity", "⚠️ [测试模式] 未在输入中找到封面URL，跳过封面对比");
+        }
+
+        // 🆕 设置视频时长
+        if (parseResult.videoDurationSeconds > 0) {
+            service.setVideoDurationSeconds(parseResult.videoDurationSeconds);
+            Log.d("MainActivity", "✅ [测试模式] 已设置视频时长: " + parseResult.videoDurationSeconds + "秒");
         }
 
         service.startTestMode();
@@ -323,7 +360,25 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        Toast.makeText(this, "🛒 购物测试模式启动，请确保抖音已在有购物锚点的视频页", Toast.LENGTH_LONG).show();
+        // 🆕 解析取证信息，提取封面URL（购物测试模式也需要封面Key用于创作灵感对比）
+        String evidenceInfo = "";
+        if (etRemark != null && etRemark.getText() != null) {
+            evidenceInfo = etRemark.getText().toString().trim();
+        }
+        if (!evidenceInfo.isEmpty()) {
+            ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
+            if (parseResult.coverImageUrl != null && !parseResult.coverImageUrl.isEmpty()) {
+                service.setCoverImageUrl(parseResult.coverImageUrl);
+                Log.d("MainActivity", "✅ [购物测试] 已设置封面URL: " + parseResult.coverImageUrl);
+                Toast.makeText(this, "🛒 购物测试模式启动（封面Key已设置）", Toast.LENGTH_LONG).show();
+            } else {
+                Log.d("MainActivity", "⚠️ [购物测试] 未在输入中找到封面URL，跳过封面对比");
+                Toast.makeText(this, "🛒 购物测试模式启动，请确保抖音已在有购物锚点的视频页", Toast.LENGTH_LONG).show();
+            }
+        } else {
+            Toast.makeText(this, "🛒 购物测试模式启动，请确保抖音已在有购物锚点的视频页", Toast.LENGTH_LONG).show();
+        }
+
         service.startShoppingTestMode();
         isRunning = true;
         updateStatus(STATUS_RUNNING);

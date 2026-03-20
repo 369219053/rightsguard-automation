@@ -52,6 +52,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private java.util.List<android.net.Uri> sessionScreenshotUris = new java.util.ArrayList<>();
     private String originalName = ""; // 原创名称
     private String infringerName = ""; // 侵权人账号名称
+    private android.graphics.Bitmap referenceCoverBitmap = null; // 侵权视频参考封面（备用，保留）
+    private String coverImageKey = null; // 🆕 侵权视频封面唯一Key（从用户输入的封面URL提取，支持jpeg_m_MD5格式和TOS格式，用于创作灵感精确对比）
 
     // 🧪 测试模式标志
     private boolean isTestMode = false; // 是否为测试模式(跳过权利卫士+录屏，直接打开抖音→历史→作者主页)
@@ -235,6 +237,103 @@ public class AutomationAccessibilityService extends AccessibilityService {
     public void setVideoDurationSeconds(int seconds) {
         this.videoDurationSeconds = seconds > 0 ? seconds : 60;
         logD("📝 设置视频时长: " + this.videoDurationSeconds + "秒");
+    }
+
+    /**
+     * 🆕 设置侵权视频封面URL（提取其中的唯一Key用于创作灵感精确对比）
+     * 支持两种格式：
+     *   1. jpeg_m_格式：从 jpeg_m_{32位MD5} 提取32位十六进制MD5
+     *   2. TOS格式：从路径最后一段提取 ~ 或 ? 之前的唯一标识符
+     *      例：.../o8zGIDs4tmqAGZeCQpyuD14Q349LgNAdHeBsHg~tplv-... → o8zGIDs4tmqAGZeCQpyuD14Q349LgNAdHeBsHg
+     */
+    public void setCoverImageUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            this.coverImageKey = null;
+            logD("📝 封面URL为空，跳过Key提取");
+            return;
+        }
+        String key = extractImageKey(url);
+        if (key != null) {
+            this.coverImageKey = key;
+            logD("✅ 封面Key提取成功: " + key);
+        } else {
+            this.coverImageKey = null;
+            logD("⚠️ 无法从封面URL提取Key，跳过创作灵感对比。URL=" + url);
+        }
+    }
+
+    /**
+     * 🆕 从字节跳动CDN URL或Key字符串中提取图片唯一标识符
+     * 支持两种格式：
+     *   1. jpeg_m_格式：提取32位十六进制MD5
+     *      输入: "jpeg_m_7028a541c836f6261c9f16a74a112c81_sx_469823_www1259-1259~tplv-..."
+     *      输出: "7028a541c836f6261c9f16a74a112c81"
+     *   2. TOS格式（tos-cn-v-xxxx/KEY）：提取URL路径最后一段中 ~ 或 ? 之前的内容
+     *      输入: "https://p6-compass-sign.byteimg.com/tos-cn-v-0051/o8zGIDs4tmqAGZeCQpyuD14Q349LgNAdHeBsHg~tplv-..."
+     *      输出: "o8zGIDs4tmqAGZeCQpyuD14Q349LgNAdHeBsHg"
+     *      也支持节点Text直接就是 "KEY?params" 格式，此时截取 ? 之前部分。
+     */
+    private String extractImageKey(String input) {
+        if (input == null || input.isEmpty()) return null;
+
+        // 优先匹配 jpeg_m_ 格式（32位十六进制MD5）
+        java.util.regex.Pattern md5Pattern = java.util.regex.Pattern.compile("jpeg_m_([0-9a-f]{32})");
+        java.util.regex.Matcher md5Matcher = md5Pattern.matcher(input);
+        if (md5Matcher.find()) return md5Matcher.group(1);
+
+        // 也支持 webp_m_ 格式（结构相同）
+        java.util.regex.Pattern webpPattern = java.util.regex.Pattern.compile("webp_m_([0-9a-f]{32})");
+        java.util.regex.Matcher webpMatcher = webpPattern.matcher(input);
+        if (webpMatcher.find()) return webpMatcher.group(1);
+
+        // TOS格式：取路径最后一段（/ 之后），再截取 ~ 或 ? 之前的部分
+        // 例：tos-cn-v-0051/o8zGIDs4...~tplv-... 或 节点Text: o8zGIDs4...?params
+        String segment = input;
+        int slashIdx = input.lastIndexOf('/');
+        if (slashIdx >= 0 && slashIdx < input.length() - 1) {
+            segment = input.substring(slashIdx + 1);
+        }
+        // 截断 ~ 之后的模板参数
+        int tildeIdx = segment.indexOf('~');
+        if (tildeIdx > 0) segment = segment.substring(0, tildeIdx);
+        // 截断 ? 之后的查询参数
+        int queryIdx = segment.indexOf('?');
+        if (queryIdx > 0) segment = segment.substring(0, queryIdx);
+
+        // 过滤掉太短（<10字符）或包含空格（可能是普通文字）的结果
+        if (segment.length() >= 10 && !segment.contains(" ") && !segment.contains(".png")
+                && !segment.contains(".jpg") && !segment.contains(".svg")) {
+            return segment;
+        }
+        return null;
+    }
+
+    /**
+     * 🆕 递归遍历无障碍树，收集所有 android.widget.Image 节点中的图片Key
+     * 同时检测是否与 coverImageKey 匹配（支持 jpeg_m_ MD5格式和TOS格式）
+     */
+    private void collectImageNodeMd5s(android.view.accessibility.AccessibilityNodeInfo node,
+                                       java.util.List<String> allKeys,
+                                       java.util.List<String> matchedKeys) {
+        if (node == null) return;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+        if ("android.widget.Image".equals(className)) {
+            CharSequence text = node.getText();
+            if (text != null) {
+                String key = extractImageKey(text.toString());
+                if (key != null) {
+                    allKeys.add(key);
+                    if (key.equals(coverImageKey)) {
+                        matchedKeys.add(key);
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            collectImageNodeMd5s(child, allKeys, matchedKeys);
+            if (child != null) child.recycle();
+        }
     }
 
     /**
@@ -3356,6 +3455,23 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 logD("✅ 兜底补充完成,最终共 " + savedCount + " 张截图");
             }
 
+            // 🆕 保存视频开头帧作为封面对比参考（用于后续创作灵感封面对比）
+            if (fallbackBitmaps[0] != null && !fallbackBitmaps[0].isRecycled()) {
+                if (referenceCoverBitmap != null && !referenceCoverBitmap.isRecycled()) {
+                    referenceCoverBitmap.recycle();
+                }
+                int bw = fallbackBitmaps[0].getWidth();
+                int bh = fallbackBitmaps[0].getHeight();
+                // 裁剪掉状态栏(顶部80px)和底部导航区(底部10%)，保留视频内容区
+                int cropTop = 80;
+                int cropHeight = (int)(bh * 0.90) - cropTop;
+                if (cropHeight > 0) {
+                    referenceCoverBitmap = android.graphics.Bitmap.createBitmap(
+                        fallbackBitmaps[0], 0, cropTop, bw, cropHeight);
+                    logD("🖼️ 已保存参考封面(" + bw + "x" + cropHeight + ")，用于创作灵感封面对比");
+                }
+            }
+
             logD("✅ 视频播放和截图完成!");
 
             // 🆕 步骤: 点击暂停视频
@@ -4394,50 +4510,67 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         });
                         Thread.sleep(700);
 
-                        // 下滑页面，OCR轮询找"带货数据"，最多滚10次
-                        logD("📜 开始下滑查找'带货数据'区域（最多10次，OCR识别）...");
+                        // 下滑页面，OCR同时检测"带货数据"和"受众数据"，两者都出现才停止
+                        // 原理：带货数据图表完整显示时，图表下方的受众数据标题也会出现在屏幕内
+                        //       两者同时可见 = 带货数据图表完整显示，且有两个30天按钮，上面那个属于带货数据
+                        logD("📜 开始下滑查找（同时检测'带货数据'+'受众数据'，最多20次，每次350px）...");
                         boolean cargoDataFound = false;
-                        for (int cScroll = 0; cScroll < 10 && !cargoDataFound; cScroll++) {
+                        final int[] bdYPos = {-1}; // 记录"带货数据"的Y坐标（上面那个30天与它同行）
+                        for (int cScroll = 0; cScroll < 20 && !cargoDataFound; cScroll++) {
                             if (!isRunning) { logD("🛑 停止任务，终止带货数据查找"); break; }
 
-                            // 先执行一次下滑手势（小步滚动300px，避免滚动过头错过"带货数据"）
+                            // 先执行一次下滑手势（小步滚动350px，防止带货数据图表被滑过头）
                             android.graphics.Path cPath = new android.graphics.Path();
-                            cPath.moveTo(540, 1600);
-                            cPath.lineTo(540, 1100); // 每次滚动500px
+                            cPath.moveTo(540, 1500);
+                            cPath.lineTo(540, 1150);
                             android.accessibilityservice.GestureDescription cGesture =
                                 new android.accessibilityservice.GestureDescription.Builder()
                                     .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(cPath, 0, 350))
                                     .build();
                             dispatchGesture(cGesture, null, null);
-                            Thread.sleep(1000); // 从600ms增加到1000ms，等待WebView渲染完成
+                            Thread.sleep(1000); // 等待WebView渲染完成
 
                             if (!isRunning) { logD("🛑 停止任务，终止带货数据查找"); break; }
 
-                            // OCR截图检测"带货数据"是否出现
+                            // OCR截图同时检测"带货数据"和"受众数据"
+                            // 两者都出现 = 带货数据图表完整可见，且两个30天都在屏幕内
                             final boolean[] cOcrDone = {false};
                             final boolean[] cFound = {false};
                             final int cIdx = cScroll + 1;
                             takeScreenshot(new ScreenshotCallback() {
                                 @Override
                                 public void onSuccess(android.graphics.Bitmap bitmap) {
+                                    // 使用模糊双组检测：一次OCR同时找"带货数据"和"受众数据"的所有OCR误识别变体
+                                    // "数"字常被ML Kit误读为"教"，所以候选词包含两种写法
                                     OcrHelper cOcr = new OcrHelper(message -> logD(message));
-                                    cOcr.findTextPosition(bitmap, "带货数据", new OcrHelper.OcrCallback() {
-                                        @Override
-                                        public void onSuccess(OcrHelper.TextMatch match) {
-                                            logD("✅ 第" + cIdx + "次下滑后OCR检测到'带货数据'");
-                                            cFound[0] = true;
-                                            cOcrDone[0] = true;
-                                            cOcr.release();
-                                            bitmap.recycle();
-                                        }
-                                        @Override
-                                        public void onFailure(String error) {
-                                            logD("⏳ 第" + cIdx + "次下滑未检测到'带货数据'，继续...");
-                                            cOcrDone[0] = true;
-                                            cOcr.release();
-                                            bitmap.recycle();
-                                        }
-                                    });
+                                    cOcr.findDualTextPositions(bitmap,
+                                        new String[]{"带货数据", "带货教据", "带货数"},   // 组1: 带货数据变体
+                                        new String[]{"受众数据", "受众教据", "受众数"},   // 组2: 受众数据变体
+                                        new OcrHelper.DualOcrCallback() {
+                                            @Override
+                                            public void onSuccess(String g1Match, int bdY, String g2Match, int szY) {
+                                                logD("✅ 第" + cIdx + "次下滑：'" + g1Match + "'(Y=" + bdY + ") + '" + g2Match + "'(Y=" + szY + ") 同时可见，停止下滑！");
+                                                bdYPos[0] = bdY;
+                                                cFound[0] = true;
+                                                cOcr.release();
+                                                bitmap.recycle();
+                                                cOcrDone[0] = true;
+                                            }
+                                            @Override
+                                            public void onPartial(String g1Match, int bdY) {
+                                                logD("⏳ 第" + cIdx + "次下滑：'" + g1Match + "'已见(Y=" + bdY + ")，但受众数据未出现，继续下滑...");
+                                                cOcr.release();
+                                                bitmap.recycle();
+                                                cOcrDone[0] = true;
+                                            }
+                                            @Override
+                                            public void onFailure(String error) {
+                                                logD("⏳ 第" + cIdx + "次下滑未检测到带货/受众数据，继续...");
+                                                cOcr.release();
+                                                bitmap.recycle();
+                                                cOcrDone[0] = true;
+                                            }
+                                        });
                                 }
                                 @Override
                                 public void onFailure() { cOcrDone[0] = true; }
@@ -4451,13 +4584,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                             if (cFound[0]) {
                                 cargoDataFound = true;
-                                // 截图保存带货数据页面
                                 Thread.sleep(300);
-                                takeScreenshotWithPrefix("购物车取证_带货数据", new ScreenshotCallback() {
-                                    @Override public void onSuccess() { logD("✅ 带货数据页截图保存成功"); }
-                                    @Override public void onFailure() { logE("❌ 带货数据页截图保存失败"); }
-                                });
-                                Thread.sleep(500);
 
                                 // ★ 点击"带货数据"旁边的"30天"按钮，打开时间筛选弹窗
                                 // ① 优先：无障碍API精准定位
@@ -4509,9 +4636,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                                 // ② 无障碍失败则兜底：OCR坐标点击
                                 if (!thirtyDayClicked) {
-                                    logD("⚠️ 无障碍点击失败，OCR兜底查找'近30日'/'30天'...");
+                                    logD("⚠️ 无障碍点击失败，OCR兜底查找'近30日'/'30天'（优先与带货数据Y相近的那个）...");
                                     final int[] thirtyDayPos = {-1, -1};
                                     final boolean[] thirtyDayOcrDone = {false};
+                                    final int targetBdY = bdYPos[0]; // 带货数据标题Y，用于匹配同行的30天按钮
                                     takeScreenshot(new ScreenshotCallback() {
                                         @Override
                                         public void onSuccess(android.graphics.Bitmap bitmap) {
@@ -4520,13 +4648,32 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                             tdOcr.findAnyTextPosition(bitmap, new String[]{"近30日", "30天"}, new OcrHelper.OcrAnyCallback() {
                                                 @Override
                                                 public void onSuccess(String matchedKeyword) {
+                                                    // 全量搜索所有"30天"，选与带货数据Y最近的（即同一行的30天按钮）
                                                     OcrHelper posOcr = new OcrHelper(msg -> logD(msg));
-                                                    posOcr.findTextPosition(bitmap, matchedKeyword, new OcrHelper.OcrCallback() {
+                                                    posOcr.findAllTextPositions(bitmap, matchedKeyword, new OcrHelper.OcrMultiCallback() {
                                                         @Override
-                                                        public void onSuccess(OcrHelper.TextMatch match) {
-                                                            thirtyDayPos[0] = match.center.x;
-                                                            thirtyDayPos[1] = match.center.y;
-                                                            logD("✅ OCR找到时间按钮：'" + matchedKeyword + "' 坐标=(" + match.center.x + "," + match.center.y + ")");
+                                                        public void onSuccess(java.util.List<OcrHelper.TextMatch> matches) {
+                                                            OcrHelper.TextMatch bestMatch = matches.get(0);
+                                                            if (targetBdY > 0) {
+                                                                // 优先选Y与"带货数据"标题Y差值最小的（同行按钮）
+                                                                int minDiff = Math.abs(bestMatch.center.y - targetBdY);
+                                                                for (OcrHelper.TextMatch m : matches) {
+                                                                    int diff = Math.abs(m.center.y - targetBdY);
+                                                                    if (diff < minDiff) {
+                                                                        minDiff = diff;
+                                                                        bestMatch = m;
+                                                                    }
+                                                                }
+                                                                logD("✅ OCR找到时间按钮：'" + matchedKeyword + "' 共" + matches.size() + "个匹配，带货数据Y=" + targetBdY + "，选最近的坐标=(" + bestMatch.center.x + "," + bestMatch.center.y + ") 差=" + minDiff + "px");
+                                                            } else {
+                                                                // 无参考Y时降级：取Y最小的
+                                                                for (OcrHelper.TextMatch m : matches) {
+                                                                    if (m.center.y < bestMatch.center.y) bestMatch = m;
+                                                                }
+                                                                logD("✅ OCR找到时间按钮：'" + matchedKeyword + "' 共" + matches.size() + "个匹配，取Y最小的坐标=(" + bestMatch.center.x + "," + bestMatch.center.y + ")");
+                                                            }
+                                                            thirtyDayPos[0] = bestMatch.center.x;
+                                                            thirtyDayPos[1] = bestMatch.center.y;
                                                             posOcr.release();
                                                             tdOcr.release();
                                                             bitmap.recycle();
@@ -4607,8 +4754,56 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                     }
                                     if (ninetyDayPos[0] >= 0) {
                                         clickByCoordinates(ninetyDayPos[0], ninetyDayPos[1]);
-                                        logD("🖱️ 已点击'近90天'，等待页面刷新...");
-                                        Thread.sleep(1000);
+                                        logD("🖱️ 已点击'近90天'，OCR轮询等待筛选器切换完成...");
+
+                                        // OCR轮询：每500ms截图检测"90天"是否出现，最多等6秒
+                                        boolean ninetyLoaded = false;
+                                        for (int nw = 0; nw < 12 && !ninetyLoaded; nw++) {
+                                            if (!isRunning) throw new InterruptedException("stopped");
+                                            Thread.sleep(500);
+                                            final boolean[] nwDone = {false};
+                                            final boolean[] nwFound = {false};
+                                            final int nwIdx = nw + 1;
+                                            takeScreenshot(new ScreenshotCallback() {
+                                                @Override
+                                                public void onSuccess(android.graphics.Bitmap bitmap) {
+                                                    OcrHelper nwOcr = new OcrHelper(msg -> logD(msg));
+                                                    nwOcr.findTextPosition(bitmap, "90天", new OcrHelper.OcrCallback() {
+                                                        @Override
+                                                        public void onSuccess(OcrHelper.TextMatch match) {
+                                                            logD("✅ OCR检测到'90天'，数据已加载完成（第" + nwIdx + "次轮询）");
+                                                            nwFound[0] = true;
+                                                            nwOcr.release();
+                                                            bitmap.recycle();
+                                                            nwDone[0] = true;
+                                                        }
+                                                        @Override
+                                                        public void onFailure(String error) {
+                                                            logD("⏳ 第" + nwIdx + "次轮询：'90天'未出现，继续等待...");
+                                                            nwOcr.release();
+                                                            bitmap.recycle();
+                                                            nwDone[0] = true;
+                                                        }
+                                                    });
+                                                }
+                                                @Override public void onFailure() { nwDone[0] = true; }
+                                            });
+                                            long nwWait = System.currentTimeMillis();
+                                            while (!nwDone[0] && System.currentTimeMillis() - nwWait < 2000) {
+                                                if (!isRunning) throw new InterruptedException("stopped");
+                                                Thread.sleep(50);
+                                            }
+                                            if (nwFound[0]) { ninetyLoaded = true; }
+                                        }
+                                        if (!ninetyLoaded) {
+                                            logE("⚠️ 6秒内未检测到'90天'，可能加载较慢，继续截图");
+                                        }
+
+                                        if (!isRunning) throw new InterruptedException("stopped");
+                                        // 受众数据在首次下滑阶段已确认可见，带货数据图表已完整显示
+                                        // 点击30天→90天是弹窗操作，不改变页面滚动位置，直接截图即可
+                                        logD("📸 90天数据已加载，带货数据图表完整可见，准备截图...");
+                                        Thread.sleep(300);
                                         if (!isRunning) throw new InterruptedException("stopped");
                                         takeScreenshotWithPrefix("购物车取证_带货数据_90天", new ScreenshotCallback() {
                                             @Override public void onSuccess() { logD("✅ 带货数据90天截图保存成功"); }
@@ -4622,7 +4817,20 @@ public class AutomationAccessibilityService extends AccessibilityService {
                             } // if (cFound[0])
                         }
                         if (!cargoDataFound) {
-                            logE("❌ 下滑10次后仍未检测到'带货数据'，跳过截图");
+                            logE("❌ 下滑20次后仍未检测到'带货数据'（可能未加载完成），跳过截图");
+                        }
+
+                        // 🆕 继续下滑查找"创作灵感"区域，进行侵权视频封面对比
+                        if (isRunning) {
+                            logD("📜 查找创作灵感区域进行侵权封面对比...");
+                            try {
+                                scrollToInspirationAndCompare();
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                logD("🛑 创作灵感封面对比被中断");
+                            } catch (Exception ex) {
+                                logE("创作灵感封面对比异常: " + ex.getMessage());
+                            }
                         }
 
                         // 完成后返回商品详情页
@@ -5857,9 +6065,16 @@ public class AutomationAccessibilityService extends AccessibilityService {
                             posOcr.findTextPosition(bmp, keyword, new OcrHelper.OcrCallback() {
                                 @Override
                                 public void onSuccess(OcrHelper.TextMatch match) {
-                                    logD("📍 坐标: (" + match.center.x + ", " + match.center.y + ")");
+                                    logD("📍 原始坐标: (" + match.center.x + ", " + match.center.y + ")");
                                     clickPos[0] = match.center.x;
                                     clickPos[1] = match.center.y;
+                                    // OCR识别的是底部文字标签，若Y>2100则极可能超出item可点击区域
+                                    // 向上偏移90px，改为点击图标区域（item上半部分），确保在bounds内
+                                    if (clickPos[1] > 2100) {
+                                        int adjustedY = clickPos[1] - 90;
+                                        logD("⚠️ 资质规则Y=" + clickPos[1] + " 过低（超出item底部），上移至Y=" + adjustedY + " 点击图标区域");
+                                        clickPos[1] = adjustedY;
+                                    }
                                     ocrDone[0] = true;
                                     posOcr.release();
                                     pollOcr.release();
@@ -7053,6 +7268,385 @@ public class AutomationAccessibilityService extends AccessibilityService {
             logE("点击【QQ】按钮失败: " + e.getMessage());
         }
     }
+
+    // ==================== 创作灵感封面对比 ====================
+
+    /**
+     * 下滑查找"创作灵感"区域，并对比侵权视频封面
+     * 下滑最多12次（每次400px），OCR检测"创作灵感"出现后调用 compareInspirationCarousel
+     */
+    private void scrollToInspirationAndCompare() throws InterruptedException {
+        // 无论是否有封面Key，都先下滑到创作灵感区域让其可见
+        // 有封面Key时才进行侵权视频对比
+        boolean hasKey = coverImageKey != null && !coverImageKey.isEmpty();
+        if (!hasKey) {
+            logD("⚠️ 未提供封面Key，将只下滑到创作灵感区域展示，不做封面对比");
+        }
+        logD("📜 开始下滑查找'创作灵感'区域（最多12次，每次400px）...");
+        boolean inspirationFound = false;
+        int inspirationY = -1;
+
+        for (int i = 0; i < 12 && !inspirationFound; i++) {
+            if (!isRunning) break;
+            // 每次向下滚动400px（手指从Y=1600上划到Y=1200）
+            android.graphics.Path path = new android.graphics.Path();
+            path.moveTo(540, 1600);
+            path.lineTo(540, 1200);
+            android.accessibilityservice.GestureDescription gesture =
+                new android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 350))
+                    .build();
+            dispatchGesture(gesture, null, null);
+            Thread.sleep(800);
+            if (!isRunning) break;
+
+            final boolean[] ocrDone = {false};
+            final boolean[] found = {false};
+            final int[] foundY = {-1};
+            final int scrollIdx = i + 1;
+            takeScreenshot(new ScreenshotCallback() {
+                @Override
+                public void onSuccess(android.graphics.Bitmap bitmap) {
+                    OcrHelper ocr = new OcrHelper(message -> logD(message));
+                    ocr.findTextPosition(bitmap, "创作灵感", new OcrHelper.OcrCallback() {
+                        @Override
+                        public void onSuccess(OcrHelper.TextMatch match) {
+                            logD("✅ 第" + scrollIdx + "次下滑后OCR检测到'创作灵感' Y=" + match.center.y);
+                            found[0] = true;
+                            foundY[0] = match.center.y;
+                            ocrDone[0] = true;
+                            ocr.release();
+                            bitmap.recycle();
+                        }
+                        @Override
+                        public void onFailure(String error) {
+                            logD("⏳ 第" + scrollIdx + "次下滑未检测到'创作灵感'，继续...");
+                            ocrDone[0] = true;
+                            ocr.release();
+                            bitmap.recycle();
+                        }
+                    });
+                }
+                @Override
+                public void onFailure() { ocrDone[0] = true; }
+            });
+            long waitStart = System.currentTimeMillis();
+            while (!ocrDone[0] && System.currentTimeMillis() - waitStart < 2500) {
+                if (!isRunning) break;
+                Thread.sleep(50);
+            }
+            if (found[0]) {
+                inspirationFound = true;
+                inspirationY = foundY[0];
+            }
+        }
+
+        if (!inspirationFound) {
+            logD("⚠️ 下滑12次后未找到'创作灵感'区域，此商品可能无创作灵感内容");
+            return;
+        }
+
+        logD("🎯 已定位'创作灵感' Y=" + inspirationY + "，开始智能上滑确保区域完整显示...");
+
+        // ★ 智能上滑：以"商品评价"消失作为停止信号
+        // 原理：商品评价在创作灵感上方，当商品评价滚出屏幕顶部，创作灵感轮播区域即完整显示
+        // 步长300px，最多10次
+        boolean productReviewGone = false;
+        for (int isIdx = 0; isIdx < 10 && !productReviewGone; isIdx++) {
+            if (!isRunning) break;
+            final int currentIsIdx = isIdx;
+            // 先检测当前屏幕是否还有"商品评价"，若已消失则不需要上滑了
+            final boolean[] preCheckDone = {false};
+            final boolean[] reviewStillVisible = {false};
+            takeScreenshot(new ScreenshotCallback() {
+                @Override
+                public void onSuccess(android.graphics.Bitmap bitmap) {
+                    OcrHelper preOcr = new OcrHelper(message -> logD(message));
+                    preOcr.findTextPosition(bitmap, "商品评价", new OcrHelper.OcrCallback() {
+                        @Override
+                        public void onSuccess(OcrHelper.TextMatch match) {
+                            logD("⏳ 第" + (currentIsIdx + 1) + "次检测：'商品评价' 仍可见 Y=" + match.center.y + "，继续上滑...");
+                            reviewStillVisible[0] = true;
+                            preOcr.release();
+                            bitmap.recycle();
+                            preCheckDone[0] = true;
+                        }
+                        @Override
+                        public void onFailure(String error) {
+                            logD("✅ 第" + (currentIsIdx + 1) + "次检测：'商品评价'已消失，创作灵感区域完整显示！");
+                            reviewStillVisible[0] = false;
+                            preOcr.release();
+                            bitmap.recycle();
+                            preCheckDone[0] = true;
+                        }
+                    });
+                }
+                @Override public void onFailure() { preCheckDone[0] = true; }
+            });
+            long preWait = System.currentTimeMillis();
+            while (!preCheckDone[0] && System.currentTimeMillis() - preWait < 2500) {
+                if (!isRunning) break;
+                Thread.sleep(50);
+            }
+            if (!reviewStillVisible[0]) {
+                productReviewGone = true;
+                break;
+            }
+            // "商品评价"还在，继续上滑300px
+            android.graphics.Path isPath = new android.graphics.Path();
+            isPath.moveTo(540, 1500);
+            isPath.lineTo(540, 1200);
+            android.accessibilityservice.GestureDescription isGesture =
+                new android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(isPath, 0, 200))
+                    .build();
+            dispatchGesture(isGesture, null, null);
+            Thread.sleep(500);
+        }
+        if (!productReviewGone) {
+            logD("⚠️ 10次上滑后'商品评价'仍可见，以当前视图继续操作");
+        }
+        logD("🎯 创作灵感区域已就绪，准备截图/封面对比");
+        if (hasKey) {
+            logD("🔍 开始进行侵权封面对比...");
+            compareInspirationCarousel(inspirationY);
+        } else {
+            // 没有封面Key时：截一张整体截图留存，然后结束
+            logD("📸 无封面Key，截图记录创作灵感区域后结束...");
+            takeScreenshotWithPrefix("购物车取证_创作灵感_整体", new ScreenshotCallback() {
+                @Override public void onSuccess() { logD("✅ 创作灵感整体截图已保存"); }
+                @Override public void onFailure() { logE("❌ 创作灵感整体截图保存失败"); }
+            });
+            Thread.sleep(500);
+        }
+    }
+
+    /**
+     * 对创作灵感当前可见视频进行封面对比（不左滑，只检查当前页面）
+     * @param inspirationY 创作灵感标题的OCR中心Y坐标
+     */
+    private void compareInspirationCarousel(int inspirationY) throws InterruptedException {
+        logD("🔍 开始封面Key对比，参考封面Key: " + coverImageKey);
+
+        // 先截一张整体截图留存
+        takeScreenshotWithPrefix("购物车取证_创作灵感_整体", new ScreenshotCallback() {
+            @Override public void onSuccess() { logD("✅ 创作灵感整体截图已保存"); }
+            @Override public void onFailure() { logE("❌ 创作灵感整体截图保存失败"); }
+        });
+        Thread.sleep(600);
+
+        // 读取无障碍树，扫描当前页面所有视频封面节点，找匹配的节点坐标
+        android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            logD("⚠️ 无法获取无障碍树，跳过封面对比");
+            return;
+        }
+        java.util.List<String> allKeys = new java.util.ArrayList<>();
+        java.util.List<android.graphics.Rect> matchedBounds = new java.util.ArrayList<>();
+        collectMatchingImageNodes(root, allKeys, matchedBounds);
+        root.recycle(); // 回收根节点，坐标已提前保存到 matchedBounds
+
+        logD("📊 无障碍树共扫描到 " + allKeys.size() + " 个Image节点");
+        for (int i = 0; i < allKeys.size(); i++) {
+            logD("  " + (coverImageKey.equals(allKeys.get(i)) ? "✅" : "❌") + " 第" + (i + 1) + "个 Key: " + allKeys.get(i));
+        }
+
+        if (matchedBounds.isEmpty()) {
+            logD("✅ 创作灵感封面对比完成：当前页面未发现侵权视频（共" + allKeys.size() + "个节点）");
+            return;
+        }
+
+        logD("⚠️ 发现 " + matchedBounds.size() + " 个侵权视频节点，准备依次点击取证...");
+
+        // 依次点击所有匹配的视频节点（通过坐标，节点已回收所以只能用坐标）
+        for (int idx = 0; idx < matchedBounds.size(); idx++) {
+            if (!isRunning) break;
+            android.graphics.Rect bounds = matchedBounds.get(idx);
+            int tapX = (bounds.left + bounds.right) / 2;
+            int tapY = (bounds.top + bounds.bottom) / 2;
+            logD("👆 第" + (idx + 1) + "/" + matchedBounds.size() + "个侵权视频坐标(" + tapX + ", " + tapY + ")，点击打开...");
+
+            // 用坐标点击（节点已回收，只能坐标）
+            clickByCoordinates(tapX, tapY);
+            long videoOpenTime = System.currentTimeMillis();
+
+            // 等待视频打开并开始播放
+            Thread.sleep(3500);
+
+            if (!isRunning) break;
+
+            // ① 检测左下角账号名称是否是侵权人
+            boolean accountVerified = false;
+            if (infringerName != null && !infringerName.isEmpty()) {
+                logD("🔍 OCR验证账号名称，期望包含: " + infringerName);
+                final boolean[] verifyDone = {false};
+                final boolean[] verifyResult = {false};
+                takeScreenshot(new ScreenshotCallback() {
+                    @Override
+                    public void onSuccess(android.graphics.Bitmap bitmap) {
+                        OcrHelper vOcr = new OcrHelper(msg -> logD(msg));
+                        vOcr.findTextPosition(bitmap, infringerName, new OcrHelper.OcrCallback() {
+                            @Override
+                            public void onSuccess(OcrHelper.TextMatch match) {
+                                logD("✅ 账号名称验证成功，找到'" + infringerName + "' Y=" + match.center.y);
+                                verifyResult[0] = true;
+                                vOcr.release();
+                                bitmap.recycle();
+                                verifyDone[0] = true;
+                            }
+                            @Override
+                            public void onFailure(String error) {
+                                logD("⚠️ 未找到侵权人账号'" + infringerName + "'，跳过此视频");
+                                vOcr.release();
+                                bitmap.recycle();
+                                verifyDone[0] = true;
+                            }
+                        });
+                    }
+                    @Override public void onFailure() { verifyDone[0] = true; }
+                });
+                long vWait = System.currentTimeMillis();
+                while (!verifyDone[0] && System.currentTimeMillis() - vWait < 3000) {
+                    if (!isRunning) break;
+                    Thread.sleep(50);
+                }
+                accountVerified = verifyResult[0];
+            } else {
+                // 未设置侵权人名称，跳过验证直接取证
+                logD("⚠️ 未设置侵权人名称，跳过账号验证，直接截图取证");
+                accountVerified = true;
+            }
+
+            if (!isRunning) break;
+
+            if (accountVerified) {
+                // ② 播放完整视频，随机截图3张（25% / 50% / 75%时间点）
+                final int captureVideoIdx = idx + 1;
+                int dur = videoDurationSeconds > 0 ? videoDurationSeconds : 60;
+                logD("🎬 账号验证通过，开始播放视频(时长=" + dur + "s)，将在25%/50%/75%时间点截图...");
+
+                // 计算三个截图时间点（相对视频打开+3.5s等待之后的已过去时间）
+                long[] screenshotDelays = {
+                    (long)(dur * 0.25 * 1000) - 3500,  // 25%时刻减去已等待的3.5s
+                    (long)(dur * 0.50 * 1000) - 3500,  // 50%时刻
+                    (long)(dur * 0.75 * 1000) - 3500   // 75%时刻
+                };
+                int[] capturePcts = {25, 50, 75};
+                for (int si = 0; si < 3; si++) {
+                    if (!isRunning) break;
+                    long remaining = screenshotDelays[si] - (System.currentTimeMillis() - videoOpenTime - 3500);
+                    if (remaining > 0) {
+                        logD("⏳ 等待" + (remaining/1000.0) + "s到达视频" + capturePcts[si] + "%时间点...");
+                        Thread.sleep(remaining);
+                    }
+                    if (!isRunning) break;
+                    final int pct = capturePcts[si];
+                    final int captureSeq = si + 1;
+                    takeScreenshotWithPrefix("购物车取证_创作灵感_侵权视频" + captureVideoIdx + "_截图" + captureSeq + "_" + pct + "pct", new ScreenshotCallback() {
+                        @Override public void onSuccess() { logD("✅ 侵权视频" + captureVideoIdx + " 第" + captureSeq + "张截图(" + pct + "%)已保存"); }
+                        @Override public void onFailure() { logE("❌ 侵权视频" + captureVideoIdx + " 第" + captureSeq + "张截图失败"); }
+                    });
+                    Thread.sleep(300);
+                }
+
+                // 等待视频播放完成（基于真实时钟计算剩余时间）
+                if (isRunning) {
+                    long videoEndMs = videoOpenTime + (long)(dur * 1000L);
+                    long remainMs = videoEndMs - System.currentTimeMillis();
+                    if (remainMs > 500) {
+                        logD("⏳ 等待视频播放完毕，剩余约" + (remainMs/1000) + "s...");
+                        Thread.sleep(Math.min(remainMs, remainMs));
+                    }
+                    logD("✅ 视频" + captureVideoIdx + "播放完毕，已截图3张取证");
+                }
+            }
+
+            // 按返回键回到商品详情页，准备点下一个
+            if (isRunning) {
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                logD("🔙 按返回键回到商品详情页...");
+                Thread.sleep(2500);
+            }
+        }
+
+        logD("✅ 创作灵感封面对比完成：共发现 " + matchedBounds.size() + " 个侵权视频，已全部取证完毕");
+    }
+
+    /**
+     * 递归遍历无障碍树，收集所有 android.widget.Image 节点中的图片Key，
+     * 同时将与 coverImageKey 匹配的节点的屏幕坐标（Rect）收集到 matchedBounds。
+     * 注意：在调用者 root.recycle() 之前必须完成坐标提取！
+     */
+    private void collectMatchingImageNodes(android.view.accessibility.AccessibilityNodeInfo node,
+                                            java.util.List<String> allKeys,
+                                            java.util.List<android.graphics.Rect> matchedBounds) {
+        if (node == null) return;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+        if ("android.widget.Image".equals(className)) {
+            CharSequence text = node.getText();
+            if (text != null) {
+                String key = extractImageKey(text.toString());
+                if (key != null) {
+                    allKeys.add(key);
+                    if (key.equals(coverImageKey)) {
+                        // 立即提取坐标（root.recycle()前），避免节点失效
+                        android.graphics.Rect b = new android.graphics.Rect();
+                        node.getBoundsInScreen(b);
+                        // 只收集在屏幕内的有效坐标（排除屏幕外或不可见节点）
+                        if (b.width() > 50 && b.height() > 50 && b.top >= 0 && b.bottom <= 2400) {
+                            matchedBounds.add(b);
+                            logD("📍 匹配节点坐标: (" + b.left + "," + b.top + ")-(" + b.right + "," + b.bottom + ") 中心=(" + ((b.left+b.right)/2) + "," + ((b.top+b.bottom)/2) + ")");
+                        } else {
+                            logD("⚠️ 匹配节点坐标无效或不在屏幕内: " + b.toString() + "，跳过");
+                        }
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            collectMatchingImageNodes(node.getChild(i), allKeys, matchedBounds);
+        }
+    }
+
+    /**
+     * 计算图片的感知哈希（aHash 8x8）
+     * 将图片缩放到8x8灰度图，对比每个像素与平均亮度，生成64位指纹
+     */
+    private long computeAHash(android.graphics.Bitmap bitmap) {
+        android.graphics.Bitmap small = android.graphics.Bitmap.createScaledBitmap(bitmap, 8, 8, true);
+        int[] pixels = new int[64];
+        long sum = 0;
+        for (int y = 0; y < 8; y++) {
+            for (int x = 0; x < 8; x++) {
+                int pixel = small.getPixel(x, y);
+                int r = (pixel >> 16) & 0xFF;
+                int g = (pixel >> 8) & 0xFF;
+                int b = pixel & 0xFF;
+                int gray = (int)(0.299 * r + 0.587 * g + 0.114 * b);
+                pixels[y * 8 + x] = gray;
+                sum += gray;
+            }
+        }
+        small.recycle();
+        int avg = (int)(sum / 64);
+        long hash = 0;
+        for (int i = 0; i < 64; i++) {
+            if (pixels[i] > avg) {
+                hash |= (1L << i);
+            }
+        }
+        return hash;
+    }
+
+    /**
+     * 计算两个64位aHash的汉明距离（不同bit数量）
+     * 距离越小说明图片越相似，<15视为同一视频封面
+     */
+    private int hammingDistance(long h1, long h2) {
+        return Long.bitCount(h1 ^ h2);
+    }
+
+    // ==================== 创作灵感封面对比 结束 ====================
 
     /**
      * 向右滑动分享弹窗底部操作行 (kdm RecyclerView)

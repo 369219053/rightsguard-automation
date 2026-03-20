@@ -316,6 +316,92 @@ public class OcrHelper {
     }
 
     /**
+     * 同时检测两组候选词（各组任意命中一个即视为找到），仅跑一次OCR，效率高。
+     * 典型用途：同时找"带货数据"（含OCR误识别变体）和"受众数据"（含误识别变体），
+     * 两者都命中才视为目标区域完整显示。
+     *
+     * @param bitmap   要识别的图片
+     * @param group1   第一组候选词（任意命中一个即算找到），例如 {"带货数据","带货教据","带货数"}
+     * @param group2   第二组候选词（任意命中一个即算找到），例如 {"受众数据","受众教据","受众数"}
+     * @param callback 回调：onSuccess(g1Match, g1Y, g2Match, g2Y) 两组都命中；
+     *                 onPartial(g1Match, g1Y) 只有第一组命中；
+     *                 onFailure 两组都未命中
+     */
+    public void findDualTextPositions(Bitmap bitmap, String[] group1, String[] group2, DualOcrCallback callback) {
+        if (bitmap == null) {
+            String msg = "❌ Bitmap为空,无法识别(双组)";
+            Log.e(TAG, msg);
+            if (logCallback != null) logCallback.onLog(msg);
+            callback.onFailure("Bitmap为空");
+            return;
+        }
+
+        String msg1 = "🔍 开始OCR识别(双组),组1=" + java.util.Arrays.toString(group1)
+                + " 组2=" + java.util.Arrays.toString(group2);
+        Log.d(TAG, msg1);
+        if (logCallback != null) logCallback.onLog(msg1);
+
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        recognizer.process(image)
+                .addOnSuccessListener(text -> {
+                    String msg = "✅ OCR识别成功,识别到 " + text.getTextBlocks().size() + " 个文本块";
+                    Log.d(TAG, msg);
+                    if (logCallback != null) logCallback.onLog(msg);
+
+                    int g1Y = -1, g2Y = -1;
+                    String g1Match = null, g2Match = null;
+
+                    for (Text.TextBlock block : text.getTextBlocks()) {
+                        String blockText = block.getText();
+                        String blockMsg = "📝 文本块: " + blockText;
+                        Log.d(TAG, blockMsg);
+                        if (logCallback != null) logCallback.onLog(blockMsg);
+
+                        Rect bounds = block.getBoundingBox();
+                        if (bounds == null) continue;
+
+                        // 检查第一组
+                        if (g1Y < 0) {
+                            for (String c : group1) {
+                                if (blockText.contains(c)) {
+                                    g1Y = bounds.centerY();
+                                    g1Match = c;
+                                    logCallback.onLog("🎯 [双组] 命中组1: '" + c + "' Y=" + g1Y);
+                                    break;
+                                }
+                            }
+                        }
+                        // 检查第二组
+                        if (g2Y < 0) {
+                            for (String c : group2) {
+                                if (blockText.contains(c)) {
+                                    g2Y = bounds.centerY();
+                                    g2Match = c;
+                                    logCallback.onLog("🎯 [双组] 命中组2: '" + c + "' Y=" + g2Y);
+                                    break;
+                                }
+                            }
+                        }
+                        if (g1Y >= 0 && g2Y >= 0) break; // 两组都找到，提前退出
+                    }
+
+                    if (g1Y >= 0 && g2Y >= 0) {
+                        callback.onSuccess(g1Match, g1Y, g2Match, g2Y);
+                    } else if (g1Y >= 0) {
+                        callback.onPartial(g1Match, g1Y);
+                    } else {
+                        callback.onFailure("两组候选词均未命中");
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    String errorMsg = "❌ OCR识别失败(双组): " + e.getMessage();
+                    Log.e(TAG, errorMsg);
+                    if (logCallback != null) logCallback.onLog(errorMsg);
+                    callback.onFailure(errorMsg);
+                });
+    }
+
+    /**
      * 释放资源
      */
     public void release() {
@@ -348,6 +434,18 @@ public class OcrHelper {
     public interface OcrAnyCallback {
         void onSuccess(String matchedKeyword);
 
+        void onFailure(String error);
+    }
+
+    /**
+     * OCR回调接口（双组候选词）
+     */
+    public interface DualOcrCallback {
+        /** 两组都命中 */
+        void onSuccess(String g1Match, int g1Y, String g2Match, int g2Y);
+        /** 仅第一组命中（第二组未出现） */
+        void onPartial(String g1Match, int g1Y);
+        /** 两组都未命中 */
         void onFailure(String error);
     }
 

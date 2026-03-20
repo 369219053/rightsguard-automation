@@ -12,6 +12,89 @@
 
 ## 🚀 版本历史
 
+### V4.4 (2026-03-20) 🔍 模糊OCR匹配 + 创作灵感侵权视频完整取证流程
+
+**✨ 核心更新 - 模糊候选词OCR + 创作灵感视频账号验证 + 25/50/75%截图取证**
+
+#### ✅ 完成内容
+
+**1. 模糊OCR双组检测 - `findDualTextPositions()` - OcrHelper.java**
+- ✅ **新增方法**: `findDualTextPositions(Bitmap, String[], String[], DualOcrCallback)` 一次OCR同时检测两组候选词
+- ✅ **带货数据候选组**: `["带货数据", "带货教据", "带货数"]`（覆盖"数"→"教"误读）
+- ✅ **受众数据候选组**: `["受众数据", "受众教据", "受众数"]`（覆盖"数"→"教"误读）
+- ✅ **onPartial回调**: 仅组1命中时继续下滑，避免过早停止
+- ✅ **onBoth回调**: 两组同时命中才停止，保证图表完整显示
+
+**2. 双组同时命中停滑策略 - `checkAndCaptureShoppingCart()` - AutomationAccessibilityService.java**
+- ✅ **下滑步长调整**: 500px → **350px**（减少超调，避免带货数据滚出屏幕顶部）
+- ✅ **最大次数增加**: 10次 → **20次**（弥补步长减少带来的次数需求）
+- ✅ **停止条件**: 带货数据候选词 + 受众数据候选词**同时**出现才停止（之前只检测受众数据）
+- ✅ **30天按钮选取**: 从所有"30天"中选Y差值与"带货数据"最小的那个（上面那个），避免误点受众数据的30天
+
+**3. 创作灵感侵权视频检测修复 - `compareInspirationCarousel()` - AutomationAccessibilityService.java**
+- ✅ **移除左滑逻辑**: 删除按卡片位置左滑430px的逻辑，只检查当前页面可见视频
+- ✅ **坐标先存后recycle**: 扫描节点时先调用 `getBoundsInScreen()` 保存 `Rect`，再 `root.recycle()`，避免recycle后坐标失效
+- ✅ **坐标有效性校验**: 宽>50px AND 高>50px AND Y坐标在屏幕内(0~2400)
+- ✅ **点击方式**: 直接用保存的 `Rect` 坐标调用 `clickByCoordinates`，不依赖失效节点引用
+
+**4. 侵权视频完整取证流程 - `compareInspirationCarousel()` - AutomationAccessibilityService.java**
+- ✅ **账号名称OCR验证**: 点开视频后，OCR检测屏幕是否包含 `infringerName`，不匹配则跳过
+- ✅ **三点截图**: 按视频时长的 25% / 50% / 75% 时间点截图，每点等待到达后截图
+- ✅ **等待视频播完**: 基于真实时钟（`System.currentTimeMillis()`）计算剩余时间，不重复等待
+- ✅ **多视频循环**: 当前页面有几个侵权视频就处理几个，每个处理完按返回键继续下一个
+- ✅ **文件名格式**: `购物车取证_创作灵感_侵权视频1_截图1_25pct.png`
+
+**5. 测试模式补充封面Key - `startTestMode()` - MainActivity.java**
+- ✅ **问题修复**: 普通测试模式未传递封面URL，导致"无封面Key"流程结束
+- ✅ **修复方案**: 补充 `setCoverImageUrl()` 和 `setVideoDurationSeconds()` 调用，与正式流程一致
+
+#### 🔧 技术关键代码
+
+**模糊双组OCR检测**:
+```java
+OcrHelper.findDualTextPositions(bitmap,
+    new String[]{"带货数据", "带货教据", "带货数"},   // 组1
+    new String[]{"受众数据", "受众教据", "受众数"},   // 组2
+    new DualOcrCallback() {
+        void onBoth(TextMatch g1, TextMatch g2) { /* 停止下滑，点击30天 */ }
+        void onPartial(TextMatch g1) { /* 仅组1 → 继续下滑 */ }
+        void onNone() { /* 继续下滑 */ }
+    });
+```
+
+**坐标先存后recycle（防止失效）**:
+```java
+Rect bounds = new Rect();
+node.getBoundsInScreen(bounds);
+if (bounds.width() > 50 && bounds.height() > 50 && bounds.bottom <= 2400) {
+    matchedBounds.add(bounds); // 只保存Rect，不保存节点引用
+}
+root.recycle(); // 安全，坐标已保存
+```
+
+**三点截图时序**:
+```java
+long startMs = System.currentTimeMillis();
+int[] pcts = {25, 50, 75};
+for (int i = 0; i < pcts.length; i++) {
+    long targetMs = startMs + (long)(videoDurationSeconds * 1000 * pcts[i] / 100.0);
+    long waitMs = targetMs - System.currentTimeMillis();
+    if (waitMs > 0) Thread.sleep(waitMs);
+    takeScreenshotWithPrefix("购物车取证_创作灵感_侵权视频" + idx + "_截图" + (i+1) + "_" + pcts[i] + "pct", ...);
+}
+```
+
+#### 📁 文件变更
+- `app/src/main/java/com/rightsguard/automation/OcrHelper.java`
+  - 新增 `findDualTextPositions()`: 一次OCR双组模糊候选词匹配，带 onBoth/onPartial/onNone 回调
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - `checkAndCaptureShoppingCart()`: 步长350px、双组停滑条件、带货数据Y最近30天
+  - `compareInspirationCarousel()`: 移除左滑、坐标先存后recycle、账号验证、三点截图
+- `app/src/main/java/com/rightsguard/automation/MainActivity.java`
+  - `startTestMode()`: 补充 `setCoverImageUrl()` 和 `setVideoDurationSeconds()`
+
+---
+
 ### V4.3 (2026-03-12) 🛒 带货数据时间筛选 + 无障碍上下文点击 + 测试模式修复
 
 **✨ 核心更新 - 带货数据90天时间筛选 + 精准上下文节点导航**
