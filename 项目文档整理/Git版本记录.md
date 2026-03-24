@@ -12,6 +12,62 @@
 
 ## 🚀 版本历史
 
+### V4.5 (2026-03-24) 🛡️ 测试模式补充广告检测 + 创作灵感视频逐条分享链接到QQ
+
+**✨ 核心更新 - 启动广告检测覆盖测试模式 + 创作灵感视频逐条QQ分享**
+
+#### ✅ 完成内容
+
+**1. 测试模式补充广告检测 - `testModeThread` - AutomationAccessibilityService.java**
+- ✅ **问题根因**: `skipDouyinSplashAdIfPresent()` 仅在 `startDouyinAutomation()` 里调用，测试模式走独立 `testModeThread` 路径，广告出现时完全跳过了检测逻辑
+- ✅ **修复方案**: 在 `testModeThread` 的 Step1（确认抖音到前台）之后、Step2（唤出导航栏）之前，插入 `skipDouyinSplashAdIfPresent()` 调用
+- ✅ **广告检测逻辑**: 最多等10秒，每500ms轮询一次；3秒内无广告则提前返回，不影响无广告时的响应速度
+- ✅ **检测策略A**: 精确ID匹配 `com.ss.android.ugc.aweme:id/0m4`（dump确认）
+- ✅ **检测策略B**: desc含"跳过广告"（防止抖音版本更新后ID变更）
+- ✅ **点击策略**: 优先无障碍API点击；失败时坐标兜底（自动计算按钮中心坐标）
+
+**2. 创作灵感视频逐条分享链接到QQ - `shareCurrentInspirationVideoToQQ()` - AutomationAccessibilityService.java**
+- ✅ **正确流程**: 每处理完一条侵权视频（看完+截图），立即在视频页分享链接到QQ，再返回创作灵感继续下一条
+- ✅ **Step8修复**: 分享完成按HOME最小化QQ后，改用 `switchToDouyin()` 切回抖音（原 `startActivity(ACTION_MAIN)` 在此设备抛出 No Activity found 异常）
+- ✅ **三重兜底**: URL Scheme `snssdk1128://` → `getLaunchIntentForPackage()` → 手动构造 MAIN/LAUNCHER Intent
+- ✅ **文件名格式**: `创作灵感_侵权视频1_QQ发送取证`、`创作灵感_侵权视频2_QQ发送取证`
+
+#### 🔧 技术关键代码
+
+**测试模式广告检测插入位置**:
+```java
+// 确认抖音到前台后 ← 已有逻辑
+logD("✅ 第N秒检测到抖音已到前台");
+
+// ★ 新增：立即检测启动广告
+logD("🔍 [测试模式] 检测抖音启动广告...");
+skipDouyinSplashAdIfPresent();  // 无广告3秒后自动返回，有广告点击跳过
+
+// Step2 唤出底部导航栏 ← 已有逻辑
+clickByCoordinates(540, 800);
+```
+
+**切回抖音修复（Step8）**:
+```java
+// ❌ 原写法（抛 ActivityNotFoundException）
+douyinIntent.setPackage("com.ss.android.ugc.aweme");
+douyinIntent.setAction(ACTION_MAIN);
+startActivity(douyinIntent);
+
+// ✅ 修复后（三重兜底）
+switchToDouyin();
+Thread.sleep(2000);
+```
+
+#### 📋 日志关键输出
+- `🔍 [测试模式] 检测抖音启动广告...` → 广告检测被触发（测试模式路径）
+- `✅ [广告检测] 发现'跳过广告'按钮(ID:0m4)，坐标=...，准备点击...` → 有广告时
+- `✅ [广告检测] 等待XXXms，未检测到启动广告，正常启动` → 无广告时
+- `📤 侵权视频N已看完，在视频页分享链接到QQ...` → 逐条分享开始
+- `✅ 已通过URL Scheme切换到抖音APP (方案1)` → Step8切回抖音
+
+---
+
 ### V4.4 (2026-03-20) 🔍 模糊OCR匹配 + 创作灵感侵权视频完整取证流程
 
 **✨ 核心更新 - 模糊候选词OCR + 创作灵感视频账号验证 + 25/50/75%截图取证**

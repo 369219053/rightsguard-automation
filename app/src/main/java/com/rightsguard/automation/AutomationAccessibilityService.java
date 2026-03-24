@@ -418,6 +418,12 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     return;
                 }
 
+                // ★ 广告检测：抖音到前台后立即检测并跳过启动广告（测试模式同样需要）
+                // skipDouyinSplashAdIfPresent() 会等最多10秒，无广告则3秒后自动返回
+                if (!isRunning) { logD("🛑 停止任务，终止测试模式"); return; }
+                logD("🔍 [测试模式] 检测抖音启动广告...");
+                skipDouyinSplashAdIfPresent();
+
                 // Step2: 点击"我"按钮
                 if (!isRunning) { logD("🛑 停止任务，终止测试模式"); return; }
                 // 注意：URL Scheme打开抖音后落在全屏视频信息流，底部导航栏默认隐藏
@@ -2557,9 +2563,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
             try {
                 logD("🎯 权利卫士已打开抖音,开始自动化流程...");
 
-                // 等待抖音完全启动
-                logD("⏱️ 等待抖音完全启动(3秒)...");
-                Thread.sleep(3000);
+                // 等待抖音完全启动，同时检测并跳过启动广告
+                logD("⏱️ 等待抖音完全启动，同时检测启动广告...");
+                skipDouyinSplashAdIfPresent();
 
                 // 检测是否在首页
                 android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
@@ -5795,6 +5801,105 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
+     * 抖音首次启动时，检测并跳过启动广告页面。
+     * 策略：最多等待10秒，每500ms检测一次"跳过广告"按钮（ID: 0m4，或desc含"跳过广告"）。
+     *   - 检测到 → 点击跳过，等待广告消失后继续
+     *   - 未检测到（正常启动无广告）→ 等满3秒后继续
+     * 注意：广告页面不能随意点击正文区域，只能点右上角跳过按钮。
+     */
+    private void skipDouyinSplashAdIfPresent() throws InterruptedException {
+        logD("🔍 [广告检测] 开始检测抖音启动广告（最多等待10秒）...");
+        final int MAX_WAIT_MS = 10000;    // 最多等10秒
+        final int POLL_INTERVAL_MS = 500; // 每500ms检测一次
+        boolean adDetected = false;
+        int elapsed = 0;
+
+        while (elapsed < MAX_WAIT_MS) {
+            Thread.sleep(POLL_INTERVAL_MS);
+            elapsed += POLL_INTERVAL_MS;
+
+            android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root == null) continue;
+
+            try {
+                boolean skipFound = false;
+
+                // 策略A：通过ID精确查找（dump确认：com.ss.android.ugc.aweme:id/0m4）
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> skipNodes =
+                    root.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/0m4");
+                if (skipNodes != null && !skipNodes.isEmpty()) {
+                    for (android.view.accessibility.AccessibilityNodeInfo n : skipNodes) {
+                        android.graphics.Rect r = new android.graphics.Rect();
+                        n.getBoundsInScreen(r);
+                        if (r.width() > 0 && r.height() > 0) {
+                            logD("✅ [广告检测] 发现'跳过广告'按钮(ID:0m4)，坐标=" + r.toString() + "，准备点击...");
+                            // 优先无障碍API点击
+                            boolean clicked = n.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            if (!clicked) {
+                                // 兜底：坐标点击右上角（dump确认中心约(948,192)）
+                                int cx = (r.left + r.right) / 2;
+                                int cy = (r.top + r.bottom) / 2;
+                                clickByCoordinates(cx, cy);
+                                logD("⚡ [广告检测] 坐标兜底点击跳过广告 (" + cx + "," + cy + ")");
+                            } else {
+                                logD("⚡ [广告检测] 无障碍API点击跳过广告成功");
+                            }
+                            skipFound = true;
+                            adDetected = true;
+                        }
+                        n.recycle();
+                        if (skipFound) break;
+                    }
+                }
+
+                // 策略B：通过desc含"跳过广告"查找（防止ID变更）
+                if (!skipFound) {
+                    android.view.accessibility.AccessibilityNodeInfo skipDescNode =
+                        findNodeByDescContains(root, "跳过广告");
+                    if (skipDescNode != null) {
+                        android.graphics.Rect r = new android.graphics.Rect();
+                        skipDescNode.getBoundsInScreen(r);
+                        if (r.width() > 0 && r.height() > 0) {
+                            logD("✅ [广告检测] 发现'跳过广告'按钮(desc匹配)，坐标=" + r.toString() + "，准备点击...");
+                            boolean clicked = skipDescNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            if (!clicked) {
+                                int cx = (r.left + r.right) / 2;
+                                int cy = (r.top + r.bottom) / 2;
+                                clickByCoordinates(cx, cy);
+                                logD("⚡ [广告检测] 坐标兜底点击跳过广告 (" + cx + "," + cy + ")");
+                            } else {
+                                logD("⚡ [广告检测] 无障碍API点击跳过广告成功(desc)");
+                            }
+                            skipFound = true;
+                            adDetected = true;
+                        }
+                        skipDescNode.recycle();
+                    }
+                }
+
+                if (skipFound) {
+                    // 点击后等待广告页消失（最多再等3秒）
+                    logD("⏳ [广告检测] 已点击跳过，等待广告页消失（最多3秒）...");
+                    Thread.sleep(3000);
+                    logD("✅ [广告检测] 广告跳过完成，继续正常流程");
+                    return;
+                }
+
+                // 无广告时：若已等满3秒（6次检测），且没有发现广告，判断为无广告正常启动
+                if (elapsed >= 3000 && !adDetected) {
+                    logD("✅ [广告检测] 等待" + elapsed + "ms，未检测到启动广告，正常启动");
+                    return;
+                }
+
+            } finally {
+                root.recycle();
+            }
+        }
+
+        logD("⏰ [广告检测] 等待超时(" + MAX_WAIT_MS + "ms)，未检测到广告，继续正常流程");
+    }
+
+    /**
      * 多策略检测当前是否在抖音【视频播放页】
      * 先排除作者主页，再检测视频页特有元素
      * 策略1: zzf (分享按钮) 有正常正值宽高  ← dump确认的新ID
@@ -7559,17 +7664,130 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     }
                     logD("✅ 视频" + captureVideoIdx + "播放完毕，已截图3张取证");
                 }
+
+                // ③ 视频播放完毕，在当前视频页分享链接到QQ【我的电脑】，然后返回抖音视频页
+                if (isRunning) {
+                    logD("📤 侵权视频" + captureVideoIdx + "已看完，在视频页分享链接到QQ...");
+                    try {
+                        shareCurrentInspirationVideoToQQ(captureVideoIdx);
+                    } catch (Exception e) {
+                        logE("❌ 侵权视频" + captureVideoIdx + "分享QQ失败: " + e.getMessage());
+                    }
+                }
             }
 
-            // 按返回键回到商品详情页，准备点下一个
+            // 按返回键回到创作灵感页，准备点击下一个侵权视频
             if (isRunning) {
                 performGlobalAction(GLOBAL_ACTION_BACK);
-                logD("🔙 按返回键回到商品详情页...");
+                logD("🔙 按返回键回到创作灵感页...");
                 Thread.sleep(2500);
             }
         }
 
         logD("✅ 创作灵感封面对比完成：共发现 " + matchedBounds.size() + " 个侵权视频，已全部取证完毕");
+    }
+
+    /**
+     * 创作灵感侵权视频播放完毕后（此时已在视频播放页），分享链接到QQ【我的电脑】，然后切回抖音。
+     * 调用时必须处于视频播放页。分享完成后按返回键可回到创作灵感页。
+     * 注意：本方法不停止录屏/不生成PDF，仅完成分享后切回抖音。
+     * @param videoIdx 当前是第几个侵权视频，用于日志和截图命名
+     */
+    private void shareCurrentInspirationVideoToQQ(int videoIdx) throws InterruptedException {
+        logD("📤 [侵权视频" + videoIdx + "] 开始在视频页分享链接到QQ【我的电脑】...");
+
+        // Step 1: 点击视频页【分享】按钮（三级兜底逻辑）
+        logD("📤 Step1: 点击视频页【分享】按钮...");
+        {
+            boolean shareClicked = false;
+            android.view.accessibility.AccessibilityNodeInfo rootForShare = getRootInActiveWindow();
+            if (rootForShare != null) {
+                // 方案A: zzf ID（dump确认的新ID）
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> zzfNodes =
+                    rootForShare.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/zzf");
+                if (zzfNodes != null) {
+                    for (android.view.accessibility.AccessibilityNodeInfo n : zzfNodes) {
+                        android.graphics.Rect r = new android.graphics.Rect();
+                        n.getBoundsInScreen(r);
+                        if (r.width() > 0 && r.height() > 0) {
+                            shareClicked = n.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            logD("⚡ 无障碍API点击【分享】zzf: " + shareClicked);
+                        }
+                        n.recycle();
+                        if (shareClicked) break;
+                    }
+                }
+                // 方案B: desc含"分享"且位于右侧
+                if (!shareClicked) {
+                    android.view.accessibility.AccessibilityNodeInfo shareDescNode = findNodeByDescContains(rootForShare, "分享");
+                    if (shareDescNode != null) {
+                        android.graphics.Rect r = new android.graphics.Rect();
+                        shareDescNode.getBoundsInScreen(r);
+                        if (r.width() > 0 && r.height() > 0 && r.right > 800) {
+                            shareClicked = shareDescNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                            logD("⚡ 无障碍API点击【分享】desc: " + shareClicked);
+                        }
+                        shareDescNode.recycle();
+                    }
+                }
+                rootForShare.recycle();
+            }
+            // 方案C: 坐标兜底 (1044, 1700)
+            if (!shareClicked) {
+                clickByCoordinates(1044, 1700);
+                logD("⚡ 坐标兜底点击【分享】(1044,1700)");
+            }
+        }
+        logD("🎉 分享按钮已点击，等待分享弹窗出现...");
+
+        // Step 2: 等待分享弹窗出现，点击【分享链接】
+        Thread.sleep(1500);
+        clickShareLinkInPopup();
+
+        // Step 3: 等待"链接已复制"弹窗，点击【QQ】
+        Thread.sleep(1500);
+        clickQQButton();
+
+        // Step 4: 等待QQ打开，点击【我的电脑】
+        Thread.sleep(2000);
+        clickMyComputerInQQ();
+
+        // Step 5: 等待聊天界面打开，粘贴并发送链接（不停止录屏/不生成PDF）
+        Thread.sleep(2000);
+        logD("📋 Step5: 粘贴链接并发送到QQ【我的电脑】...");
+        clickByCoordinates(466, 2165);   // 点击输入框，触发键盘+粘贴浮窗
+        Thread.sleep(800);
+        clickByCoordinates(484, 1503);   // 点击粘贴浮窗
+        Thread.sleep(500);
+        clickByCoordinates(956, 1244);   // 点击发送按钮
+        logD("✅ [侵权视频" + videoIdx + "] 链接已发送到QQ【我的电脑】！");
+
+        // Step 6: 等待消息出现，截图取证
+        Thread.sleep(1000);
+        logD("📸 Step6: 截图保存QQ发送记录...");
+        final int captureIdx = videoIdx;
+        final boolean[] screenshotDone = {false};
+        takeScreenshotWithPrefix("创作灵感_侵权视频" + captureIdx + "_QQ发送取证", new ScreenshotCallback() {
+            @Override public void onSuccess() { logD("✅ 侵权视频" + captureIdx + " QQ发送截图已保存"); screenshotDone[0] = true; }
+            @Override public void onFailure() { logE("❌ 侵权视频" + captureIdx + " QQ发送截图失败"); screenshotDone[0] = true; }
+        });
+        for (int i = 0; i < 30; i++) {
+            if (screenshotDone[0]) break;
+            Thread.sleep(100);
+        }
+
+        // Step 7: 按HOME键最小化QQ
+        Thread.sleep(500);
+        logD("🏠 Step7: 按HOME键最小化QQ...");
+        performGlobalAction(GLOBAL_ACTION_HOME);
+        Thread.sleep(1000);
+
+        // Step 8: 切回抖音（回到视频播放页，后续按返回键可回到创作灵感页）
+        // 使用 switchToDouyin() 三重兜底：URL Scheme → getLaunchIntentForPackage → MAIN/LAUNCHER
+        logD("📱 Step8: 切回抖音，回到视频播放页...");
+        switchToDouyin();
+        Thread.sleep(2000); // 等待抖音到前台
+        logD("✅ [侵权视频" + videoIdx + "] 已切回抖音视频页，按返回键将回到创作灵感页");
     }
 
     /**
