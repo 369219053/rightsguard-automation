@@ -7501,10 +7501,63 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
             if (!isRunning) break;
 
-            // ① 封面Key已匹配确认是侵权视频，无需再做账号名OCR验证（V4.8简化）
-            // 直接取证，避免OCR找名称失败导致误跳过真实侵权视频
-            boolean accountVerified = true;
-            logD("✅ 封面Key已匹配，跳过账号名OCR验证，直接取证");
+            // ① 无障碍树验证账号名称（dump确认：title节点含"@账号名"，user_avatar含账号名）
+            // 不使用OCR——视频播放时画面特效/水印导致OCR失败；无障碍树直接读取文本，100%可靠
+            boolean accountVerified = false;
+            if (infringerName != null && !infringerName.isEmpty()) {
+                logD("🔍 无障碍树验证账号名称，期望包含: " + infringerName);
+                android.view.accessibility.AccessibilityNodeInfo vRoot = getRootInActiveWindow();
+                if (vRoot != null) {
+                    // 方式1: 查找 title 节点（ID=nua下的title，内容为"@账号名"）
+                    // 过滤：只看屏幕内可见节点（top >= 0 && bottom <= 2400）
+                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> titleNodes =
+                        vRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/title");
+                    if (titleNodes != null) {
+                        for (android.view.accessibility.AccessibilityNodeInfo tn : titleNodes) {
+                            android.graphics.Rect tr = new android.graphics.Rect();
+                            tn.getBoundsInScreen(tr);
+                            CharSequence text = tn.getText();
+                            // 只检查屏幕可见区域内的节点，避免被下一个视频的off-screen节点误匹配
+                            if (tr.top >= 0 && tr.bottom <= 2400 && text != null
+                                    && text.toString().contains(infringerName)) {
+                                logD("✅ 账号名称验证成功（title节点），找到'" + infringerName + "' text='" + text + "' Y=" + tr.top);
+                                accountVerified = true;
+                            }
+                            tn.recycle();
+                            if (accountVerified) break;
+                        }
+                    }
+                    // 方式2: 查找 user_avatar 的 ContentDescription（备用）
+                    if (!accountVerified) {
+                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> avatarNodes =
+                            vRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/user_avatar");
+                        if (avatarNodes != null) {
+                            for (android.view.accessibility.AccessibilityNodeInfo an : avatarNodes) {
+                                android.graphics.Rect ar = new android.graphics.Rect();
+                                an.getBoundsInScreen(ar);
+                                CharSequence desc = an.getContentDescription();
+                                if (ar.top >= 0 && ar.bottom <= 2400 && desc != null
+                                        && desc.toString().contains(infringerName)) {
+                                    logD("✅ 账号名称验证成功（user_avatar desc），找到'" + infringerName + "' desc='" + desc + "'");
+                                    accountVerified = true;
+                                }
+                                an.recycle();
+                                if (accountVerified) break;
+                            }
+                        }
+                    }
+                    vRoot.recycle();
+                    if (!accountVerified) {
+                        logD("⚠️ 未在无障碍树中找到侵权人账号'" + infringerName + "'，跳过此视频");
+                    }
+                } else {
+                    logD("⚠️ 无法获取无障碍树，跳过账号验证，直接截图取证");
+                    accountVerified = true;
+                }
+            } else {
+                logD("⚠️ 未设置侵权人名称，跳过账号验证，直接截图取证");
+                accountVerified = true;
+            }
 
             if (!isRunning) break;
 
