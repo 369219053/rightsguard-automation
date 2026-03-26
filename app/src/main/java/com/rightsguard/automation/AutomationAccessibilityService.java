@@ -54,6 +54,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private String infringerName = ""; // 侵权人账号名称
     private android.graphics.Bitmap referenceCoverBitmap = null; // 侵权视频参考封面（备用，保留）
     private String coverImageKey = null; // 🆕 侵权视频封面唯一Key（从用户输入的封面URL提取，支持jpeg_m_MD5格式和TOS格式，用于创作灵感精确对比）
+    private String targetVideoPlayCount = ""; // 🆕 创作灵感中侵权视频的播放量，用于达人视频列表中匹配（如"368.55万"）
 
     // 🧪 测试模式标志
     private boolean isTestMode = false; // 是否为测试模式(跳过权利卫士+录屏，直接打开抖音→历史→作者主页)
@@ -200,11 +201,28 @@ public class AutomationAccessibilityService extends AccessibilityService {
      */
     public void setRemark(String remark) {
         this.remark = remark != null ? remark : "";
-        // 解析原创名称和侵权人账号名称（格式: 原创名称-抖音:侵权人账号名称）
+        // 解析原创名称和侵权人账号名称
+        // 输入格式: 原创名称-抖音:侵权人名称-佣金率 其他内容...
+        // 侵权人名称在 "-抖音:" 后，到下一个 "-数字" 或空格前截止
         int douyinIndex = this.remark.indexOf("-抖音:");
         if (douyinIndex > 0) {
             this.originalName = this.remark.substring(0, douyinIndex).trim();
-            this.infringerName = this.remark.substring(douyinIndex + 4).trim();
+            String afterDouyin = this.remark.substring(douyinIndex + 4).trim();
+            // 在侵权人名称中，找到第一个 "-数字" 的位置（佣金率格式如 -3.58），在此截断
+            int commIdx = -1;
+            for (int i = 0; i < afterDouyin.length() - 1; i++) {
+                if (afterDouyin.charAt(i) == '-' && Character.isDigit(afterDouyin.charAt(i + 1))) {
+                    commIdx = i;
+                    break;
+                }
+            }
+            if (commIdx > 0) {
+                this.infringerName = afterDouyin.substring(0, commIdx).trim();
+            } else {
+                // 没有佣金率则用空格分隔
+                int spaceIdx = afterDouyin.indexOf(' ');
+                this.infringerName = (spaceIdx > 0) ? afterDouyin.substring(0, spaceIdx).trim() : afterDouyin;
+            }
         } else {
             this.originalName = this.remark;
             this.infringerName = "";
@@ -515,20 +533,52 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
-     * 🛒 购物测试模式：直接从当前视频播放页执行购物车取证（三个点→选品带货→进店）
-     * 适用于单独测试购物流程，需要用户手动停在有购物锚点的抖音视频页面
+     * 🎯 带货测试模式：跳转抖音后直接在带货达人Tab查找侵权人
+     * 使用前：手动在抖音打开商品页，切到"带货达人"Tab，然后回到本APK点击按钮
      */
-    public void startShoppingTestMode() {
-        logD("🛒 启动购物测试模式...");
+    public void startLeadingCreatorTestMode() {
+        logD("🎯 启动带货测试模式...");
         isRunning = true;
 
         new Thread(() -> {
             try {
-                logD("🛒 购物测试模式: 直接执行购物车取证流程（三个点→选品带货→进店）...");
-                checkAndCaptureShoppingCart();
-                logD("✅ 购物测试模式完成");
+                // Step1: 跳转抖音，等待到前台
+                logD("📱 带货测试模式 Step1: 跳转抖音...");
+                switchToDouyin();
+
+                // 等待抖音到前台（最多8秒）
+                boolean douyinInFront = false;
+                for (int i = 0; i < 8; i++) {
+                    Thread.sleep(1000);
+                    android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+                    if (root != null) {
+                        CharSequence rootPkg = root.getPackageName();
+                        if (rootPkg != null && rootPkg.toString().contains("aweme")) {
+                            douyinInFront = true;
+                            logD("✅ 抖音已到前台（第" + (i + 1) + "秒）");
+                            root.recycle();
+                            break;
+                        }
+                        root.recycle();
+                    }
+                }
+
+                if (!douyinInFront) {
+                    logE("❌ 8秒内抖音未到前台，带货测试模式终止");
+                    return;
+                }
+
+                // Step2: 当前已在带货达人Tab，直接查找侵权账号
+                if (!isRunning) { logD("🛑 停止任务，终止带货测试模式"); return; }
+                logD("🎯 带货测试模式 Step2: 直接在带货达人Tab查找侵权人...");
+                checkLeadingCreators();
+                logD("✅ 带货测试模式完成");
+
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                logD("🛑 带货测试模式被中断");
             } catch (Exception e) {
-                logE("🛒 购物测试模式失败: " + e.getMessage());
+                logE("🎯 带货测试模式失败: " + e.getMessage());
                 e.printStackTrace();
             } finally {
                 isRunning = false;
@@ -7439,6 +7489,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
         // ─── Step 4: 点击"达人"，走带货达人检测流程 ───
         if (isRunning) {
             logD("📜 创作灵感处理完毕，继续处理'带货达人'板块...");
+            logD("✅ [达人] 点击'达人'标签(934,277)...");
+            clickNavTab("达人", 934, 277);
+            Thread.sleep(1500);
             try {
                 checkLeadingCreators();
             } catch (Exception e) {
@@ -7470,6 +7523,19 @@ public class AutomationAccessibilityService extends AccessibilityService {
         java.util.List<String> allKeys = new java.util.ArrayList<>();
         java.util.List<android.graphics.Rect> matchedBounds = new java.util.ArrayList<>();
         collectMatchingImageNodes(root, allKeys, matchedBounds);
+
+        // 🆕 提取匹配视频的播放量（在root.recycle()之前，节点仍有效）
+        if (!matchedBounds.isEmpty()) {
+            int matchCenterX = (matchedBounds.get(0).left + matchedBounds.get(0).right) / 2;
+            String pc = extractPlayCountNearX(root, matchCenterX);
+            if (pc != null && !pc.isEmpty()) {
+                targetVideoPlayCount = pc;
+                logD("📊 [创作灵感] 捕获侵权视频播放量: " + targetVideoPlayCount);
+            } else {
+                logD("⚠️ [创作灵感] 未能从轮播图提取到侵权视频播放量");
+            }
+        }
+
         root.recycle(); // 回收根节点，坐标已提前保存到 matchedBounds
 
         logD("📊 无障碍树共扫描到 " + allKeys.size() + " 个Image节点");
@@ -7856,98 +7922,34 @@ public class AutomationAccessibilityService extends AccessibilityService {
         }
 
         // ─────────────────────────────────────────────────────────────────
-        // ★ 空白页恢复：4秒等待后页面仍空白 → 点击三个点→选品带货，重新进入正确页面
-        //   与 checkAndCaptureShoppingCart() 中的三个点→选品带货流程相同
-        //   恢复成功后继续执行带货达人检测（同一方法继续往下）
+        // ★ 空白页恢复：直接重新点击"达人"标签，避免滑动手势导致误返回上一页
+        //   原因：下滑手势（内容上移）会触发页面后退，改为用Tab点击强制加载达人区域
         // ─────────────────────────────────────────────────────────────────
         if (!pageLoaded) {
-            // ★ 空白页恢复：在屏幕中间安全区域执行下滑手势，触发创作灵感页面加载
-            //   原理：空白页下滑一下即可重新加载内容，用滑动手势（非点击）避免误触任何按钮
-            //   安全区域：X=540（水平居中），Y=1100→1700（避开顶部按钮栏和底部导航栏）
-            logD("🔄 [带货达人] 检测到空白页面，通过安全下滑手势触发页面加载（最多3次）...");
-            boolean swipeRecovered = false;
-            for (int swipeIdx = 0; swipeIdx < 3 && !swipeRecovered; swipeIdx++) {
-                if (!isRunning) return;
-                final int curSwipe = swipeIdx;
-
-                // 执行下滑手势（moveTo+lineTo = 滑动，不会触发点击事件）
-                android.graphics.Path swipePath = new android.graphics.Path();
-                swipePath.moveTo(540, 1100); // 起点：屏幕中上部安全区
-                swipePath.lineTo(540, 1700); // 终点：屏幕中下部安全区（向下滑600px）
-                dispatchGesture(
-                    new android.accessibilityservice.GestureDescription.Builder()
-                        .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(swipePath, 0, 500))
-                        .build(), null, null);
-                logD("👆 [带货达人] 第" + (curSwipe + 1) + "次下滑手势执行，等待1.5秒页面加载...");
-                Thread.sleep(1500);
-
-                // OCR检测"创作灵感"是否已加载出来
-                final boolean[] swipeOcrDone = {false};
-                final boolean[] swipeOcrFound = {false};
-                takeScreenshot(new ScreenshotCallback() {
-                    @Override
-                    public void onSuccess(android.graphics.Bitmap bitmap) {
-                        if (bitmap == null) { swipeOcrDone[0] = true; return; }
-                        OcrHelper swipeOcr = new OcrHelper(msg -> logD(msg));
-                        swipeOcr.findTextPosition(bitmap, "创作灵感", new OcrHelper.OcrCallback() {
-                            @Override
-                            public void onSuccess(OcrHelper.TextMatch match) {
-                                logD("✅ [带货达人] 第" + (curSwipe + 1) + "次滑动后OCR检测到'创作灵感'，页面已恢复！");
-                                swipeOcrFound[0] = true;
-                                swipeOcrDone[0] = true;
-                                swipeOcr.release();
-                                bitmap.recycle();
-                            }
-                            @Override
-                            public void onFailure(String error) {
-                                logD("⌛ [带货达人] 第" + (curSwipe + 1) + "次滑动后页面仍未加载，继续重试...");
-                                swipeOcrDone[0] = true;
-                                swipeOcr.release();
-                                bitmap.recycle();
-                            }
-                        });
-                    }
-                    @Override public void onFailure() { swipeOcrDone[0] = true; }
-                });
-                long swipeWait = System.currentTimeMillis();
-                while (!swipeOcrDone[0] && System.currentTimeMillis() - swipeWait < 3000) {
-                    Thread.sleep(100);
-                }
-                swipeRecovered = swipeOcrFound[0];
-            }
-
-            if (swipeRecovered) {
-                logD("✅ [带货达人] 空白页通过滑动手势恢复，继续带货达人检测流程");
-            } else {
-                logD("⚠️ [带货达人] 3次滑动后页面仍未出现'创作灵感'，强制继续带货达人检测");
-            }
+            logD("🔄 [带货达人] 检测到空白页面，重新点击'达人'标签恢复（不做滑动）...");
+            clickNavTab("达人", 934, 277);
+            Thread.sleep(2000);
+            logD("✅ [带货达人] 已重新点击'达人'标签，继续后续流程");
         }
-
-        if (infringerName == null || infringerName.isEmpty()) {
-            logD("⚠️ [带货达人] 未设置侵权人名称，跳过达人检测");
-            return;
-        }
-        logD("📜 [带货达人] 开始检测（侵权账号: " + infringerName + "）...");
 
         // ─────────────────────────────────────────────────────────────────
-        // Step 1: 上滑触发顶部Tab导航栏，点击"达人"直接定位到带货达人区域
+        // Step 1: 截图存档带货达人整体区域（无论是否有侵权账号，都先截图）
         // ─────────────────────────────────────────────────────────────────
-        logD("📜 [带货达人] 上滑触发顶部导航栏...");
-        boolean darenNavVisible = ensureTopNavVisible();
-        if (!darenNavVisible) {
-            logD("✅ [带货达人] 未能触发顶部导航栏，跳过达人检测，继续后续流程");
-            return;
-        }
-        logD("✅ [带货达人] 导航栏已出现，点击'达人'标签(934,277)...");
-        clickNavTab("达人", 934, 277);
-        Thread.sleep(1500); // 等待带货达人区域完整加载
-
-        // Step 3: 截图存档带货达人整体区域
+        logD("📷 [带货达人] 截图带货达人整体区域...");
         takeScreenshotWithPrefix("购物车取证_带货达人_整体", new ScreenshotCallback() {
             @Override public void onSuccess() { logD("✅ 带货达人整体截图已保存"); }
             @Override public void onFailure() { logE("❌ 带货达人整体截图保存失败"); }
         });
         Thread.sleep(500);
+
+        // ─────────────────────────────────────────────────────────────────
+        // Step 2: 如未设置侵权账号名称，截图已完成，直接返回
+        // ─────────────────────────────────────────────────────────────────
+        if (infringerName == null || infringerName.isEmpty()) {
+            logD("⚠️ [带货达人] 未设置侵权人名称，截图已保存，跳过达人点击检测");
+            return;
+        }
+        logD("📜 [带货达人] 开始检测（侵权账号: " + infringerName + "）...");
 
         // Step 4: 优先用无障碍树查找侵权账号名称（精确匹配 TextView 节点）
         // 节点坐标必须在屏幕可见区（Y: 200~2100）才视为真正可见，否则额外下滑对齐
@@ -8035,10 +8037,112 @@ public class AutomationAccessibilityService extends AccessibilityService {
         }
 
         if (creatorFound) {
-            logD("✅ [带货达人] 已点击侵权账号'" + infringerName + "'，等待后续步骤...");
+            logD("✅ [带货达人] 已点击侵权账号'" + infringerName + "'，等待达人主页加载...");
+
+            // 等待达人主页加载（最多8秒，检测到"视频"Tab出现即可）
+            boolean homeLoaded = false;
+            android.graphics.Rect videoTabRect = null;
+            for (int i = 0; i < 8; i++) {
+                Thread.sleep(1000);
+                android.view.accessibility.AccessibilityNodeInfo root2 = getRootInActiveWindow();
+                if (root2 != null) {
+                    videoTabRect = findCreatorProfileVideoTab(root2);
+                    root2.recycle();
+                    if (videoTabRect != null) {
+                        logD("✅ [带货达人] 达人主页已加载（第" + (i + 1) + "秒），Tab栏已出现");
+                        homeLoaded = true;
+                        break;
+                    }
+                }
+            }
+            if (!homeLoaded) {
+                logD("⚠️ [带货达人] 未检测到Tab栏，继续等待2秒...");
+                Thread.sleep(2000);
+            }
+
+            // Step1: 在首页点击"近7日"筛选器，切换到"近30日"
+            logD("🗓️ [带货达人] Step1: 点击首页时间筛选器(880,168)...");
+            clickByCoordinates(880, 168);
+            Thread.sleep(1500);
+
+            // 无障碍树查找"近30日"选项并点击
+            android.view.accessibility.AccessibilityNodeInfo filterRoot = getRootInActiveWindow();
+            if (filterRoot != null) {
+                android.graphics.Rect rect30 = findTextNodeByExactText(filterRoot, "近30日");
+                filterRoot.recycle();
+                if (rect30 != null) {
+                    int fx = (rect30.left + rect30.right) / 2;
+                    int fy = (rect30.top + rect30.bottom) / 2;
+                    clickByCoordinates(fx, fy);
+                    logD("✅ [带货达人] 已选择'近30日' (" + fx + "," + fy + ")，等待页面刷新...");
+                } else {
+                    // 兜底坐标（来自dump分析：近30日选项中心≈747,703）
+                    clickByCoordinates(747, 703);
+                    logD("⚠️ [带货达人] 无障碍未找到'近30日'，坐标兜底(747,703)");
+                }
+            }
+            Thread.sleep(2500);
+
+            // Step2: 截图首页（近30日数据）
+            logD("📸 [带货达人] Step2: 对达人首页近30日截图存档...");
+            takeScreenshotWithPrefix("购物车取证_达人首页_近30日", new ScreenshotCallback() {
+                @Override public void onSuccess() { logD("✅ 达人首页近30日截图已保存"); }
+                @Override public void onFailure() { logE("❌ 达人首页近30日截图失败"); }
+            });
+            Thread.sleep(1000);
+
+            // Step3: 点击"视频"Tab
+            logD("👆 [带货达人] Step3: 点击'视频'Tab...");
+            if (videoTabRect != null) {
+                int vx = (videoTabRect.left + videoTabRect.right) / 2;
+                int vy = (videoTabRect.top + videoTabRect.bottom) / 2;
+                clickByCoordinates(vx, vy);
+                logD("👆 [带货达人] 已点击'视频'Tab (" + vx + "," + vy + ")");
+            } else {
+                clickByCoordinates(540, 654);
+                logD("👆 [带货达人] 坐标兜底点击'视频'Tab (540,654)");
+            }
+            Thread.sleep(2000);
+
+            // Step4: 用封面Key在视频列表查找侵权视频
+            if (coverImageKey != null && !coverImageKey.isEmpty()) {
+                logD("🔍 [视频查找] Step4: 目标封面Key=" + coverImageKey + "，开始在视频列表查找侵权视频...");
+                searchVideoByCoverKey();
+            } else {
+                logD("⚠️ [视频查找] 未设置封面Key，跳过视频查找");
+            }
+
         } else {
             logD("✅ [带货达人] 板块中未发现侵权账号'" + infringerName + "'，继续后续流程");
         }
+    }
+
+    /**
+     * 在达人主页无障碍树中查找"视频"Tab节点，返回其屏幕坐标 Rect。
+     * dump中对应：ID=tabBarIndex-2，Text="视频"，clickable=true
+     */
+    private android.graphics.Rect findCreatorProfileVideoTab(android.view.accessibility.AccessibilityNodeInfo node) {
+        if (node == null) return null;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+        if ("android.widget.TextView".equals(className)) {
+            CharSequence text = node.getText();
+            if (text != null && "视频".equals(text.toString().trim()) && node.isClickable()) {
+                android.graphics.Rect b = new android.graphics.Rect();
+                node.getBoundsInScreen(b);
+                if (b.width() > 0 && b.height() > 0 && b.top >= 0 && b.bottom <= 2400) {
+                    return b;
+                }
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                android.graphics.Rect result = findCreatorProfileVideoTab(child);
+                child.recycle();
+                if (result != null) return result;
+            }
+        }
+        return null;
     }
 
     /**
@@ -8055,7 +8159,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 android.graphics.Rect b = new android.graphics.Rect();
                 node.getBoundsInScreen(b);
                 logD("🎯 [带货达人] 无障碍树找到达人名称: '" + text + "' bounds=" + b);
-                if (b.width() > 0 && b.height() > 0 && b.top > 0 && b.bottom <= 2400) {
+                if (b.width() > 0 && b.height() > 0 && b.top >= 0 && b.bottom <= 2400) {
                     return b;
                 }
             }
@@ -8067,6 +8171,58 @@ public class AutomationAccessibilityService extends AccessibilityService {
             if (result != null) return result;
         }
         return null;
+    }
+
+    /**
+     * 在创作灵感轮播图的无障碍树中，查找X中心最接近 targetCenterX 的播放量文本。
+     * 适用于：创作灵感区域视频卡片中格式为"X.XX万"的播放量TextView。
+     */
+    private String extractPlayCountNearX(android.view.accessibility.AccessibilityNodeInfo node, int targetCenterX) {
+        java.util.List<String> texts = new java.util.ArrayList<>();
+        java.util.List<Integer> xCenters = new java.util.ArrayList<>();
+        collectCarouselPlayCounts(node, texts, xCenters);
+        if (texts.isEmpty()) return null;
+        int bestIdx = 0;
+        int bestDiff = Integer.MAX_VALUE;
+        for (int i = 0; i < xCenters.size(); i++) {
+            int diff = Math.abs(xCenters.get(i) - targetCenterX);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                bestIdx = i;
+            }
+        }
+        return bestDiff < 400 ? texts.get(bestIdx) : null;
+    }
+
+    /**
+     * 递归收集创作灵感轮播区域中格式为"X.XX万"的播放量TextViews及其X中心。
+     */
+    private void collectCarouselPlayCounts(android.view.accessibility.AccessibilityNodeInfo node,
+                                           java.util.List<String> texts,
+                                           java.util.List<Integer> xCenters) {
+        if (node == null) return;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+        if ("android.widget.TextView".equals(className)) {
+            CharSequence text = node.getText();
+            if (text != null) {
+                String t = text.toString().trim();
+                if (t.contains("万") && t.matches("[0-9]+\\.?[0-9]*万[+]?")) {
+                    android.graphics.Rect b = new android.graphics.Rect();
+                    node.getBoundsInScreen(b);
+                    if (b.width() > 0 && b.height() > 0) {
+                        texts.add(t);
+                        xCenters.add((b.left + b.right) / 2);
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                collectCarouselPlayCounts(child, texts, xCenters);
+                child.recycle();
+            }
+        }
     }
 
     // ==================== 创作灵感封面对比 结束 ====================
@@ -8192,6 +8348,363 @@ public class AutomationAccessibilityService extends AccessibilityService {
             logD("⚠️ [导航Tab] 无障碍未命中，坐标兜底点击(" + fallbackX + "," + fallbackY + ")...");
             clickByCoordinates(fallbackX, fallbackY);
         }
+    }
+
+    /**
+     * 在侵权达人"视频"页面，通过播放量匹配查找并点击侵权视频。
+     * 策略：扫描可见播放量节点 → 与targetVideoPlayCount模糊匹配 → 找到则点击截图
+     * 若未找到则下滑继续查找，直至内容不再变化（已到列表底部）。
+     */
+    private void searchVideoByPlayCount() throws InterruptedException {
+        if (targetVideoPlayCount == null || targetVideoPlayCount.isEmpty()) {
+            logD("⚠️ [视频查找] 未设置目标播放量，跳过");
+            return;
+        }
+        logD("🔍 [视频查找] 开始查找播放量=" + targetVideoPlayCount + " 的视频，等待列表加载...");
+        Thread.sleep(2000);
+
+        java.util.Set<String> previousCountSet = new java.util.HashSet<>();
+        final int MAX_SCROLLS = 30;
+
+        for (int scrollIdx = 0; scrollIdx <= MAX_SCROLLS; scrollIdx++) {
+            if (!isRunning) break;
+
+            // 扫描当前屏幕上所有播放量节点
+            java.util.List<String> countTexts = new java.util.ArrayList<>();
+            java.util.List<Integer> countYCenters = new java.util.ArrayList<>();
+            android.view.accessibility.AccessibilityNodeInfo scanRoot = getRootInActiveWindow();
+            if (scanRoot != null) {
+                collectVideoListPlayCounts(scanRoot, countTexts, countYCenters);
+                scanRoot.recycle();
+            }
+            logD("📊 [视频查找] 第" + (scrollIdx + 1) + "轮，扫描到" + countTexts.size() + "个播放量节点");
+
+            // 尝试匹配目标播放量
+            boolean found = false;
+            for (int i = 0; i < countTexts.size(); i++) {
+                String ct = countTexts.get(i);
+                logD("  检查: " + ct + " vs 目标: " + targetVideoPlayCount);
+                if (playCountMatches(ct, targetVideoPlayCount)) {
+                    int clickY = countYCenters.get(i);
+                    int clickX = 345; // 缩略图X中心（dump: [309,381] 中心≈345）
+                    logD("✅ [视频查找] 匹配成功！播放量=" + ct + "，点击缩略图(" + clickX + "," + clickY + ")");
+                    Thread.sleep(300);
+                    clickByCoordinates(clickX, clickY);
+                    long videoOpenTime = System.currentTimeMillis();
+                    Thread.sleep(3500);
+                    if (!isRunning) return;
+
+                    // 截图3张（25% / 50% / 75%时间点）
+                    int dur = videoDurationSeconds > 0 ? videoDurationSeconds : 60;
+                    logD("🎬 [视频查找] 开始截图取证（时长=" + dur + "s）...");
+                    long[] delays = {
+                        (long)(dur * 0.25 * 1000) - 3500,
+                        (long)(dur * 0.50 * 1000) - 3500,
+                        (long)(dur * 0.75 * 1000) - 3500
+                    };
+                    int[] pcts = {25, 50, 75};
+                    for (int si = 0; si < 3; si++) {
+                        if (!isRunning) break;
+                        long remaining = delays[si] - (System.currentTimeMillis() - videoOpenTime - 3500);
+                        if (remaining > 0) Thread.sleep(remaining);
+                        if (!isRunning) break;
+                        final int pct = pcts[si];
+                        final int seq = si + 1;
+                        takeScreenshotWithPrefix("购物车取证_达人视频_截图" + seq + "_" + pct + "pct", new ScreenshotCallback() {
+                            @Override public void onSuccess() { logD("✅ 达人视频第" + seq + "张截图(" + pct + "%)已保存"); }
+                            @Override public void onFailure() { logE("❌ 达人视频第" + seq + "张截图失败"); }
+                        });
+                        Thread.sleep(300);
+                    }
+
+                    // 返回视频列表
+                    if (isRunning) {
+                        performGlobalAction(GLOBAL_ACTION_BACK);
+                        logD("🔙 [视频查找] 已返回，取证完成");
+                    }
+                    found = true;
+                    break;
+                }
+            }
+            if (found) break;
+
+            // 检查是否到达底部（播放量集合与上次滚动相同）
+            java.util.Set<String> currentCountSet = new java.util.HashSet<>(countTexts);
+            if (scrollIdx > 0 && !currentCountSet.isEmpty() && currentCountSet.equals(previousCountSet)) {
+                logD("⚠️ [视频查找] 已到达列表底部，未找到播放量=" + targetVideoPlayCount + " 的视频，返回");
+                break;
+            }
+            if (!currentCountSet.isEmpty()) {
+                previousCountSet = currentCountSet;
+            }
+
+            // 下滑继续查找（手指从下向上滑）
+            logD("📜 [视频查找] 第" + (scrollIdx + 1) + "次下滑查找...");
+            android.graphics.Path scrollPath = new android.graphics.Path();
+            scrollPath.moveTo(540, 1800);
+            scrollPath.lineTo(540, 900);
+            android.accessibilityservice.GestureDescription scrollGesture =
+                new android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(scrollPath, 0, 400))
+                    .build();
+            dispatchGesture(scrollGesture, null, null);
+            Thread.sleep(1200);
+        }
+    }
+
+    /**
+     * 递归遍历无障碍树，收集侵权达人视频列表中所有可见的播放量文本及其Y坐标。
+     * 识别逻辑：找到Text="播放量"的TextView → 在其父节点的兄弟节点中查找"X.XX万"格式的数值。
+     */
+    private void collectVideoListPlayCounts(android.view.accessibility.AccessibilityNodeInfo node,
+                                            java.util.List<String> countTexts,
+                                            java.util.List<Integer> countYCenters) {
+        if (node == null) return;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+        if ("android.widget.TextView".equals(className)) {
+            CharSequence text = node.getText();
+            if (text != null && "播放量".equals(text.toString().trim())) {
+                android.graphics.Rect b = new android.graphics.Rect();
+                node.getBoundsInScreen(b);
+                if (b.width() > 0 && b.height() > 0 && b.top >= 0 && b.bottom <= 2400) {
+                    int playLabelYCenter = (b.top + b.bottom) / 2;
+                    // 在父节点中找兄弟节点（播放量数值，X起点在"播放量"标签右侧）
+                    android.view.accessibility.AccessibilityNodeInfo parent = node.getParent();
+                    if (parent != null) {
+                        for (int i = 0; i < parent.getChildCount(); i++) {
+                            android.view.accessibility.AccessibilityNodeInfo sibling = parent.getChild(i);
+                            if (sibling != null) {
+                                android.graphics.Rect sr = new android.graphics.Rect();
+                                sibling.getBoundsInScreen(sr);
+                                CharSequence sText = sibling.getText();
+                                if (sText != null && sr.left >= 450 && Math.abs(sr.centerY() - playLabelYCenter) < 40) {
+                                    String sStr = sText.toString().trim();
+                                    if (sStr.contains("万") && sStr.matches("[0-9]+\\.?[0-9]*万[+]?")) {
+                                        countTexts.add(sStr);
+                                        countYCenters.add(playLabelYCenter);
+                                        logD("📍 [视频列表] 找到播放量: " + sStr + " Y=" + playLabelYCenter);
+                                    }
+                                }
+                                sibling.recycle();
+                            }
+                        }
+                        parent.recycle();
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                collectVideoListPlayCounts(child, countTexts, countYCenters);
+                child.recycle();
+            }
+        }
+    }
+
+    /**
+     * 将播放量文本解析为浮点数（万为单位）。
+     * 支持格式：53.83万、5万、1.08万、22万+
+     * 返回-1表示解析失败。
+     */
+    private float parsePlayCountFloat(String text) {
+        if (text == null || !text.contains("万")) return -1f;
+        try {
+            String num = text.replace("万+", "").replace("万", "").trim();
+            return Float.parseFloat(num);
+        } catch (NumberFormatException e) {
+            return -1f;
+        }
+    }
+
+    /**
+     * 模糊匹配两个播放量字符串（允许±2%或±0.5万的误差）。
+     * 因为创作灵感和视频列表在不同时间采集，数值可能因实时更新略有差异。
+     */
+    private boolean playCountMatches(String actual, String target) {
+        float a = parsePlayCountFloat(actual);
+        float t = parsePlayCountFloat(target);
+        if (a < 0 || t < 0) return actual.equals(target);
+        float diff = Math.abs(a - t);
+        float tolerance = Math.max(t * 0.02f, 0.5f); // 2%或0.5万，取较大值
+        return diff <= tolerance;
+    }
+
+    /**
+     * 递归查找Text精确匹配的TextView节点，返回其屏幕坐标Rect。
+     * 用于定位下拉筛选菜单中的选项（如"近30日"）。
+     */
+    private android.graphics.Rect findTextNodeByExactText(
+            android.view.accessibility.AccessibilityNodeInfo node, String exactText) {
+        if (node == null) return null;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+        if ("android.widget.TextView".equals(className)) {
+            CharSequence text = node.getText();
+            if (text != null && exactText.equals(text.toString().trim())) {
+                android.graphics.Rect b = new android.graphics.Rect();
+                node.getBoundsInScreen(b);
+                if (b.width() > 0 && b.height() > 0) {
+                    logD("🎯 [筛选器] 找到文本节点'" + exactText + "' bounds=" + b);
+                    return b;
+                }
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                android.graphics.Rect result = findTextNodeByExactText(child, exactText);
+                child.recycle();
+                if (result != null) return result;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 在侵权达人"视频"页面，通过封面图Key匹配查找并点击侵权视频。
+     * 策略：扫描Image节点的text属性，匹配coverImageKey → 找到则点击整个视频卡片 → 截图3张
+     * 未找到则下滑继续查找，直至内容不再变化（已到列表底部）。
+     */
+    private void searchVideoByCoverKey() throws InterruptedException {
+        if (coverImageKey == null || coverImageKey.isEmpty()) {
+            logD("⚠️ [封面查找] 未设置封面Key，跳过");
+            return;
+        }
+        logD("🔍 [封面查找] 开始滚动查找封面Key=" + coverImageKey);
+        Thread.sleep(1500);
+
+        java.util.Set<String> previousKeySet = new java.util.HashSet<>();
+        final int MAX_SCROLLS = 30;
+
+        for (int scrollIdx = 0; scrollIdx <= MAX_SCROLLS; scrollIdx++) {
+            if (!isRunning) break;
+
+            // 扫描当前屏幕所有Image节点，查找封面Key匹配的节点
+            android.view.accessibility.AccessibilityNodeInfo scanRoot = getRootInActiveWindow();
+            android.graphics.Rect matchedCardBounds = null;
+            java.util.Set<String> currentKeySet = new java.util.HashSet<>();
+
+            if (scanRoot != null) {
+                matchedCardBounds = findVideoCardByCoverKey(scanRoot, currentKeySet);
+                scanRoot.recycle();
+            }
+
+            logD("📊 [封面查找] 第" + (scrollIdx + 1) + "轮，扫描到" + currentKeySet.size()
+                    + "个Image节点，" + (matchedCardBounds != null ? "✅ 找到目标" : "❌ 未找到"));
+
+            // 找到了目标视频卡片
+            if (matchedCardBounds != null) {
+                int tapX = (matchedCardBounds.left + matchedCardBounds.right) / 2;
+                int tapY = (matchedCardBounds.top + matchedCardBounds.bottom) / 2;
+                logD("✅ [封面查找] 匹配成功！点击视频卡片中心(" + tapX + "," + tapY + ")");
+                Thread.sleep(300);
+                clickByCoordinates(tapX, tapY);
+                long videoOpenTime = System.currentTimeMillis();
+                Thread.sleep(3500);
+                if (!isRunning) return;
+
+                // Step A: 展开"数据类"小窗口（点击右侧展开箭头，坐标666,1431）
+                logD("📊 [视频播放] Step A: 点击展开数据面板(666,1431)...");
+                clickByCoordinates(666, 1431);
+                Thread.sleep(1200);
+                if (!isRunning) return;
+
+                // Step B: 下拉隐藏"文案类"抽屉（从拖拽手柄中心540,1561开始下滑到540,2346）
+                // 注意：起点必须从手柄处开始，避免touch down落在视频播放器上导致暂停
+                logD("📄 [视频播放] Step B: 下拉隐藏文案抽屉（从手柄540,1561开始）...");
+                android.graphics.Path hidePath = new android.graphics.Path();
+                hidePath.moveTo(540, 1561);
+                hidePath.lineTo(540, 2346);
+                android.accessibilityservice.GestureDescription hideGesture =
+                    new android.accessibilityservice.GestureDescription.Builder()
+                        .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                            hidePath, 0, 700))
+                        .build();
+                dispatchGesture(hideGesture, null, null);
+                Thread.sleep(1800);
+                if (!isRunning) return;
+
+                // Step C: 截图1张取证
+                logD("📸 [视频播放] Step C: 截图取证...");
+                takeScreenshotWithPrefix("购物车取证_达人视频", new ScreenshotCallback() {
+                    @Override public void onSuccess() { logD("✅ 达人视频截图已保存"); }
+                    @Override public void onFailure() { logE("❌ 达人视频截图失败"); }
+                });
+                Thread.sleep(800);
+                return;
+            }
+
+            // 检查是否到达底部（Image key集合与上次滚动相同）
+            if (scrollIdx > 0 && !currentKeySet.isEmpty() && currentKeySet.equals(previousKeySet)) {
+                logD("⚠️ [封面查找] 已到达列表底部，未找到匹配封面Key的视频，返回");
+                break;
+            }
+            if (!currentKeySet.isEmpty()) {
+                previousKeySet = currentKeySet;
+            }
+
+            // 下滑继续查找
+            logD("⬇️ [封面查找] 第" + (scrollIdx + 1) + "次下滑...");
+            android.graphics.Path scrollPath = new android.graphics.Path();
+            scrollPath.moveTo(540, 1600);
+            scrollPath.lineTo(540, 900);
+            android.accessibilityservice.GestureDescription scrollGesture =
+                new android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
+                        scrollPath, 0, 400))
+                    .build();
+            dispatchGesture(scrollGesture, null, null);
+            Thread.sleep(1200);
+        }
+
+        logD("⚠️ [封面查找] 达到最大滚动次数(" + MAX_SCROLLS + ")，未找到目标视频，返回");
+    }
+
+    /**
+     * 递归遍历无障碍树，在侵权达人视频列表中查找封面Key匹配的视频卡片。
+     * 找到匹配的Image节点后，向上追溯到最近的可点击父节点（视频卡片容器）。
+     * @param node    当前节点
+     * @param allKeys 收集所有Image节点的key（用于底部检测）
+     * @return 找到的视频卡片可点击区域Rect，未找到返回null
+     */
+    private android.graphics.Rect findVideoCardByCoverKey(
+            android.view.accessibility.AccessibilityNodeInfo node,
+            java.util.Set<String> allKeys) {
+        if (node == null) return null;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+
+        // Image节点：检查text是否包含coverImageKey
+        if ("android.widget.Image".equals(className)) {
+            CharSequence text = node.getText();
+            if (text != null) {
+                String textStr = text.toString();
+                // 收集所有key用于底部检测（取?前的部分）
+                int qIdx = textStr.indexOf('?');
+                String rawKey = qIdx > 0 ? textStr.substring(0, qIdx) : textStr;
+                allKeys.add(rawKey);
+
+                // 检查是否匹配目标coverImageKey
+                if (textStr.startsWith(coverImageKey) || rawKey.equals(coverImageKey)) {
+                    logD("🎯 [封面查找] 找到匹配Image节点！key=" + rawKey);
+                    // 直接返回小封面图自身坐标（72×72缩略图），用于精确点击
+                    android.graphics.Rect imgBounds = new android.graphics.Rect();
+                    node.getBoundsInScreen(imgBounds);
+                    logD("🎯 [封面查找] 小封面图坐标: " + imgBounds + "，将点击其中心");
+                    return imgBounds;
+                }
+            }
+        }
+
+        // 递归子节点
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                android.graphics.Rect result = findVideoCardByCoverKey(child, allKeys);
+                child.recycle();
+                if (result != null) return result;
+            }
+        }
+        return null;
     }
 
     /**
