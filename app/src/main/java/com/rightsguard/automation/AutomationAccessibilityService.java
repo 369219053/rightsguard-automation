@@ -7380,42 +7380,65 @@ public class AutomationAccessibilityService extends AccessibilityService {
      * 下滑最多12次（每次400px），OCR检测"创作灵感"出现后调用 compareInspirationCarousel
      */
     private void scrollToInspirationAndCompare() throws InterruptedException {
-        // 无论是否有封面Key，都先下滑到创作灵感区域让其可见
-        // 有封面Key时才进行侵权视频对比
         boolean hasKey = coverImageKey != null && !coverImageKey.isEmpty();
         if (!hasKey) {
             logD("⚠️ 未提供封面Key，将只下滑到创作灵感区域展示，不做封面对比");
         }
-        // 上滑触发顶部Tab导航栏，点击"内容"直接定位到创作灵感区域
-        logD("📜 [创作灵感] 上滑触发顶部导航栏...");
-        boolean inspirationFound = ensureTopNavVisible();
-        int inspirationY = 0; // compareInspirationCarousel 不实际使用此坐标
 
-        if (!inspirationFound) {
-            logD("⚠️ [创作灵感] 未能触发顶部导航栏，此商品可能无创作灵感内容");
+        // ─── Step 0: 上滑触发顶部Tab导航栏 ───
+        logD("📜 [导航] 上滑触发顶部导航栏...");
+        boolean navVisible = ensureTopNavVisible();
+        if (!navVisible) {
+            logD("⚠️ [导航] 未能触发顶部导航栏，此商品可能无该区域内容，跳过后续Tab流程");
             return;
         }
 
-        logD("✅ [创作灵感] 导航栏已出现，点击'内容'标签(736,277)...");
-        clickNavTab("内容", 736, 277);
-        Thread.sleep(1500); // 等待创作灵感区域完整加载
-        logD("🎯 创作灵感区域已就绪，准备截图/封面对比");
-        if (hasKey) {
-            logD("🔍 开始进行侵权封面对比...");
-            compareInspirationCarousel(inspirationY);
-        } else {
-            // 没有封面Key时：截一张整体截图留存，然后结束
-            logD("📸 无封面Key，截图记录创作灵感区域后结束...");
-            takeScreenshotWithPrefix("购物车取证_创作灵感_整体", new ScreenshotCallback() {
-                @Override public void onSuccess() { logD("✅ 创作灵感整体截图已保存"); }
-                @Override public void onFailure() { logE("❌ 创作灵感整体截图保存失败"); }
+        // ─── Step 1: 点击"受众"，等待加载后截图 ───
+        if (isRunning) {
+            logD("✅ [受众] 点击'受众'标签(343,277)...");
+            clickNavTab("受众", 343, 277);
+            Thread.sleep(1500);
+            takeScreenshotWithPrefix("购物车取证_受众_整体", new ScreenshotCallback() {
+                @Override public void onSuccess() { logD("✅ 受众截图已保存"); }
+                @Override public void onFailure() { logE("❌ 受众截图保存失败"); }
             });
             Thread.sleep(500);
         }
 
-        // 创作灵感处理完毕后，继续下滑检测"带货达人"板块
+        // ─── Step 2: 点击"评价"，等待加载后截图 ───
         if (isRunning) {
-            logD("📜 创作灵感处理完毕，继续下滑检测'带货达人'板块...");
+            logD("✅ [评价] 点击'评价'标签(540,277)...");
+            clickNavTab("评价", 540, 277);
+            Thread.sleep(1500);
+            takeScreenshotWithPrefix("购物车取证_评价_整体", new ScreenshotCallback() {
+                @Override public void onSuccess() { logD("✅ 评价截图已保存"); }
+                @Override public void onFailure() { logE("❌ 评价截图保存失败"); }
+            });
+            Thread.sleep(500);
+        }
+
+        // ─── Step 3: 点击"内容"，走创作灵感封面对比流程 ───
+        if (isRunning) {
+            logD("✅ [内容/创作灵感] 点击'内容'标签(736,277)...");
+            clickNavTab("内容", 736, 277);
+            Thread.sleep(1500);
+            logD("🎯 创作灵感区域已就绪，准备截图/封面对比");
+            if (hasKey) {
+                logD("🔍 开始进行侵权封面对比...");
+                compareInspirationCarousel(0);
+            } else {
+                logD("📸 无封面Key，截图记录创作灵感区域后结束...");
+                takeScreenshotWithPrefix("购物车取证_创作灵感_整体", new ScreenshotCallback() {
+                    @Override public void onSuccess() { logD("✅ 创作灵感整体截图已保存"); }
+                    @Override public void onFailure() { logE("❌ 创作灵感整体截图保存失败"); }
+                });
+                Thread.sleep(500);
+            }
+        }
+
+        // ─── Step 4: 点击"达人"，走带货达人检测流程 ───
+        if (isRunning) {
+            logD("📜 创作灵感处理完毕，继续处理'带货达人'板块...");
             try {
                 checkLeadingCreators();
             } catch (Exception e) {
@@ -7478,47 +7501,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
             if (!isRunning) break;
 
-            // ① 检测左下角账号名称是否是侵权人
-            boolean accountVerified = false;
-            if (infringerName != null && !infringerName.isEmpty()) {
-                logD("🔍 OCR验证账号名称，期望包含: " + infringerName);
-                final boolean[] verifyDone = {false};
-                final boolean[] verifyResult = {false};
-                takeScreenshot(new ScreenshotCallback() {
-                    @Override
-                    public void onSuccess(android.graphics.Bitmap bitmap) {
-                        OcrHelper vOcr = new OcrHelper(msg -> logD(msg));
-                        vOcr.findTextPosition(bitmap, infringerName, new OcrHelper.OcrCallback() {
-                            @Override
-                            public void onSuccess(OcrHelper.TextMatch match) {
-                                logD("✅ 账号名称验证成功，找到'" + infringerName + "' Y=" + match.center.y);
-                                verifyResult[0] = true;
-                                vOcr.release();
-                                bitmap.recycle();
-                                verifyDone[0] = true;
-                            }
-                            @Override
-                            public void onFailure(String error) {
-                                logD("⚠️ 未找到侵权人账号'" + infringerName + "'，跳过此视频");
-                                vOcr.release();
-                                bitmap.recycle();
-                                verifyDone[0] = true;
-                            }
-                        });
-                    }
-                    @Override public void onFailure() { verifyDone[0] = true; }
-                });
-                long vWait = System.currentTimeMillis();
-                while (!verifyDone[0] && System.currentTimeMillis() - vWait < 3000) {
-                    if (!isRunning) break;
-                    Thread.sleep(50);
-                }
-                accountVerified = verifyResult[0];
-            } else {
-                // 未设置侵权人名称，跳过验证直接取证
-                logD("⚠️ 未设置侵权人名称，跳过账号验证，直接截图取证");
-                accountVerified = true;
-            }
+            // ① 封面Key已匹配确认是侵权视频，无需再做账号名OCR验证（V4.8简化）
+            // 直接取证，避免OCR找名称失败导致误跳过真实侵权视频
+            boolean accountVerified = true;
+            logD("✅ 封面Key已匹配，跳过账号名OCR验证，直接取证");
 
             if (!isRunning) break;
 

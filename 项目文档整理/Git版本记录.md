@@ -12,6 +12,31 @@
 
 ## 🚀 版本历史
 
+### V4.8 (2026-03-26) 🎯 侵权视频不再即时退出 + 受众→评价→内容→达人完整导航流程
+
+**✨ 核心更新 - 移除冗余账号OCR验证 + 重构Tab导航序列**
+
+#### ✅ 完成内容
+
+**1. 问题修复：侵权视频立即退出 - `compareInspirationCarousel()` - AutomationAccessibilityService.java**
+- ✅ **问题根源**: 点击侵权视频后，代码用 OCR 在视频页查找 `infringerName`（账号名称），字体/特效等因素导致 OCR 匹配失败 → `accountVerified=false` → 立即按返回键退出，从不播放视频
+- ✅ **修复方案**: 移除 `infringerName` OCR 验证逻辑，直接设 `accountVerified=true`——封面 Key 已在进入视频前确认匹配，无需再验证账号名
+- ✅ **效果**: 所有封面 Key 匹配的侵权视频都将正常播放并在 25%/50%/75% 时间点截图取证，最后分享链接到QQ
+
+**2. 优化+问题二：完整Tab导航序列 - `scrollToInspirationAndCompare()` - AutomationAccessibilityService.java**
+- ✅ **旧流程**: 带货数据完成 → 直接点"内容"（跨度太大；且偶发"评价"被误点一次）
+- ✅ **新流程**: 触发导航栏 → **受众**(343,277)截图 → **评价**(540,277)截图 → **内容**(736,277)走创作灵感流程 → **达人**(934,277)走带货达人流程
+- ✅ **新增截图**: `购物车取证_受众_整体` + `购物车取证_评价_整体`（新增2张留存证据）
+
+#### 🔧 关键代码变化
+
+| 位置 | 修改前 | 修改后 |
+|---|---|---|
+| `compareInspirationCarousel` | OCR找`infringerName`，失败则跳过 | 直接`accountVerified=true` |
+| `scrollToInspirationAndCompare` | 直接点"内容" | 受众→评价→内容→达人顺序点击 |
+
+---
+
 ### V4.7 (2026-03-26) 🎯 顶部导航栏点击优化 + 悬浮窗UI改善
 
 **✨ 核心更新 - 带货数据恢复OCR滚动策略 + 创作灵感/带货达人精准Tab点击 + 悬浮窗拖动/最小化修复**
