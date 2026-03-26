@@ -40,6 +40,9 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
     private Handler handler;
     private boolean isRunning = false;
 
+    /** 用户是否手动向上滚动了（true=不自动跟随底部；false=自动跟随最新日志） */
+    private boolean userScrolledUp = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -75,6 +78,22 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
         btnClearLog.setOnClickListener(this);
         btnCopyLog.setOnClickListener(this);
         btnExportLog.setOnClickListener(this);
+
+        // 监听用户手动滚动：向上翻时停止自动跟随，滑回底部附近时恢复自动跟随
+        scrollView.setOnScrollChangeListener((v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+            int maxScroll = scrollView.getChildAt(0).getHeight() - scrollView.getHeight();
+            if (maxScroll <= 0) {
+                userScrolledUp = false;
+                return;
+            }
+            // 距离底部 120px 以内视为"在底部"，恢复自动跟随
+            if (scrollY >= maxScroll - 120) {
+                userScrolledUp = false;
+            } else if (scrollY < oldScrollY) {
+                // 用户主动往上滑，停止自动跟随
+                userScrolledUp = true;
+            }
+        });
     }
 
     @Override
@@ -125,7 +144,10 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
             } else {
                 tvLogContent.setText(logs);
                 tvLogContent.setTextColor(getResources().getColor(R.color.text_secondary, null));
-                scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+                // 只有用户没有手动向上翻时才自动滚到底部
+                if (!userScrolledUp) {
+                    scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+                }
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -146,6 +168,7 @@ public class LogActivity extends AppCompatActivity implements View.OnClickListen
 
     private void clearLog() {
         AutomationAccessibilityService.clearLogs();
+        userScrolledUp = false; // 清空日志后恢复自动跟随底部
         updateLogDisplay();
         Toast.makeText(this, R.string.toast_log_cleared, Toast.LENGTH_SHORT).show();
     }

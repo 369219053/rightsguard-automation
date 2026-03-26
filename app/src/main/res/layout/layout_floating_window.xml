@@ -10,18 +10,18 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp"
+        android:padding="10dp"
         android:background="@drawable/floating_window_background"
         android:elevation="8dp"
         android:visibility="visible">
 
-        <!-- 拖动手柄 -->
+        <!-- 拖动手柄（宽度占满，方便拖动） -->
         <View
             android:id="@+id/view_drag_handle"
-            android:layout_width="40dp"
-            android:layout_height="4dp"
+            android:layout_width="match_parent"
+            android:layout_height="10dp"
             android:layout_gravity="center_horizontal"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="6dp"
             android:background="@drawable/drag_handle" />
 
         <!-- 状态指示 -->
@@ -30,9 +30,9 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginBottom="12dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp">
+            android:layout_marginBottom="6dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp">
 
             <View
                 android:id="@+id/view_float_status_indicator"
@@ -57,59 +57,59 @@
             <!-- 开始按钮 -->
             <Button
                 android:id="@+id/btn_float_start"
-                android:layout_width="80dp"
-                android:layout_height="40dp"
+                android:layout_width="68dp"
+                android:layout_height="36dp"
                 android:text="@string/float_start"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textColor="@color/text_white"
                 android:background="@drawable/button_primary"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="6dp"
                 android:textAllCaps="false" />
 
             <!-- 停止按钮 -->
             <Button
                 android:id="@+id/btn_float_stop"
-                android:layout_width="80dp"
-                android:layout_height="40dp"
+                android:layout_width="68dp"
+                android:layout_height="36dp"
                 android:text="@string/float_stop"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textColor="@color/primary_blue"
                 android:background="@drawable/button_outlined"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="6dp"
                 android:textAllCaps="false"
                 android:enabled="false" />
 
             <!-- 测试坐标按钮 -->
             <Button
                 android:id="@+id/btn_float_test_coordinate"
-                android:layout_width="60dp"
-                android:layout_height="40dp"
-                android:text="📍测试"
-                android:textSize="11sp"
+                android:layout_width="52dp"
+                android:layout_height="36dp"
+                android:text="📍"
+                android:textSize="14sp"
                 android:textColor="@color/primary_blue"
                 android:background="@drawable/button_outlined"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="6dp"
                 android:textAllCaps="false" />
 
             <!-- Dump按钮 (⚠️ 开发专用,正式版将移除) -->
             <Button
                 android:id="@+id/btn_float_dump"
-                android:layout_width="60dp"
-                android:layout_height="40dp"
+                android:layout_width="52dp"
+                android:layout_height="36dp"
                 android:text="Dump"
-                android:textSize="11sp"
+                android:textSize="10sp"
                 android:textColor="@android:color/holo_red_dark"
                 android:background="@drawable/button_dump"
-                android:layout_marginEnd="8dp"
+                android:layout_marginEnd="6dp"
                 android:textAllCaps="false" />
 
             <!-- 最小化按钮 -->
             <Button
                 android:id="@+id/btn_float_minimize"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
                 android:text="—"
-                android:textSize="18sp"
+                android:textSize="16sp"
                 android:textColor="@color/text_secondary"
                 android:background="@drawable/button_outlined"
                 android:textAllCaps="false" />
@@ -120,20 +120,21 @@
     <!-- 最小化状态的悬浮窗 (小圆点) -->
     <LinearLayout
         android:id="@+id/layout_minimized"
-        android:layout_width="60dp"
-        android:layout_height="60dp"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
         android:orientation="vertical"
         android:gravity="center"
         android:background="@drawable/floating_window_minimized"
         android:elevation="8dp"
         android:visibility="gone">
 
+        <!-- 点击恢复悬浮窗，长按/拖动可移动位置 -->
         <Button
             android:id="@+id/btn_minimized_dump"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:text="Dump"
-            android:textSize="10sp"
+            android:text="⬆"
+            android:textSize="18sp"
             android:textColor="@color/text_white"
             android:background="@android:color/transparent"
             android:textAllCaps="false" />

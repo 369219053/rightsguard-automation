@@ -43,6 +43,7 @@ public class FloatingWindowService extends Service {
 
     private View layoutFull; // 完整状态布局
     private View layoutMinimized; // 最小化状态布局
+    private View viewDragHandle; // 拖动手柄
 
     // 坐标测试相关
     private View coordinateTesterView;
@@ -115,6 +116,9 @@ public class FloatingWindowService extends Service {
         tvStatus = floatingView.findViewById(R.id.tv_float_status);
         statusIndicator = floatingView.findViewById(R.id.view_float_status_indicator);
 
+        // 拖动手柄
+        viewDragHandle = floatingView.findViewById(R.id.view_drag_handle);
+
         // 最小化状态的控件
         btnMinimizedDump = floatingView.findViewById(R.id.btn_minimized_dump);
 
@@ -124,10 +128,7 @@ public class FloatingWindowService extends Service {
         btnMinimize.setOnClickListener(v -> toggleMinimize());
         btnTestCoordinate.setOnClickListener(v -> showCoordinateTester());
         btnDump.setOnClickListener(v -> dumpCurrentUI());
-
-        // 最小化状态的Dump按钮
-        btnMinimizedDump.setOnClickListener(v -> dumpCurrentUI());
-        // 注意: layoutMinimized的点击和拖动在setupDrag()中处理
+        // 注意: btnMinimizedDump的点击（恢复）和拖动在setupDrag()中统一处理
     }
 
     /**
@@ -144,13 +145,12 @@ public class FloatingWindowService extends Service {
     }
     
     private void setupDrag() {
-        // 完整状态:整个布局可拖动,但按钮不拦截
-        layoutFull.setOnTouchListener(new View.OnTouchListener() {
-            private int initialX;
-            private int initialY;
-            private float initialTouchX;
-            private float initialTouchY;
-            private boolean isDragging = false;
+        // ── 完整状态：把拖动手柄绑定到 view_drag_handle ──────────────────────────
+        // 原理：view_drag_handle 是独立的 View，无子按钮干扰。
+        // 返回 true 后系统会持续发送 MOVE / UP 事件，拖动完全可靠。
+        viewDragHandle.setOnTouchListener(new View.OnTouchListener() {
+            private int initialX, initialY;
+            private float initialTouchX, initialTouchY;
 
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -160,39 +160,29 @@ public class FloatingWindowService extends Service {
                         initialY = params.y;
                         initialTouchX = event.getRawX();
                         initialTouchY = event.getRawY();
-                        isDragging = false;
-                        return false; // 不拦截,让按钮可以响应
+                        return true; // 必须返回 true，才能收到后续 MOVE/UP
 
                     case MotionEvent.ACTION_MOVE:
-                        float deltaX = event.getRawX() - initialTouchX;
-                        float deltaY = event.getRawY() - initialTouchY;
-
-                        // 如果移动距离超过10像素,认为是拖动
-                        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-                            isDragging = true;
-                            params.x = initialX + (int) deltaX;
-                            params.y = initialY + (int) deltaY;
-                            windowManager.updateViewLayout(floatingView, params);
-                            return true; // 拦截拖动事件
-                        }
-                        return false;
+                        params.x = initialX + (int) (event.getRawX() - initialTouchX);
+                        params.y = initialY + (int) (event.getRawY() - initialTouchY);
+                        windowManager.updateViewLayout(floatingView, params);
+                        return true;
 
                     case MotionEvent.ACTION_UP:
-                        if (isDragging) {
-                            return true; // 拖动结束,拦截事件
-                        }
-                        return false; // 不是拖动,让按钮响应点击
+                        return true;
                 }
                 return false;
             }
         });
 
-        // 最小化状态下,整个圆点可拖动(但点击时恢复)
-        layoutMinimized.setOnTouchListener(new View.OnTouchListener() {
-            private int initialX;
-            private int initialY;
-            private float initialTouchX;
-            private float initialTouchY;
+        // ── 最小化状态：把拖动 + 点击恢复 绑定到 btnMinimizedDump ───────────────
+        // 原理：按钮填满整个最小化区域；若把逻辑放在父布局的 setOnTouchListener 上，
+        // 子 Button 会先消费事件，父布局的监听永远触发不了。
+        // 直接在 Button 上设置 OnTouchListener（返回 true）→ 父布局不再介入，
+        // 按钮的 onClick 也会被绕过，由我们自己在 ACTION_UP 里判断是点击还是拖动。
+        btnMinimizedDump.setOnTouchListener(new View.OnTouchListener() {
+            private int initialX, initialY;
+            private float initialTouchX, initialTouchY;
             private boolean isDragging = false;
 
             @Override
@@ -204,24 +194,22 @@ public class FloatingWindowService extends Service {
                         initialTouchX = event.getRawX();
                         initialTouchY = event.getRawY();
                         isDragging = false;
-                        return true;
+                        return true; // 接管所有后续事件
 
                     case MotionEvent.ACTION_MOVE:
-                        float deltaX = event.getRawX() - initialTouchX;
-                        float deltaY = event.getRawY() - initialTouchY;
-
-                        // 如果移动距离超过10像素,认为是拖动
-                        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+                        float dx = event.getRawX() - initialTouchX;
+                        float dy = event.getRawY() - initialTouchY;
+                        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
                             isDragging = true;
-                            params.x = initialX + (int) deltaX;
-                            params.y = initialY + (int) deltaY;
+                            params.x = initialX + (int) dx;
+                            params.y = initialY + (int) dy;
                             windowManager.updateViewLayout(floatingView, params);
                         }
                         return true;
 
                     case MotionEvent.ACTION_UP:
-                        // 如果没有拖动,认为是点击,恢复悬浮窗
                         if (!isDragging) {
+                            // 未拖动 → 点击 → 恢复完整悬浮窗
                             toggleMinimize();
                         }
                         return true;

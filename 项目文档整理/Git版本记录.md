@@ -12,6 +12,76 @@
 
 ## 🚀 版本历史
 
+### V4.7 (2026-03-26) 🎯 顶部导航栏点击优化 + 悬浮窗UI改善
+
+**✨ 核心更新 - 带货数据恢复OCR滚动策略 + 创作灵感/带货达人精准Tab点击 + 悬浮窗拖动/最小化修复**
+
+#### ✅ 完成内容
+
+**1. 带货数据 - 恢复双OCR滚动策略 - `checkAndCaptureShoppingCart()` - AutomationAccessibilityService.java**
+- ✅ **问题背景**: 点击"热度"Tab后带货数据无法完整渲染，必须先点其他Tab再回来，显得不专业
+- ✅ **修复方案**: 回退到V4.4的双组OCR滚动策略（下滑最多20次，每次350px，同时检测"带货数据"+"受众数据"）
+- ✅ **双组检测**: `findDualTextPositions()` 同时命中 `["带货数据","带货教据","带货数"]` + `["受众数据","受众教据","受众数"]` 才停止
+- ✅ **停止即截图**: 两组同时命中 = 带货数据图表完整可见，直接进行30天→90天筛选并截图
+
+**2. 创作灵感 - 改点"内容"Tab - `scrollToInspirationAndCompare()` - AutomationAccessibilityService.java**
+- ✅ **改动**: `clickNavTab("评价", 540, 277)` → `clickNavTab("内容", 736, 277)`
+- ✅ **原因**: "内容"Tab才能完整显示创作灵感视频列表（"评价"Tab为评论区，内容不符）
+
+**3. 带货达人 - 确认点"达人"Tab - `checkLeadingCreators()` - AutomationAccessibilityService.java**
+- ✅ **确认无变更**: 已正确使用 `clickNavTab("达人", 934, 277)`，无需修改
+
+**4. 悬浮窗三大改善 - `FloatingWindowService.java` + `layout_floating_window.xml`**
+- ✅ **问题1（尺寸）**: 整体尺寸缩小约15%（padding 16dp→10dp，按钮高度 40dp→36dp）
+- ✅ **问题2（拖动）**: 将拖动监听挂到 `view_drag_handle`（空View无子控件干扰），`ACTION_DOWN` 返回 `true`，MOVE/UP 持续响应
+- ✅ **问题3（最小化）**: 最小化后点击图标恢复悬浮窗（原误触发Dump截图），图标从"Dump"改为"⬆"
+
+#### 🔧 核心代码变化
+
+**双OCR滚动停止逻辑（带货数据）**:
+```java
+cOcr.findDualTextPositions(bitmap,
+    new String[]{"带货数据", "带货教据", "带货数"},
+    new String[]{"受众数据", "受众教据", "受众数"},
+    new OcrHelper.DualOcrCallback() {
+        void onSuccess(String g1, int bdY, String g2, int szY) {
+            bdYPos[0] = bdY; cFound[0] = true;  // 两者同时可见，停止下滑
+        }
+        void onPartial(String g1, int bdY) { /* 仅带货数据可见，继续下滑 */ }
+        void onFailure(String error) { /* 两者均未见，继续下滑 */ }
+    });
+```
+
+**Tab点击对应关系**:
+| 板块 | Tab标签 | 坐标 |
+|---|---|---|
+| 带货数据 | 双OCR滚动（不走Tab） | - |
+| 创作灵感 | 内容 | (736, 277) |
+| 带货达人 | 达人 | (934, 277) |
+
+#### 📋 日志关键输出
+- `✅ 第N次下滑：'带货数据'(Y=xxx) + '受众数据'(Y=xxx) 同时可见，停止下滑！` → 带货数据完整
+- `✅ [创作灵感] 导航栏已出现，点击'内容'标签(736,277)...` → 创作灵感Tab点击
+- `✅ [带货达人] 导航栏已出现，点击'达人'标签(934,277)...` → 带货达人Tab点击
+
+---
+
+### V4.6 (2026-03-26) 🖼️ 悬浮窗缩小+可拖动+最小化修复 + 顶部Tab导航栏重构
+
+**✨ 核心更新 - 三板块改用顶部Tab直接跳转 + 悬浮窗可拖动**
+
+#### ✅ 完成内容
+
+**1. 三板块统一改用顶部Tab跳转（后续因带货数据渲染问题部分回退，见V4.7）**
+- ✅ 新增 `ensureTopNavVisible()`：上滑直到OCR检测到"带货数据"，最多15次
+- ✅ 新增 `clickNavTab(tabName, x, y)`：优先无障碍API点击Tab节点，兜底坐标点击
+- ✅ 创作灵感改为点击"内容"Tab(736,277)，带货达人点击"达人"Tab(934,277)
+
+**2. 悬浮窗改善（最终完成版，见V4.7）**
+- ✅ 缩小尺寸、拖动监听修复、最小化恢复逻辑修复
+
+---
+
 ### V4.5 (2026-03-24) 🛡️ 测试模式补充广告检测 + 创作灵感视频逐条分享链接到QQ
 
 **✨ 核心更新 - 启动广告检测覆盖测试模式 + 创作灵感视频逐条QQ分享**

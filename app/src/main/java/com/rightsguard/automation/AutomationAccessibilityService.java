@@ -4578,8 +4578,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                             }
                                         });
                                 }
-                                @Override
-                                public void onFailure() { cOcrDone[0] = true; }
+                                @Override public void onFailure() { cOcrDone[0] = true; }
                             });
                             // 等OCR完成（最多2秒），同时响应停止信号
                             long cWait = System.currentTimeMillis();
@@ -4820,8 +4819,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
                                         logE("❌ 未找到'近90天'，跳过90天截图");
                                     }
                                 }
-                            } // if (cFound[0])
-                        }
+                            }  // if (cFound[0])
+                        }  // for cScroll
                         if (!cargoDataFound) {
                             logE("❌ 下滑20次后仍未检测到'带货数据'（可能未加载完成），跳过截图");
                         }
@@ -4842,7 +4841,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         // 完成后返回商品详情页
                         logD("🔙 有千川数据流程完成，按返回键回到商品详情页...");
                         performGlobalAction(GLOBAL_ACTION_BACK);
-                        Thread.sleep(1000);
+                        Thread.sleep(2000); // 增加至2秒，给店铺详情页面足够的加载时间
                     }
                     // ★★★ 新增步骤结束 ★★★
 
@@ -7387,130 +7386,19 @@ public class AutomationAccessibilityService extends AccessibilityService {
         if (!hasKey) {
             logD("⚠️ 未提供封面Key，将只下滑到创作灵感区域展示，不做封面对比");
         }
-        logD("📜 开始下滑查找'创作灵感'区域（最多12次，每次400px）...");
-        boolean inspirationFound = false;
-        int inspirationY = -1;
-
-        for (int i = 0; i < 12 && !inspirationFound; i++) {
-            if (!isRunning) break;
-            // 每次向下滚动400px（手指从Y=1600上划到Y=1200）
-            android.graphics.Path path = new android.graphics.Path();
-            path.moveTo(540, 1600);
-            path.lineTo(540, 1200);
-            android.accessibilityservice.GestureDescription gesture =
-                new android.accessibilityservice.GestureDescription.Builder()
-                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 350))
-                    .build();
-            dispatchGesture(gesture, null, null);
-            Thread.sleep(800);
-            if (!isRunning) break;
-
-            final boolean[] ocrDone = {false};
-            final boolean[] found = {false};
-            final int[] foundY = {-1};
-            final int scrollIdx = i + 1;
-            takeScreenshot(new ScreenshotCallback() {
-                @Override
-                public void onSuccess(android.graphics.Bitmap bitmap) {
-                    OcrHelper ocr = new OcrHelper(message -> logD(message));
-                    ocr.findTextPosition(bitmap, "创作灵感", new OcrHelper.OcrCallback() {
-                        @Override
-                        public void onSuccess(OcrHelper.TextMatch match) {
-                            logD("✅ 第" + scrollIdx + "次下滑后OCR检测到'创作灵感' Y=" + match.center.y);
-                            found[0] = true;
-                            foundY[0] = match.center.y;
-                            ocrDone[0] = true;
-                            ocr.release();
-                            bitmap.recycle();
-                        }
-                        @Override
-                        public void onFailure(String error) {
-                            logD("⏳ 第" + scrollIdx + "次下滑未检测到'创作灵感'，继续...");
-                            ocrDone[0] = true;
-                            ocr.release();
-                            bitmap.recycle();
-                        }
-                    });
-                }
-                @Override
-                public void onFailure() { ocrDone[0] = true; }
-            });
-            long waitStart = System.currentTimeMillis();
-            while (!ocrDone[0] && System.currentTimeMillis() - waitStart < 2500) {
-                if (!isRunning) break;
-                Thread.sleep(50);
-            }
-            if (found[0]) {
-                inspirationFound = true;
-                inspirationY = foundY[0];
-            }
-        }
+        // 上滑触发顶部Tab导航栏，点击"内容"直接定位到创作灵感区域
+        logD("📜 [创作灵感] 上滑触发顶部导航栏...");
+        boolean inspirationFound = ensureTopNavVisible();
+        int inspirationY = 0; // compareInspirationCarousel 不实际使用此坐标
 
         if (!inspirationFound) {
-            logD("⚠️ 下滑12次后未找到'创作灵感'区域，此商品可能无创作灵感内容");
+            logD("⚠️ [创作灵感] 未能触发顶部导航栏，此商品可能无创作灵感内容");
             return;
         }
 
-        logD("🎯 已定位'创作灵感' Y=" + inspirationY + "，开始智能上滑确保区域完整显示...");
-
-        // ★ 智能上滑：以"商品评价"消失作为停止信号
-        // 原理：商品评价在创作灵感上方，当商品评价滚出屏幕顶部，创作灵感轮播区域即完整显示
-        // 步长300px，最多10次
-        boolean productReviewGone = false;
-        for (int isIdx = 0; isIdx < 10 && !productReviewGone; isIdx++) {
-            if (!isRunning) break;
-            final int currentIsIdx = isIdx;
-            // 先检测当前屏幕是否还有"商品评价"，若已消失则不需要上滑了
-            final boolean[] preCheckDone = {false};
-            final boolean[] reviewStillVisible = {false};
-            takeScreenshot(new ScreenshotCallback() {
-                @Override
-                public void onSuccess(android.graphics.Bitmap bitmap) {
-                    OcrHelper preOcr = new OcrHelper(message -> logD(message));
-                    preOcr.findTextPosition(bitmap, "商品评价", new OcrHelper.OcrCallback() {
-                        @Override
-                        public void onSuccess(OcrHelper.TextMatch match) {
-                            logD("⏳ 第" + (currentIsIdx + 1) + "次检测：'商品评价' 仍可见 Y=" + match.center.y + "，继续上滑...");
-                            reviewStillVisible[0] = true;
-                            preOcr.release();
-                            bitmap.recycle();
-                            preCheckDone[0] = true;
-                        }
-                        @Override
-                        public void onFailure(String error) {
-                            logD("✅ 第" + (currentIsIdx + 1) + "次检测：'商品评价'已消失，创作灵感区域完整显示！");
-                            reviewStillVisible[0] = false;
-                            preOcr.release();
-                            bitmap.recycle();
-                            preCheckDone[0] = true;
-                        }
-                    });
-                }
-                @Override public void onFailure() { preCheckDone[0] = true; }
-            });
-            long preWait = System.currentTimeMillis();
-            while (!preCheckDone[0] && System.currentTimeMillis() - preWait < 2500) {
-                if (!isRunning) break;
-                Thread.sleep(50);
-            }
-            if (!reviewStillVisible[0]) {
-                productReviewGone = true;
-                break;
-            }
-            // "商品评价"还在，继续上滑300px
-            android.graphics.Path isPath = new android.graphics.Path();
-            isPath.moveTo(540, 1500);
-            isPath.lineTo(540, 1200);
-            android.accessibilityservice.GestureDescription isGesture =
-                new android.accessibilityservice.GestureDescription.Builder()
-                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(isPath, 0, 200))
-                    .build();
-            dispatchGesture(isGesture, null, null);
-            Thread.sleep(500);
-        }
-        if (!productReviewGone) {
-            logD("⚠️ 10次上滑后'商品评价'仍可见，以当前视图继续操作");
-        }
+        logD("✅ [创作灵感] 导航栏已出现，点击'内容'标签(736,277)...");
+        clickNavTab("内容", 736, 277);
+        Thread.sleep(1500); // 等待创作灵感区域完整加载
         logD("🎯 创作灵感区域已就绪，准备截图/封面对比");
         if (hasKey) {
             logD("🔍 开始进行侵权封面对比...");
@@ -7523,6 +7411,16 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 @Override public void onFailure() { logE("❌ 创作灵感整体截图保存失败"); }
             });
             Thread.sleep(500);
+        }
+
+        // 创作灵感处理完毕后，继续下滑检测"带货达人"板块
+        if (isRunning) {
+            logD("📜 创作灵感处理完毕，继续下滑检测'带货达人'板块...");
+            try {
+                checkLeadingCreators();
+            } catch (Exception e) {
+                logE("带货达人检测异常: " + e.getMessage());
+            }
         }
     }
 
@@ -7864,7 +7762,398 @@ public class AutomationAccessibilityService extends AccessibilityService {
         return Long.bitCount(h1 ^ h2);
     }
 
+    /**
+     * 在创作灵感区域下方继续下滑，找到"带货达人"板块，
+     * 检查是否有侵权账号（infringerName），若有则点击进入账号主页，若没有则跳过。
+     *
+     * 下滑策略：
+     *  1. 每次下滑400px（手势：从y=1600→y=1200），最多6次
+     *  2. 每次滑后OCR检测"带货达人"标题是否可见
+     *  3. 标题可见后，若标题Y坐标>1600（偏底部），再额外下滑300px
+     *     让达人列表内容出现在屏幕中间区域
+     *
+     * 点击策略：
+     *  1. 无障碍树找到 infringerName 的 TextView 节点
+     *  2. 校验节点Y坐标在屏幕可见区（200~2100），超出则再额外下滑对齐
+     *  3. 无障碍树找不到 → OCR截图兜底（OCR只识别屏幕内可见文字）
+     *  4. 两种方式均未找到 → 记录日志"未发现侵权账号"，跳过达人步骤
+     */
+    private void checkLeadingCreators() throws InterruptedException {
+        // ─────────────────────────────────────────────────────────────────
+        // ★ 页面稳定性检测（必须在 infringerName 判断之前！）
+        //   从视频页按返回键后，有时出现短暂空白页面。
+        //   无论是否设置侵权人名称，都必须先等页面加载完毕，
+        //   否则后续 BACK → 进店 会在空白页面上执行，导致流程出错。
+        //   判断标准：遍历根节点下2级子节点总数
+        //     < 10  → 页面空白/加载中，等待1秒重试
+        //     >= 10 → 页面已加载，继续
+        //   最多等待 4 次 × 1 秒 = 4 秒，超时后照常继续（避免无限阻塞）
+        // ─────────────────────────────────────────────────────────────────
+        logD("⏳ [带货达人] 检测页面是否已加载（防止空白页）...");
+        boolean pageLoaded = false;
+        for (int stab = 0; stab < 4; stab++) {
+            if (!isRunning) return;
+            android.view.accessibility.AccessibilityNodeInfo stabRoot = getRootInActiveWindow();
+            if (stabRoot != null) {
+                int twoLevelNodes = 0;
+                for (int ci = 0; ci < stabRoot.getChildCount(); ci++) {
+                    android.view.accessibility.AccessibilityNodeInfo child = stabRoot.getChild(ci);
+                    if (child != null) {
+                        twoLevelNodes += 1 + child.getChildCount();
+                        child.recycle();
+                    }
+                }
+                stabRoot.recycle();
+                if (twoLevelNodes >= 10) {
+                    logD("✅ [带货达人] 页面已加载（2级节点数=" + twoLevelNodes + "），继续后续流程");
+                    pageLoaded = true;
+                    break;
+                }
+                logD("⚠️ [带货达人] 页面可能空白（2级节点数=" + twoLevelNodes + "），等待1秒... (" + (stab + 1) + "/4)");
+            } else {
+                logD("⚠️ [带货达人] 无法获取页面根节点，等待1秒... (" + (stab + 1) + "/4)");
+            }
+            Thread.sleep(1000);
+        }
+
+        // ─────────────────────────────────────────────────────────────────
+        // ★ 空白页恢复：4秒等待后页面仍空白 → 点击三个点→选品带货，重新进入正确页面
+        //   与 checkAndCaptureShoppingCart() 中的三个点→选品带货流程相同
+        //   恢复成功后继续执行带货达人检测（同一方法继续往下）
+        // ─────────────────────────────────────────────────────────────────
+        if (!pageLoaded) {
+            // ★ 空白页恢复：在屏幕中间安全区域执行下滑手势，触发创作灵感页面加载
+            //   原理：空白页下滑一下即可重新加载内容，用滑动手势（非点击）避免误触任何按钮
+            //   安全区域：X=540（水平居中），Y=1100→1700（避开顶部按钮栏和底部导航栏）
+            logD("🔄 [带货达人] 检测到空白页面，通过安全下滑手势触发页面加载（最多3次）...");
+            boolean swipeRecovered = false;
+            for (int swipeIdx = 0; swipeIdx < 3 && !swipeRecovered; swipeIdx++) {
+                if (!isRunning) return;
+                final int curSwipe = swipeIdx;
+
+                // 执行下滑手势（moveTo+lineTo = 滑动，不会触发点击事件）
+                android.graphics.Path swipePath = new android.graphics.Path();
+                swipePath.moveTo(540, 1100); // 起点：屏幕中上部安全区
+                swipePath.lineTo(540, 1700); // 终点：屏幕中下部安全区（向下滑600px）
+                dispatchGesture(
+                    new android.accessibilityservice.GestureDescription.Builder()
+                        .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(swipePath, 0, 500))
+                        .build(), null, null);
+                logD("👆 [带货达人] 第" + (curSwipe + 1) + "次下滑手势执行，等待1.5秒页面加载...");
+                Thread.sleep(1500);
+
+                // OCR检测"创作灵感"是否已加载出来
+                final boolean[] swipeOcrDone = {false};
+                final boolean[] swipeOcrFound = {false};
+                takeScreenshot(new ScreenshotCallback() {
+                    @Override
+                    public void onSuccess(android.graphics.Bitmap bitmap) {
+                        if (bitmap == null) { swipeOcrDone[0] = true; return; }
+                        OcrHelper swipeOcr = new OcrHelper(msg -> logD(msg));
+                        swipeOcr.findTextPosition(bitmap, "创作灵感", new OcrHelper.OcrCallback() {
+                            @Override
+                            public void onSuccess(OcrHelper.TextMatch match) {
+                                logD("✅ [带货达人] 第" + (curSwipe + 1) + "次滑动后OCR检测到'创作灵感'，页面已恢复！");
+                                swipeOcrFound[0] = true;
+                                swipeOcrDone[0] = true;
+                                swipeOcr.release();
+                                bitmap.recycle();
+                            }
+                            @Override
+                            public void onFailure(String error) {
+                                logD("⌛ [带货达人] 第" + (curSwipe + 1) + "次滑动后页面仍未加载，继续重试...");
+                                swipeOcrDone[0] = true;
+                                swipeOcr.release();
+                                bitmap.recycle();
+                            }
+                        });
+                    }
+                    @Override public void onFailure() { swipeOcrDone[0] = true; }
+                });
+                long swipeWait = System.currentTimeMillis();
+                while (!swipeOcrDone[0] && System.currentTimeMillis() - swipeWait < 3000) {
+                    Thread.sleep(100);
+                }
+                swipeRecovered = swipeOcrFound[0];
+            }
+
+            if (swipeRecovered) {
+                logD("✅ [带货达人] 空白页通过滑动手势恢复，继续带货达人检测流程");
+            } else {
+                logD("⚠️ [带货达人] 3次滑动后页面仍未出现'创作灵感'，强制继续带货达人检测");
+            }
+        }
+
+        if (infringerName == null || infringerName.isEmpty()) {
+            logD("⚠️ [带货达人] 未设置侵权人名称，跳过达人检测");
+            return;
+        }
+        logD("📜 [带货达人] 开始检测（侵权账号: " + infringerName + "）...");
+
+        // ─────────────────────────────────────────────────────────────────
+        // Step 1: 上滑触发顶部Tab导航栏，点击"达人"直接定位到带货达人区域
+        // ─────────────────────────────────────────────────────────────────
+        logD("📜 [带货达人] 上滑触发顶部导航栏...");
+        boolean darenNavVisible = ensureTopNavVisible();
+        if (!darenNavVisible) {
+            logD("✅ [带货达人] 未能触发顶部导航栏，跳过达人检测，继续后续流程");
+            return;
+        }
+        logD("✅ [带货达人] 导航栏已出现，点击'达人'标签(934,277)...");
+        clickNavTab("达人", 934, 277);
+        Thread.sleep(1500); // 等待带货达人区域完整加载
+
+        // Step 3: 截图存档带货达人整体区域
+        takeScreenshotWithPrefix("购物车取证_带货达人_整体", new ScreenshotCallback() {
+            @Override public void onSuccess() { logD("✅ 带货达人整体截图已保存"); }
+            @Override public void onFailure() { logE("❌ 带货达人整体截图保存失败"); }
+        });
+        Thread.sleep(500);
+
+        // Step 4: 优先用无障碍树查找侵权账号名称（精确匹配 TextView 节点）
+        // 节点坐标必须在屏幕可见区（Y: 200~2100）才视为真正可见，否则额外下滑对齐
+        boolean creatorFound = false;
+        android.view.accessibility.AccessibilityNodeInfo darenRoot = getRootInActiveWindow();
+        if (darenRoot != null) {
+            android.graphics.Rect creatorBounds = findCreatorNodeBounds(darenRoot, infringerName);
+            darenRoot.recycle();
+            if (creatorBounds != null) {
+                int tapX = (creatorBounds.left + creatorBounds.right) / 2;
+                int tapY = (creatorBounds.top + creatorBounds.bottom) / 2;
+                // 若节点在屏幕可见区之外，再下滑把它推到中间
+                if (tapY < 200 || tapY > 2100) {
+                    logD("⚠️ [带货达人] 节点Y=" + tapY + "超出可见区，额外下滑对齐...");
+                    android.graphics.Path alignPath = new android.graphics.Path();
+                    alignPath.moveTo(540, 1500);
+                    alignPath.lineTo(540, 1100);
+                    android.accessibilityservice.GestureDescription alignGesture =
+                        new android.accessibilityservice.GestureDescription.Builder()
+                            .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(alignPath, 0, 300))
+                            .build();
+                    dispatchGesture(alignGesture, null, null);
+                    Thread.sleep(800);
+                    // 重新获取坐标
+                    android.view.accessibility.AccessibilityNodeInfo darenRoot2 = getRootInActiveWindow();
+                    if (darenRoot2 != null) {
+                        android.graphics.Rect cb2 = findCreatorNodeBounds(darenRoot2, infringerName);
+                        darenRoot2.recycle();
+                        if (cb2 != null) {
+                            tapX = (cb2.left + cb2.right) / 2;
+                            tapY = (cb2.top + cb2.bottom) / 2;
+                        }
+                    }
+                }
+                logD("✅ [带货达人] 无障碍树找到侵权账号'" + infringerName + "'，坐标=(" + tapX + "," + tapY + ")，准备点击...");
+                creatorFound = true;
+                Thread.sleep(300);
+                clickByCoordinates(tapX, tapY);
+                logD("👆 [带货达人] 已点击侵权账号，等待账号主页打开...");
+                Thread.sleep(3000);
+            }
+        }
+
+        // Step 5: 无障碍树未找到 → OCR兜底（OCR只识别屏幕可见区域，天然保证在屏幕内）
+        if (!creatorFound) {
+            logD("⚠️ [带货达人] 无障碍树未找到'" + infringerName + "'，OCR兜底查找...");
+            final boolean[] ocrDone2 = {false};
+            final int[] ocrPos = {-1, -1};
+            takeScreenshot(new ScreenshotCallback() {
+                @Override
+                public void onSuccess(android.graphics.Bitmap bitmap) {
+                    OcrHelper ocr = new OcrHelper(msg -> logD(msg));
+                    ocr.findTextPosition(bitmap, infringerName, new OcrHelper.OcrCallback() {
+                        @Override
+                        public void onSuccess(OcrHelper.TextMatch match) {
+                            logD("✅ [带货达人] OCR找到侵权账号'" + infringerName + "' 坐标=(" + match.center.x + "," + match.center.y + ")");
+                            ocrPos[0] = match.center.x;
+                            ocrPos[1] = match.center.y;
+                            ocr.release();
+                            bitmap.recycle();
+                            ocrDone2[0] = true;
+                        }
+                        @Override
+                        public void onFailure(String error) {
+                            logD("✅ [带货达人] OCR未在屏幕中找到侵权账号'" + infringerName + "'，板块内无该侵权账号");
+                            ocr.release();
+                            bitmap.recycle();
+                            ocrDone2[0] = true;
+                        }
+                    });
+                }
+                @Override public void onFailure() { ocrDone2[0] = true; }
+            });
+            long w2 = System.currentTimeMillis();
+            while (!ocrDone2[0] && System.currentTimeMillis() - w2 < 4000) {
+                if (!isRunning) return;
+                Thread.sleep(50);
+            }
+            if (ocrPos[0] >= 0) {
+                logD("👆 [带货达人] OCR坐标点击侵权账号(" + ocrPos[0] + "," + ocrPos[1] + ")...");
+                creatorFound = true;
+                clickByCoordinates(ocrPos[0], ocrPos[1]);
+                Thread.sleep(3000);
+            }
+        }
+
+        if (creatorFound) {
+            logD("✅ [带货达人] 已点击侵权账号'" + infringerName + "'，等待后续步骤...");
+        } else {
+            logD("✅ [带货达人] 板块中未发现侵权账号'" + infringerName + "'，继续后续流程");
+        }
+    }
+
+    /**
+     * 递归查找包含 targetName 文字的 TextView 节点，返回其屏幕坐标 Rect。
+     * 用于"带货达人"板块中查找侵权账号名称节点。
+     */
+    private android.graphics.Rect findCreatorNodeBounds(
+            android.view.accessibility.AccessibilityNodeInfo node, String targetName) {
+        if (node == null) return null;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+        if ("android.widget.TextView".equals(className)) {
+            CharSequence text = node.getText();
+            if (text != null && text.toString().contains(targetName)) {
+                android.graphics.Rect b = new android.graphics.Rect();
+                node.getBoundsInScreen(b);
+                logD("🎯 [带货达人] 无障碍树找到达人名称: '" + text + "' bounds=" + b);
+                if (b.width() > 0 && b.height() > 0 && b.top > 0 && b.bottom <= 2400) {
+                    return b;
+                }
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            android.graphics.Rect result = findCreatorNodeBounds(child, targetName);
+            if (child != null) child.recycle();
+            if (result != null) return result;
+        }
+        return null;
+    }
+
     // ==================== 创作灵感封面对比 结束 ====================
+
+    /**
+     * 上滑页面直到顶部Tab导航栏出现（OCR检测"带货数据"），最多15次。
+     * 触发原理：上滑到"带货数据"出现时，顶部Tab（热度/受众/评价/内容/达人）随之出现。
+     * 坐标映射：热度(145,277)、评价(540,277)、达人(934,277)
+     *
+     * @return true=导航栏已出现，false=15次仍未出现
+     */
+    private boolean ensureTopNavVisible() throws InterruptedException {
+        logD("📜 [导航栏] 开始上滑触发顶部Tab导航栏（检测'带货数据'，最多15次）...");
+        for (int navIdx = 0; navIdx < 15; navIdx++) {
+            if (!isRunning) return false;
+
+            // 先截图检测"带货数据"是否已可见（避免不必要的滑动）
+            final boolean[] ocrDone = {false};
+            final boolean[] navFound = {false};
+            final int curNavIdx = navIdx;
+            takeScreenshot(new ScreenshotCallback() {
+                @Override
+                public void onSuccess(android.graphics.Bitmap bitmap) {
+                    OcrHelper navOcr = new OcrHelper(message -> logD(message));
+                    navOcr.findAnyTextPosition(bitmap,
+                        new String[]{"带货数据", "带货教据"},
+                        new OcrHelper.OcrAnyCallback() {
+                            @Override
+                            public void onSuccess(String keyword) {
+                                logD("✅ [导航栏] 第" + (curNavIdx + 1) + "次：检测到'" + keyword + "'，顶部导航栏已出现！");
+                                navFound[0] = true;
+                                navOcr.release();
+                                bitmap.recycle();
+                                ocrDone[0] = true;
+                            }
+                            @Override
+                            public void onFailure(String error) {
+                                logD("⏳ [导航栏] 第" + (curNavIdx + 1) + "次：未检测到'带货数据'，继续上滑...");
+                                navOcr.release();
+                                bitmap.recycle();
+                                ocrDone[0] = true;
+                            }
+                        });
+                }
+                @Override public void onFailure() { ocrDone[0] = true; }
+            });
+            long navWait = System.currentTimeMillis();
+            while (!ocrDone[0] && System.currentTimeMillis() - navWait < 2500) {
+                if (!isRunning) return false;
+                Thread.sleep(50);
+            }
+            if (navFound[0]) return true;
+
+            // 未找到，执行上滑手势（手指从下往上移动，内容向下滚动，"带货数据"区域进入屏幕）
+            android.graphics.Path navPath = new android.graphics.Path();
+            navPath.moveTo(540, 1600);
+            navPath.lineTo(540, 1150);
+            android.accessibilityservice.GestureDescription navGesture =
+                new android.accessibilityservice.GestureDescription.Builder()
+                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(navPath, 0, 300))
+                    .build();
+            dispatchGesture(navGesture, null, null);
+            Thread.sleep(800);
+        }
+        logE("⚠️ [导航栏] 上滑15次后仍未检测到'带货数据'，顶部导航栏未出现");
+        return false;
+    }
+
+    /**
+     * 通过无障碍API查找并点击顶部Tab导航栏中的指定标签（避免坐标被Dump按钮遮挡）。
+     * 策略：先用无障碍树按文字查找，找到则直接performAction；找不到则坐标兜底。
+     *
+     * @param tabText  目标标签文字，如 "热度"、"评价"、"达人"
+     * @param fallbackX 坐标兜底 X
+     * @param fallbackY 坐标兜底 Y
+     */
+    private void clickNavTab(String tabText, int fallbackX, int fallbackY) {
+        logD("🔍 [导航Tab] 尝试无障碍API点击'" + tabText + "'...");
+        boolean clicked = false;
+        try {
+            android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root != null) {
+                java.util.List<android.view.accessibility.AccessibilityNodeInfo> nodes =
+                    root.findAccessibilityNodeInfosByText(tabText);
+                if (nodes != null) {
+                    for (android.view.accessibility.AccessibilityNodeInfo node : nodes) {
+                        android.graphics.Rect r = new android.graphics.Rect();
+                        node.getBoundsInScreen(r);
+                        // 必须在屏幕顶部导航栏区域内（Y范围 200~400）才认为是目标Tab
+                        if (r.top >= 200 && r.bottom <= 400 && r.width() > 0) {
+                            // 优先直接点击，若不可点击则找可点击的父节点
+                            android.view.accessibility.AccessibilityNodeInfo target = node;
+                            if (!target.isClickable()) {
+                                android.view.accessibility.AccessibilityNodeInfo parent = target.getParent();
+                                while (parent != null && !parent.isClickable()) {
+                                    android.view.accessibility.AccessibilityNodeInfo gp = parent.getParent();
+                                    parent.recycle();
+                                    parent = gp;
+                                }
+                                if (parent != null && parent.isClickable()) {
+                                    target = parent;
+                                }
+                            }
+                            if (target.isClickable()) {
+                                clicked = target.performAction(
+                                    android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                                logD(clicked
+                                    ? "✅ [导航Tab] 无障碍API点击'" + tabText + "'成功 bounds=" + r
+                                    : "⚠️ [导航Tab] 无障碍API点击'" + tabText + "'返回false");
+                            }
+                            if (target != node) target.recycle();
+                        }
+                        node.recycle();
+                        if (clicked) break;
+                    }
+                }
+                root.recycle();
+            }
+        } catch (Exception e) {
+            logE("[导航Tab] 无障碍点击异常: " + e.getMessage());
+        }
+        if (!clicked) {
+            logD("⚠️ [导航Tab] 无障碍未命中，坐标兜底点击(" + fallbackX + "," + fallbackY + ")...");
+            clickByCoordinates(fallbackX, fallbackY);
+        }
+    }
 
     /**
      * 向右滑动分享弹窗底部操作行 (kdm RecyclerView)
