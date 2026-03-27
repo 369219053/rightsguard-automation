@@ -211,11 +211,11 @@
                     android:stateListAnimator="@null"
                     android:translationZ="4dp" />
 
-                <!-- 购物测试按钮 -->
+                <!-- 带货测试按钮 -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_shopping_test"
                     style="@style/SecondaryButtonStyle"
-                    android:text="🛒 购物测试"
+                    android:text="🎯 带货测试"
                     android:textSize="14sp"
                     app:cornerRadius="16dp"
                     android:layout_marginBottom="12dp"

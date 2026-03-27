@@ -402,6 +402,38 @@ public class OcrHelper {
     }
 
     /**
+     * 识别图片中所有文字，将所有文本块合并为一个字符串返回。
+     * 适合需要自行用正则处理文字的场景（如解析视频时间格式 "0:12 / 0:45"）。
+     *
+     * @param bitmap   要识别的图片
+     * @param callback 回调：onSuccess(allText) 成功，onFailure(error) 失败
+     */
+    public void recognizeAllText(Bitmap bitmap, OcrRawTextCallback callback) {
+        if (bitmap == null) {
+            if (logCallback != null) logCallback.onLog("❌ Bitmap为空，无法识别(recognizeAllText)");
+            callback.onFailure("Bitmap为空");
+            return;
+        }
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+        recognizer.process(image)
+                .addOnSuccessListener(text -> {
+                    StringBuilder sb = new StringBuilder();
+                    for (Text.TextBlock block : text.getTextBlocks()) {
+                        if (sb.length() > 0) sb.append(" ");
+                        sb.append(block.getText().replace("\n", " "));
+                    }
+                    String result = sb.toString().trim();
+                    if (logCallback != null) logCallback.onLog("✅ recognizeAllText: 共" + result.length() + "字");
+                    callback.onSuccess(result);
+                })
+                .addOnFailureListener(e -> {
+                    String msg = "❌ recognizeAllText失败: " + e.getMessage();
+                    if (logCallback != null) logCallback.onLog(msg);
+                    callback.onFailure(msg);
+                });
+    }
+
+    /**
      * 释放资源
      */
     public void release() {
@@ -434,6 +466,14 @@ public class OcrHelper {
     public interface OcrAnyCallback {
         void onSuccess(String matchedKeyword);
 
+        void onFailure(String error);
+    }
+
+    /**
+     * OCR回调接口（返回所有识别到的原始文字，用于正则匹配等场景）
+     */
+    public interface OcrRawTextCallback {
+        void onSuccess(String allText);
         void onFailure(String error);
     }
 

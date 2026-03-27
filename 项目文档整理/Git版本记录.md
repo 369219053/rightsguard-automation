@@ -12,6 +12,38 @@
 
 ## 🚀 版本历史
 
+### V5.1 (2026-03-27) 🎬 WebView视频暂停检测修复 - 基于中心播放按钮覆盖层
+
+**✨ 核心更新 - 抛弃无效qde检测，改用中心播放按钮覆盖层精准判断暂停状态**
+
+#### ✅ 完成内容
+
+**1. 暂停检测根本修复 - `isWebViewVideoPaused()` + `findCenterPlayButton()` - AutomationAccessibilityService.java**
+- ✅ **问题根源**: 原代码通过`qde`节点的`contentDescription`判断视频播放状态，但视频播放器在WebView内，整个dump中根本不存在`qde`节点，导致检测逻辑形同虚设
+- ✅ **分析方法**: 对比`播放暂停后dump.md`与`点开侵权视频后dump.md`，发现唯一区别
+- ✅ **关键发现**: 暂停时`player`元素内出现`android.view.View clickable`（中心播放按钮），bounds约`[468,981]→[612,1128]`（144×147px，居中于屏幕）；播放时此覆盖层不存在
+- ✅ **新增方法**: `isWebViewVideoPaused(root)` 调用 `findCenterPlayButton(node)` 递归遍历无障碍树，查找满足条件的View（clickable、left>200、right<900、top>500、bottom<1500、width>80、height>80、width<400）
+- ✅ **恢复坐标修正**: 从`(540,1100)` → `(540,1054)`（播放按钮中心：`(468+612)/2=540`，`(981+1128)/2=1054`）
+
+**2. Step A / Step B检测逻辑替换**
+- ✅ **旧逻辑**: `findAccessibilityNodeInfosByViewId("qde")` → 永远返回空列表，永远触发"未找到qde节点"日志
+- ✅ **新逻辑**: `isWebViewVideoPaused(stateRootA/B)` → 准确识别暂停状态，发现时点击`(540,1054)`恢复播放
+
+#### 🔧 关键代码
+
+| 方法 | 说明 |
+|---|---|
+| `isWebViewVideoPaused(root)` | 入口：判断当前视频是否已暂停 |
+| `findCenterPlayButton(node)` | 递归遍历树，寻找中心播放按钮覆盖层 |
+
+#### 📐 关键坐标
+
+| 元素 | Bounds | 中心坐标 |
+|---|---|---|
+| 中心播放按钮（暂停时可见） | `[468,981]→[612,1128]` | `(540, 1054)` |
+
+---
+
 ### V4.8 (2026-03-26) 🎯 侵权视频不再即时退出 + 受众→评价→内容→达人完整导航流程
 
 **✨ 核心更新 - 移除冗余账号OCR验证 + 重构Tab导航序列**

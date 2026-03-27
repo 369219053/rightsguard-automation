@@ -8608,9 +8608,27 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 clickByCoordinates(666, 1431);
                 Thread.sleep(1200);
                 if (!isRunning) return;
+                // Step A后：检测视频是否被误触暂停（通过中心播放按钮覆盖层判断）
+                // 暂停时：player内部出现可点击View，bounds≈[468,981]→[612,1128]（中心播放按钮）
+                // 播放中：player内部无此覆盖层
+                {
+                    android.view.accessibility.AccessibilityNodeInfo stateRootA = getRootInActiveWindow();
+                    if (stateRootA != null) {
+                        boolean pausedA = isWebViewVideoPaused(stateRootA);
+                        stateRootA.recycle();
+                        if (pausedA) {
+                            logD("⚠️ [Step A后] 检测到中心播放按钮覆盖层，视频被误暂停！点击中心(540,1054)恢复播放...");
+                            clickByCoordinates(540, 1054);
+                            Thread.sleep(600);
+                        } else {
+                            logD("✅ [Step A后] 未发现中心播放按钮，视频正常播放中");
+                        }
+                    }
+                }
 
                 // Step B: 下拉隐藏"文案类"抽屉（从拖拽手柄中心540,1561开始下滑到540,2346）
                 // 注意：起点必须从手柄处开始，避免touch down落在视频播放器上导致暂停
+                // 手势时长从700ms延长到1000ms，确保系统识别为滑动而非点击
                 logD("📄 [视频播放] Step B: 下拉隐藏文案抽屉（从手柄540,1561开始）...");
                 android.graphics.Path hidePath = new android.graphics.Path();
                 hidePath.moveTo(540, 1561);
@@ -8618,19 +8636,234 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 android.accessibilityservice.GestureDescription hideGesture =
                     new android.accessibilityservice.GestureDescription.Builder()
                         .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
-                            hidePath, 0, 700))
+                            hidePath, 0, 1000))
                         .build();
                 dispatchGesture(hideGesture, null, null);
                 Thread.sleep(1800);
                 if (!isRunning) return;
+                // Step B后：同样检测视频是否被误触暂停（通过中心播放按钮覆盖层判断）
+                {
+                    android.view.accessibility.AccessibilityNodeInfo stateRootB = getRootInActiveWindow();
+                    if (stateRootB != null) {
+                        boolean pausedB = isWebViewVideoPaused(stateRootB);
+                        stateRootB.recycle();
+                        if (pausedB) {
+                            logD("⚠️ [Step B后] 检测到中心播放按钮覆盖层，视频被误暂停！点击中心(540,1054)恢复播放...");
+                            clickByCoordinates(540, 1054);
+                            Thread.sleep(600);
+                        } else {
+                            logD("✅ [Step B后] 未发现中心播放按钮，视频正常播放中");
+                        }
+                    }
+                }
 
-                // Step C: 截图1张取证
+                // Step C: 截图1张取证（等待截图回调完成，避免与后续OCR截图冲突 → error 3）
                 logD("📸 [视频播放] Step C: 截图取证...");
+                final boolean[] stepCDone = {false};
                 takeScreenshotWithPrefix("购物车取证_达人视频", new ScreenshotCallback() {
-                    @Override public void onSuccess() { logD("✅ 达人视频截图已保存"); }
-                    @Override public void onFailure() { logE("❌ 达人视频截图失败"); }
+                    @Override public void onSuccess() { logD("✅ 达人视频截图已保存"); stepCDone[0] = true; }
+                    @Override public void onFailure() { logE("❌ 达人视频截图失败"); stepCDone[0] = true; }
                 });
-                Thread.sleep(800);
+                // 等待Step C截图完成（最多8秒）+ 额外1.5秒让API冷却，防止后续OCR截图触发error 3
+                for (int sw = 0; sw < 80 && !stepCDone[0]; sw++) Thread.sleep(100);
+                logD("📝 [视频播放] Step C截图完成，等待API冷却...");
+                Thread.sleep(1500);
+                // 动态等待视频播放完毕：
+                // 策略1: 查找原生SeekBar(ID=6n0)并轮询进度到97% → 适用于原生播放器
+                // 策略2: OCR读取底部时间文字(如"0:12 / 0:45") → 适用于WebView播放器
+                // 兜底: videoDurationSeconds（已知时长）或最多3分钟
+                {
+                    final int MAX_WAIT_MS = 180000; // 最多等3分钟
+                    boolean videoEndDetected = false;
+
+                    // 策略1: 查找原生SeekBar(ID=6n0)并轮询进度
+                    android.view.accessibility.AccessibilityNodeInfo seekRoot = getRootInActiveWindow();
+                    boolean hasSeekBar = false;
+                    if (seekRoot != null) {
+                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> sbList =
+                            seekRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/6n0");
+                        hasSeekBar = sbList != null && !sbList.isEmpty();
+                        if (sbList != null) for (android.view.accessibility.AccessibilityNodeInfo n : sbList) n.recycle();
+                        seekRoot.recycle();
+                    }
+                    if (hasSeekBar) {
+                        logD("🎚️ [视频等待] 发现原生SeekBar，开始轮询进度...");
+                        long pollStart = System.currentTimeMillis();
+                        while (isRunning && !videoEndDetected && (System.currentTimeMillis() - pollStart) < MAX_WAIT_MS) {
+                            Thread.sleep(2000);
+                            android.view.accessibility.AccessibilityNodeInfo pollRoot = getRootInActiveWindow();
+                            if (pollRoot != null) {
+                                java.util.List<android.view.accessibility.AccessibilityNodeInfo> sbs2 =
+                                    pollRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/6n0");
+                                if (sbs2 != null && !sbs2.isEmpty()) {
+                                    android.view.accessibility.AccessibilityNodeInfo.RangeInfo ri = sbs2.get(0).getRangeInfo();
+                                    for (android.view.accessibility.AccessibilityNodeInfo n : sbs2) n.recycle();
+                                    if (ri != null && ri.getMax() > 0 && (ri.getCurrent() / ri.getMax()) >= 0.97f) {
+                                        logD("✅ [视频等待] SeekBar进度已达97%+，视频播放完毕！");
+                                        videoEndDetected = true;
+                                    } else {
+                                        float pct = (ri != null && ri.getMax() > 0) ? (ri.getCurrent() / ri.getMax() * 100f) : 0f;
+                                        logD("⏳ [视频等待] SeekBar进度 " + String.format("%.0f", pct) + "%，继续等待...");
+                                    }
+                                } else {
+                                    logD("⚠️ [视频等待] SeekBar节点消失，视为播放结束");
+                                    videoEndDetected = true;
+                                }
+                                pollRoot.recycle();
+                            }
+                        }
+                    }
+
+                    // 策略2 & 兜底: OCR读时间文字 → 计算剩余等待 → videoDurationSeconds兜底
+                    if (!videoEndDetected && isRunning) {
+                        logD("🔍 [视频等待] 无SeekBar，OCR读取底部时间文字...");
+                        final int[] ocrTotalSec = {0};
+                        final boolean[] ocrDone = {false};
+                        takeScreenshot(new ScreenshotCallback() {
+                            @Override
+                            public void onSuccess(android.graphics.Bitmap bmp) {
+                                if (bmp == null) { ocrDone[0] = true; return; }
+                                // 裁剪底部500px，聚焦视频时间显示区域
+                                int cropTop = Math.max(0, bmp.getHeight() - 500);
+                                android.graphics.Bitmap cropped = android.graphics.Bitmap.createBitmap(
+                                    bmp, 0, cropTop, bmp.getWidth(), bmp.getHeight() - cropTop);
+                                bmp.recycle();
+                                OcrHelper timeOcr = new OcrHelper(msg -> logD("[OCR时间] " + msg));
+                                timeOcr.recognizeAllText(cropped, new OcrHelper.OcrRawTextCallback() {
+                                    @Override
+                                    public void onSuccess(String allText) {
+                                        logD("📝 [视频等待] OCR文字: " + allText);
+                                        // 优先匹配 "m:ss / m:ss" 格式（当前时间/总时长）
+                                        java.util.regex.Matcher m = java.util.regex.Pattern.compile(
+                                            "(\\d{1,2}):(\\d{2})\\s*/\\s*(\\d{1,2}):(\\d{2})").matcher(allText);
+                                        if (m.find()) {
+                                            ocrTotalSec[0] = Integer.parseInt(m.group(3)) * 60 + Integer.parseInt(m.group(4));
+                                            logD("⏱️ [视频等待] OCR解析总时长: " + ocrTotalSec[0] + "s");
+                                        } else {
+                                            // 取最后一个单独的时间值（通常为总时长）
+                                            java.util.regex.Matcher m2 = java.util.regex.Pattern.compile(
+                                                "(\\d{1,2}):(\\d{2})").matcher(allText);
+                                            String lastTime = null;
+                                            while (m2.find()) lastTime = m2.group();
+                                            if (lastTime != null) {
+                                                String[] pts = lastTime.split(":");
+                                                ocrTotalSec[0] = Integer.parseInt(pts[0]) * 60 + Integer.parseInt(pts[1]);
+                                                logD("⏱️ [视频等待] OCR单时间推断总时长: " + ocrTotalSec[0] + "s");
+                                            }
+                                        }
+                                        cropped.recycle();
+                                        timeOcr.release();
+                                        ocrDone[0] = true;
+                                    }
+                                    @Override
+                                    public void onFailure(String error) {
+                                        logD("⚠️ [视频等待] OCR时间识别失败: " + error);
+                                        cropped.recycle();
+                                        timeOcr.release();
+                                        ocrDone[0] = true;
+                                    }
+                                });
+                            }
+                            @Override public void onFailure() { ocrDone[0] = true; }
+                        });
+                        // 等待OCR完成（最多3秒）
+                        long ocrWaitStart = System.currentTimeMillis();
+                        while (!ocrDone[0] && System.currentTimeMillis() - ocrWaitStart < 3000) {
+                            Thread.sleep(100);
+                        }
+
+                        // 按优先级确定总时长
+                        int totalSec;
+                        if (ocrTotalSec[0] > 0) {
+                            totalSec = ocrTotalSec[0];
+                            logD("⏳ [视频等待] 使用OCR时长 " + totalSec + "s");
+                        } else if (videoDurationSeconds > 0) {
+                            totalSec = videoDurationSeconds;
+                            logD("⏳ [视频等待] OCR未获取时长，使用任务参数 videoDurationSeconds=" + totalSec + "s");
+                        } else {
+                            totalSec = 60;
+                            logD("⏳ [视频等待] 无时长信息，默认等待60s");
+                        }
+                        long alreadyMs = System.currentTimeMillis() - videoOpenTime;
+                        long remainMs = (long)(totalSec * 1000L) - alreadyMs + 3000L; // 加3秒缓冲
+                        if (remainMs > 0 && remainMs <= MAX_WAIT_MS) {
+                            logD("⏳ [视频等待] 等待剩余 " + (remainMs / 1000) + "s（总=" + totalSec + "s，已过≈" + (alreadyMs / 1000) + "s）");
+                            Thread.sleep(remainMs);
+                        } else if (remainMs > MAX_WAIT_MS) {
+                            logD("⏳ [视频等待] 剩余超过3分钟上限，安全兜底等待3分钟");
+                            Thread.sleep(MAX_WAIT_MS);
+                        } else {
+                            logD("✅ [视频等待] 视频已播完（已过时间超过总时长）");
+                        }
+                    }
+                }
+                if (!isRunning) return;
+
+                // Step D: 退出视频播放器，返回视频列表页
+                logD("🔙 [带货达人] 视频播放完毕，返回视频列表页...");
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(2000); // 等待视频列表页稳定
+
+                // Step D2: 点击视频列表页 profile header 中的达人头像
+                // dump: 可点击父容器 [45,237]→[186,378]，中心坐标 (115,307)
+                // 注意：这是 WebView 内的元素，无原生 AccessibilityID，直接坐标点击
+                logD("👤 [带货达人] 点击达人头像(115,307)进入达人账号主页...");
+                Thread.sleep(300);
+                clickByCoordinates(115, 307);
+
+                // 等待抖音原生达人主页加载（检测 k9m 大头像 或 v17 关注按钮）
+                logD("⏳ [带货达人] 等待达人账号主页加载...");
+                boolean profileLoadedD = false;
+                for (int attempt = 0; attempt < 10; attempt++) {
+                    Thread.sleep(500);
+                    android.view.accessibility.AccessibilityNodeInfo cr = getRootInActiveWindow();
+                    if (cr != null) {
+                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> mk =
+                            cr.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/k9m");
+                        if (mk != null && !mk.isEmpty()) {
+                            logD("✅ [带货达人] 达人主页已加载(k9m，耗时约" + ((attempt + 1) * 500) + "ms)");
+                            profileLoadedD = true;
+                            for (android.view.accessibility.AccessibilityNodeInfo n : mk) n.recycle();
+                            cr.recycle();
+                            break;
+                        }
+                        mk = cr.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/v17");
+                        if (mk != null && !mk.isEmpty()) {
+                            logD("✅ [带货达人] 达人主页已加载(v17，耗时约" + ((attempt + 1) * 500) + "ms)");
+                            profileLoadedD = true;
+                            for (android.view.accessibility.AccessibilityNodeInfo n : mk) n.recycle();
+                            cr.recycle();
+                            break;
+                        }
+                        cr.recycle();
+                    }
+                }
+                if (!profileLoadedD) {
+                    logD("⚠️ [带货达人] 等待5秒仍未检测到达人主页特征，强制等待2秒继续");
+                    Thread.sleep(2000);
+                }
+
+                // Step E: 在达人主页查找蓝V认证标签并取证
+                navigateToBlueVCertification();
+
+                // Step F: 蓝V取证完成后，三次Back返回到"带货达人"页面
+                logD("🔙 [带货达人] 蓝V取证完成，开始三次Back返回带货达人页面...");
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(1500);
+                if (!isRunning) return;
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(1500);
+                if (!isRunning) return;
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(2000);
+                if (!isRunning) return;
+
+                // Step G: 点击"联系商家"按钮（坐标来自选品带货点击后页面dump）
+                // 联系商家按钮 bounds [183,2127]→[330,2226]，中心坐标 (256, 2176)
+                logD("📞 [带货达人] 点击联系商家按钮(256,2176)...");
+                clickByCoordinates(256, 2176);
+                Thread.sleep(2000);
+                logD("✅ [带货达人] 带货达人取证全流程完成！");
                 return;
             }
 
@@ -8658,6 +8891,58 @@ public class AutomationAccessibilityService extends AccessibilityService {
         }
 
         logD("⚠️ [封面查找] 达到最大滚动次数(" + MAX_SCROLLS + ")，未找到目标视频，返回");
+    }
+
+    /**
+     * 检测WebView视频播放器是否处于暂停状态。
+     *
+     * 原理：通过对比dump文件发现
+     *   - 播放中：player元素内部无居中可点击覆盖层
+     *   - 暂停时：player内部出现一个可点击的View（中心播放按钮），
+     *             bounds约为 [468,981]→[612,1128]，位于屏幕中央
+     *
+     * 检测方式：遍历整个无障碍树，找到满足以下条件的节点视为"暂停状态"：
+     *   - className = android.view.View（排除TextView、Image等）
+     *   - isClickable = true
+     *   - left > 200, right < 900（排除全屏或边缘节点）
+     *   - top > 500, bottom < 1500（在屏幕中部区域）
+     *   - width > 80, height > 80（有实际尺寸）
+     *
+     * @param root 当前窗口根节点（调用方负责recycle）
+     * @return true=视频已暂停（中心播放按钮可见），false=视频播放中
+     */
+    private boolean isWebViewVideoPaused(android.view.accessibility.AccessibilityNodeInfo root) {
+        return findCenterPlayButton(root);
+    }
+
+    /**
+     * 递归遍历，查找中心播放按钮覆盖层（暂停状态的特征节点）
+     */
+    private boolean findCenterPlayButton(android.view.accessibility.AccessibilityNodeInfo node) {
+        if (node == null) return false;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+        // 只检查 android.view.View（排除TextView、Image、Layout等）
+        if ("android.view.View".equals(className) && node.isClickable()) {
+            android.graphics.Rect r = new android.graphics.Rect();
+            node.getBoundsInScreen(r);
+            // 中心播放按钮特征：位于屏幕中部，有一定尺寸，不是全屏节点
+            if (r.left > 200 && r.right < 900
+                    && r.top > 500 && r.bottom < 1500
+                    && r.width() > 80 && r.height() > 80
+                    && r.width() < 400) { // 排除全屏的大View
+                logD("🎬 [暂停检测] 发现中心播放按钮！bounds=" + r + "，判定为视频已暂停");
+                return true;
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                boolean found = findCenterPlayButton(child);
+                child.recycle();
+                if (found) return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -8705,6 +8990,155 @@ public class AutomationAccessibilityService extends AccessibilityService {
             }
         }
         return null;
+    }
+
+    /**
+     * 🔵 在达人主页查找并点击蓝V认证标签（支持多种名称变体）
+     *
+     * 蓝V标签常见变体：
+     *   店铺授权号、店铺账号、官方账号、企业账号、认证账号、品牌账号
+     *
+     * 流程：
+     *   1. 遍历所有变体名称，通过Desc/Text在无障碍树中查找节点
+     *   2. 找到 → 点击（优先无障碍API，兜底坐标）
+     *   3. OCR轮询等待认证详情页加载（最多6秒）
+     *   4. 截图取证，命名：购物车取证_蓝V_xxx
+     *   5. 未找到 → 记录日志，跳过（该账号无蓝V认证）
+     */
+    private void navigateToBlueVCertification() throws InterruptedException {
+        logD("🔵 [蓝V] 开始检查达人主页是否有蓝V认证标签...");
+
+        // 蓝V标签名称所有可能的变体（按常见度排序）
+        String[] blueVLabels = {
+            "店铺授权号",
+            "店铺账号",
+            "官方账号",
+            "企业账号",
+            "认证账号",
+            "品牌账号"
+        };
+
+        android.view.accessibility.AccessibilityNodeInfo profileRoot = getRootInActiveWindow();
+        if (profileRoot == null) {
+            logD("⚠️ [蓝V] 无法获取页面根节点，跳过");
+            return;
+        }
+
+        android.view.accessibility.AccessibilityNodeInfo blueVNode = null;
+        String foundLabel = null;
+
+        // 依次搜索各种蓝V标签名称
+        for (String label : blueVLabels) {
+            // 策略1：通过Desc查找（"抖音组织认证：xxx" 格式）
+            blueVNode = findNodeByDescContains(profileRoot, label);
+            if (blueVNode != null) {
+                foundLabel = label;
+                logD("✅ [蓝V] Desc命中: " + label);
+                break;
+            }
+
+            // 策略2：通过Text查找
+            java.util.List<android.view.accessibility.AccessibilityNodeInfo> textNodes =
+                profileRoot.findAccessibilityNodeInfosByText(label);
+            if (textNodes != null && !textNodes.isEmpty()) {
+                blueVNode = textNodes.get(0);
+                foundLabel = label;
+                logD("✅ [蓝V] Text命中: " + label);
+                // 回收多余节点
+                for (int i = 1; i < textNodes.size(); i++) textNodes.get(i).recycle();
+                break;
+            }
+        }
+
+        if (blueVNode == null) {
+            logD("ℹ️ [蓝V] 未找到任何蓝V认证标签（该账号无蓝V认证），跳过");
+            profileRoot.recycle();
+            return;
+        }
+
+        // ─── 点击蓝V节点 ───
+        logD("✅ [蓝V] 检测到蓝V标签[" + foundLabel + "]，准备点击...");
+        boolean clicked = blueVNode.performAction(
+            android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+
+        if (!clicked) {
+            // 兜底1：向上查找可点击父节点
+            android.view.accessibility.AccessibilityNodeInfo clickable = findClickableParent(blueVNode);
+            if (clickable != null) {
+                clicked = clickable.performAction(
+                    android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
+                logD(clicked ? "✅ [蓝V] 可点击父节点点击成功" : "⚠️ [蓝V] 可点击父节点点击失败");
+                clickable.recycle();
+            }
+        }
+
+        if (!clicked) {
+            // 兜底2：坐标点击
+            android.graphics.Rect bounds = new android.graphics.Rect();
+            blueVNode.getBoundsInScreen(bounds);
+            int cx = bounds.isEmpty() ? 540 : (bounds.left + bounds.right) / 2;
+            int cy = bounds.isEmpty() ? 500 : (bounds.top + bounds.bottom) / 2;
+            clickByCoordinates(cx, cy);
+            logD("✅ [蓝V] 坐标兜底点击(" + cx + "," + cy + ")");
+        } else {
+            logD("✅ [蓝V] 无障碍API点击成功");
+        }
+
+        blueVNode.recycle();
+        profileRoot.recycle();
+
+        // ─── OCR智能等待认证详情页加载（最多6秒）───
+        logD("⏳ [蓝V] 等待认证详情页加载（OCR识别）...");
+        final String[] pageKeywords = {"认证说明", "企业认证详情", "企业名称", "资质证照", "授权信息", "店铺名称"};
+        boolean pageLoaded = false;
+        for (int sec = 1; sec <= 6; sec++) {
+            Thread.sleep(1000);
+            final boolean[] hit = {false};
+            final boolean[] ocrDone = {false};
+            takeScreenshot(new ScreenshotCallback() {
+                @Override
+                public void onSuccess(android.graphics.Bitmap bitmap) {
+                    if (bitmap == null) { ocrDone[0] = true; return; }
+                    OcrHelper ocr = new OcrHelper(message -> logD(message));
+                    ocr.findAnyTextPosition(bitmap, pageKeywords, new OcrHelper.OcrAnyCallback() {
+                        @Override
+                        public void onSuccess(String keyword) {
+                            hit[0] = true;
+                            ocrDone[0] = true;
+                            ocr.release();
+                            bitmap.recycle();
+                        }
+                        @Override
+                        public void onFailure(String error) {
+                            ocrDone[0] = true;
+                            ocr.release();
+                            bitmap.recycle();
+                        }
+                    });
+                }
+                @Override public void onFailure() { ocrDone[0] = true; }
+            });
+            for (int w = 0; w < 20 && !ocrDone[0]; w++) Thread.sleep(100);
+            if (hit[0]) {
+                logD("✅ [蓝V] 认证详情页已加载（第" + sec + "秒）");
+                pageLoaded = true;
+                break;
+            }
+            logD("⌛ [蓝V] 第" + sec + "秒：未检测到关键词，继续等待...");
+        }
+        if (!pageLoaded) {
+            logD("⚠️ [蓝V] 等待6秒仍未检测到页面特征，强制截图");
+        }
+
+        // ─── 截图取证 ───
+        final String shotLabel = foundLabel;
+        logD("📸 [蓝V] 截取认证详情页取证截图...");
+        takeScreenshotWithPrefix("购物车取证_蓝V_" + shotLabel, new ScreenshotCallback() {
+            @Override public void onSuccess() { logD("✅ [蓝V] 截图已保存: 购物车取证_蓝V_" + shotLabel); }
+            @Override public void onFailure() { logE("❌ [蓝V] 截图失败"); }
+        });
+        Thread.sleep(800);
+        logD("✅ [蓝V] 蓝V认证取证完成");
     }
 
     /**
