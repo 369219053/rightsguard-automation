@@ -12,6 +12,46 @@
 
 ## 🚀 版本历史
 
+### V5.2 (2026-03-27) 🐛 带货达人侵权人名称传递架构重构 - 彻底修复infringerName为空导致跳过问题
+
+**✨ 核心更新 - 消除双重解析漏洞，直接setter传递infringerName**
+
+#### ✅ 完成内容
+
+**1. 问题根因分析 - 双重解析漏洞**
+- ✅ **现象**: 日志出现 `⚠️ [带货达人] 未设置侵权人名称，截图已保存，跳过达人点击检测`，带货达人流程被跳过
+- ✅ **根本原因**: `parseEvidenceInfo()` 正确提取 `infringerName`，但只打包进 `remark` 字符串，再由 `setRemark()` 二次解析提取——任何格式差异（如全角冒号 `：` vs 半角 `:`）都会导致二次解析失败，`infringerName` 清空
+- ✅ **全角冒号触发场景**: 用中文输入法输入 `抖音：` 时，系统自动将 `:` 转为全角 `：`（U+FF1A），`-抖音:` 匹配失败
+
+**2. 架构重构 - MainActivity.java**
+- ✅ **`ParseResult` 新增字段**: 添加 `infringerName = ""` 和 `originalName = ""` 字段，直接存储已解析值
+- ✅ **`parseEvidenceInfo()` 同步赋值**: 提取 `infringerName` 后立即写入 `result.infringerName` 和 `result.originalName`，不再丢弃解析结果
+- ✅ **三个模式统一调用独立setter**: `startAutomation()`、`startTestMode()`、`startLeadingCreatorTestMode()` 均调用 `service.setInfringerName(parseResult.infringerName)` 和 `service.setOriginalName(parseResult.originalName)`
+
+**3. 新增独立setter - AutomationAccessibilityService.java**
+- ✅ **`setInfringerName(String name)`**: 直接赋值 `this.infringerName`，附带日志 `📝 直接设置侵权人名称: 'xxx'`，无任何二次解析
+- ✅ **`setOriginalName(String name)`**: 直接赋值 `this.originalName`，附带日志
+
+**4. 诊断日志增强**
+- ✅ 在带货达人检测入口（Step 2判断前）新增始终打印的诊断日志：
+  ```
+  🔍 [带货达人] 诊断 → infringerName='xxx' originalName='xxx' remark='xxx'
+  ```
+- ✅ 确保不论是否跳过，日志中均能看到三个字段的实际值，便于排查
+
+**5. 全角冒号兜底（已在V5.1中处理）**
+- ✅ `parseEvidenceInfo()` 和 `setRemark()` 均有 `info.replace("：", ":")` 标准化处理
+
+#### 🔧 数据流对比
+
+| | 旧架构（V5.1及之前） | 新架构（V5.2） |
+|---|---|---|
+| 数据来源 | `setRemark()` 二次解析 remark 字符串 | `setInfringerName()` 直接赋值 |
+| 失败风险 | 全角冒号/格式差异均导致失败 | 无，源头已解析完毕 |
+| 诊断能力 | 失败时只知道 `infringerName=""` | 日志始终打印实际值 |
+
+---
+
 ### V5.1 (2026-03-27) 🎬 WebView视频暂停检测修复 - 基于中心播放按钮覆盖层
 
 **✨ 核心更新 - 抛弃无效qde检测，改用中心播放按钮覆盖层精准判断暂停状态**

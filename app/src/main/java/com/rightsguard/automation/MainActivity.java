@@ -127,6 +127,10 @@ public class MainActivity extends AppCompatActivity {
         if (service != null) {
             // 设置备注
             service.setRemark(parseResult.remark);
+            // 🔧 直接设置侵权人名称和原创名称，不依赖 setRemark 二次解析
+            service.setInfringerName(parseResult.infringerName);
+            service.setOriginalName(parseResult.originalName);
+            Log.d("MainActivity", "✅ [startAutomation] 侵权人: '" + parseResult.infringerName + "' 原创: '" + parseResult.originalName + "'");
 
             // 设置侵权链接
             if (parseResult.infringementUrl != null && !parseResult.infringementUrl.isEmpty()) {
@@ -172,6 +176,9 @@ public class MainActivity extends AppCompatActivity {
 
         try {
             Log.d("MainActivity", "🔍 开始解析: " + info);
+
+            // 🔧 兼容中文键盘全角冒号：将全角冒号「：」统一替换为半角冒号「:」，防止 indexOf("-抖音:") 失败
+            info = info.replace("：", ":");
 
             // 格式: 原创名称-抖音:侵权人账号名称-原创分享链接+侵权人分享链接+侵权视频标题+侵权视频时长[+封面URL]
             // 示例(含封面): 花开富贵-抖音:文文工艺品-https://v.douyin.com/xxx/+https://v.douyin.com/iFLNKJNj/+花开富贵檀香，燃起来就会开花+106+https://p3-aio.ecombdimg.com/jpeg_m_xxx
@@ -260,6 +267,9 @@ public class MainActivity extends AppCompatActivity {
 
                 // 生成备注: 原创名称-抖音:侵权人账号名称
                 result.remark = originalName + "-抖音:" + infringerName;
+                // 🔧 直接存储解析结果，让 MainActivity 通过独立 setter 传给 service，避免 setRemark 二次解析失败
+                result.infringerName = infringerName;
+                result.originalName = originalName;
                 Log.d("MainActivity", "✅ 备注: " + result.remark);
                 Log.d("MainActivity", "  - 原创名称: " + originalName);
                 Log.d("MainActivity", "  - 侵权人账号名称: " + infringerName);
@@ -286,6 +296,8 @@ public class MainActivity extends AppCompatActivity {
         String videoKeywords; // 🆕 视频文案关键词
         int videoDurationSeconds; // 🆕 视频时长(秒)
         String coverImageUrl; // 🆕 侵权视频封面URL（用于创作灵感MD5对比）
+        String infringerName = ""; // 🔧 直接存储已解析的侵权人名称，避免setRemark二次解析失败
+        String originalName = "";  // 🔧 直接存储已解析的原创名称
     }
 
     /**
@@ -339,6 +351,12 @@ public class MainActivity extends AppCompatActivity {
             Log.d("MainActivity", "✅ [测试模式] 已设置视频时长: " + parseResult.videoDurationSeconds + "秒");
         }
 
+        // 🔧 直接设置侵权人名称，确保 infringerName 正确（即使测试模式也要传）
+        service.setRemark(parseResult.remark);
+        service.setInfringerName(parseResult.infringerName);
+        service.setOriginalName(parseResult.originalName);
+        Log.d("MainActivity", "✅ [测试模式] 侵权人: '" + parseResult.infringerName + "' 原创: '" + parseResult.originalName + "'");
+
         service.startTestMode();
         isRunning = true;
         updateStatus(STATUS_RUNNING);
@@ -369,7 +387,11 @@ public class MainActivity extends AppCompatActivity {
             ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
             // 设置侵权人名称（带货达人检测所需）
             service.setRemark(parseResult.remark);
+            // 🔧 直接设置侵权人名称，绕过 setRemark 二次解析
+            service.setInfringerName(parseResult.infringerName);
+            service.setOriginalName(parseResult.originalName);
             Log.d("MainActivity", "✅ [带货测试] 已设置备注（侵权人）: " + parseResult.remark);
+            Log.d("MainActivity", "✅ [带货测试] 直接侵权人名称: '" + parseResult.infringerName + "' 原创: '" + parseResult.originalName + "'");
             // 设置封面URL（创作灵感封面对比所需）
             if (parseResult.coverImageUrl != null && !parseResult.coverImageUrl.isEmpty()) {
                 service.setCoverImageUrl(parseResult.coverImageUrl);

@@ -201,6 +201,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
      */
     public void setRemark(String remark) {
         this.remark = remark != null ? remark : "";
+        // 🔧 兼容全角冒号（中文键盘可能输入「：」），统一转为半角「:」再解析
+        this.remark = this.remark.replace("：", ":");
         // 解析原创名称和侵权人账号名称
         // 输入格式: 原创名称-抖音:侵权人名称-佣金率 其他内容...
         // 侵权人名称在 "-抖音:" 后，到下一个 "-数字" 或空格前截止
@@ -239,6 +241,22 @@ public class AutomationAccessibilityService extends AccessibilityService {
     public void setInfringementUrl(String url) {
         this.infringementUrl = url != null ? url : "";
         logD("📝 设置侵权链接: " + this.infringementUrl);
+    }
+
+    /**
+     * 🔧 直接设置侵权人名称（绕过 setRemark 二次解析，确保 infringerName 正确赋值）
+     */
+    public void setInfringerName(String name) {
+        this.infringerName = name != null ? name.trim() : "";
+        logD("📝 直接设置侵权人名称: '" + this.infringerName + "'");
+    }
+
+    /**
+     * 🔧 直接设置原创名称
+     */
+    public void setOriginalName(String name) {
+        this.originalName = name != null ? name.trim() : "";
+        logD("📝 直接设置原创名称: '" + this.originalName + "'");
     }
 
     /**
@@ -4473,6 +4491,54 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     });
                     Thread.sleep(700);
 
+                    // ★★★ 新增 Step F1.5 (V5.2): 点击"联系商家" → 等待加载 → 点击电话按钮 → 截图 → 返回 ★★★
+                    // 联系商家按钮 bounds [183,2127]→[330,2226]，中心坐标 (256, 2176)
+                    logD("📞 [联系商家] Step F1.5: 点击'联系商家'按钮 (256, 2176)...");
+                    clickByCoordinates(256, 2176);
+
+                    // 智能等待联系商家聊天页加载（检测"发送您要咨询的内容"文字节点，最多6秒）
+                    logD("⏳ [联系商家] 等待聊天页面加载（最多6秒）...");
+                    boolean contactPageLoaded = false;
+                    for (int cw = 0; cw < 12 && !contactPageLoaded; cw++) {
+                        Thread.sleep(500);
+                        android.view.accessibility.AccessibilityNodeInfo cwRoot = getRootInActiveWindow();
+                        if (cwRoot != null) {
+                            // 检测 EditText "发送您要咨询的内容"（dump确认：bounds [210,2220]→[756,2286]）
+                            java.util.List<android.view.accessibility.AccessibilityNodeInfo> cwNodes =
+                                cwRoot.findAccessibilityNodeInfosByText("发送您要咨询的内容");
+                            if (cwNodes != null && !cwNodes.isEmpty()) {
+                                contactPageLoaded = true;
+                                logD("✅ [联系商家] 聊天页已加载（第" + (cw + 1) + "次检测到输入框节点）");
+                                for (android.view.accessibility.AccessibilityNodeInfo n : cwNodes) n.recycle();
+                            }
+                            cwRoot.recycle();
+                        }
+                    }
+                    if (!contactPageLoaded) {
+                        logD("⚠️ [联系商家] 6秒内未检测到聊天页特征，强制继续");
+                    }
+                    Thread.sleep(300);
+
+                    // 点击右上角电话样式按钮（nav bar右侧，联系商家聊天页顶部导航栏）
+                    // 坐标来自 dump/联系商家dump.md 实测：(898, 188)
+                    logD("📱 [联系商家] 点击右上角电话按钮 (898, 188)...");
+                    clickByCoordinates(898, 188);
+                    Thread.sleep(1500); // 等待电话弹窗或新页面出现
+
+                    // 截图取证（电话按钮点击后的页面）
+                    logD("📸 [联系商家] 截取电话取证截图...");
+                    takeScreenshotWithPrefix("购物车取证_联系商家", new ScreenshotCallback() {
+                        @Override public void onSuccess() { logD("✅ '联系商家'电话截图保存成功"); }
+                        @Override public void onFailure() { logE("❌ '联系商家'电话截图保存失败"); }
+                    });
+                    Thread.sleep(700);
+
+                    // 返回到"选品带货"页面（实测只需一次Back）
+                    logD("🔙 [联系商家] 按返回键回到'选品带货'页面...");
+                    performGlobalAction(GLOBAL_ACTION_BACK);
+                    Thread.sleep(1000);
+                    logD("✅ [联系商家] 联系商家取证完成，继续后续步骤...");
+
                     // Step F2: 双向确认是否有千川数据（无障碍节点优先，OCR兜底）
                     // 有千川数据特征：节点含"双佣金"或"带货人数"
                     // 无千川数据特征：节点含"未加入精选联盟"或"先去选品广场"
@@ -7945,6 +8011,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
         // ─────────────────────────────────────────────────────────────────
         // Step 2: 如未设置侵权账号名称，截图已完成，直接返回
         // ─────────────────────────────────────────────────────────────────
+        // 🔧 诊断日志：始终打印当前 infringerName/originalName/remark 的值
+        logD("🔍 [带货达人] 诊断 → infringerName='" + infringerName + "' originalName='" + originalName + "' remark='" + remark + "'");
         if (infringerName == null || infringerName.isEmpty()) {
             logD("⚠️ [带货达人] 未设置侵权人名称，截图已保存，跳过达人点击检测");
             return;
@@ -8846,24 +8914,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 // Step E: 在达人主页查找蓝V认证标签并取证
                 navigateToBlueVCertification();
 
-                // Step F: 蓝V取证完成后，三次Back返回到"带货达人"页面
-                logD("🔙 [带货达人] 蓝V取证完成，开始三次Back返回带货达人页面...");
-                performGlobalAction(GLOBAL_ACTION_BACK);
-                Thread.sleep(1500);
-                if (!isRunning) return;
-                performGlobalAction(GLOBAL_ACTION_BACK);
-                Thread.sleep(1500);
-                if (!isRunning) return;
-                performGlobalAction(GLOBAL_ACTION_BACK);
-                Thread.sleep(2000);
-                if (!isRunning) return;
-
-                // Step G: 点击"联系商家"按钮（坐标来自选品带货点击后页面dump）
-                // 联系商家按钮 bounds [183,2127]→[330,2226]，中心坐标 (256, 2176)
-                logD("📞 [带货达人] 点击联系商家按钮(256,2176)...");
-                clickByCoordinates(256, 2176);
-                Thread.sleep(2000);
-                logD("✅ [带货达人] 带货达人取证全流程完成！");
+                // Step F: 蓝V取证完成，全流程结束
+                // 注意：联系商家取证已在 Step F1.5（选品带货页面加载后立即执行）完成，无需在此重复
+                logD("✅ [带货达人] 蓝V取证完成，带货达人取证全流程已结束！");
                 return;
             }
 
