@@ -12,6 +12,61 @@
 
 ## 🚀 版本历史
 
+### V5.3 (2026-03-27) 🔍 本地NCC模板匹配修复 - 滑块验证码X坐标始终为0
+
+**✨ 核心更新 - 搜索起点从0改为fgW，跳过碎片初始位置，命中真实缺口**
+
+#### 🐛 问题根因
+
+```
+✅ 本地模板匹配完成：最优X=0px，相关得分=0.993   ← 每次都是0！
+```
+
+- 碎片图（162×162px）在截图中的绝对坐标为 `[141,1060]→[303,1222]`
+- 背景图从 `[141,895]` 开始裁剪，碎片相对背景图的 **起始X = 0**
+- NCC算法从 `offsetX=0` 开始搜索，在X=0处与碎片当前位置完美重叠，相关系数高达0.993
+- **算法把碎片的初始位置当成了缺口**，始终输出 X=0，滑块滑到最左端验证必然失败
+
+#### ✅ 修复方案
+
+**文件**: `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+**方法**: `localNccTemplateMatch()`
+
+```java
+// ❌ 修复前：从0开始，会命中碎片自身位置
+for (int offsetX = 0; offsetX < maxX; offsetX++)
+
+// ✅ 修复后：从fgW(=162px)开始，强制跳过碎片初始位置
+for (int offsetX = fgW; offsetX < maxX; offsetX++)
+```
+
+#### 📊 修复前后对比
+
+| | 修复前 | 修复后 |
+|---|---|---|
+| 搜索起点 | offsetX = 0 | offsetX = fgW（162px） |
+| 匹配结果 | X=0，得分=0.993（碎片自身） | X=真实缺口位置，得分正常 |
+| 滑动行为 | 始终滑到最左端 | 滑到真实缺口位置 |
+| 验证结果 | 必然失败 | 正常通过 |
+
+#### 📋 日志变化
+
+```
+# 修复前
+✅ 本地模板匹配完成：最优X=0px，相关得分=0.993
+
+# 修复后
+✅ 本地模板匹配完成：最优X=187px，相关得分=0.721
+🖐️ 本地匹配滑动距离=187px，目标x=409，模拟人手滑动...
+✅ 本地匹配验证通过！等待资质页加载...
+```
+
+#### 📁 文件变更
+- `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java`
+  - `localNccTemplateMatch()`: 循环起点 `offsetX=0` → `offsetX=fgW`
+
+---
+
 ### V5.2 (2026-03-27) 🐛 带货达人侵权人名称传递架构重构 - 彻底修复infringerName为空导致跳过问题
 
 **✨ 核心更新 - 消除双重解析漏洞，直接setter传递infringerName**

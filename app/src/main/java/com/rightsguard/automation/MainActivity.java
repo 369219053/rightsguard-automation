@@ -24,8 +24,7 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvStatusDetail;
     private View viewStatusIndicator;
     private MaterialButton btnStart;
-    private MaterialButton btnTestMode;
-    private MaterialButton btnShoppingTest;
+    private MaterialButton btnCaptchaTest;
     private MaterialButton btnStop;
     private MaterialButton btnViewLog;
     private ImageView ivSettings;
@@ -51,8 +50,7 @@ public class MainActivity extends AppCompatActivity {
         tvStatusDetail = findViewById(R.id.tv_status_detail);
         viewStatusIndicator = findViewById(R.id.view_status_indicator);
         btnStart = findViewById(R.id.btn_start);
-        btnTestMode = findViewById(R.id.btn_test_mode);
-        btnShoppingTest = findViewById(R.id.btn_shopping_test);
+        btnCaptchaTest = findViewById(R.id.btn_captcha_test);
         btnStop = findViewById(R.id.btn_stop);
         btnViewLog = findViewById(R.id.btn_view_log);
         ivSettings = findViewById(R.id.iv_settings);
@@ -66,11 +64,8 @@ public class MainActivity extends AppCompatActivity {
         // 开始按钮
         btnStart.setOnClickListener(v -> startAutomation());
 
-        // 测试模式按钮
-        btnTestMode.setOnClickListener(v -> startTestMode());
-
-        // 带货测试按钮
-        btnShoppingTest.setOnClickListener(v -> startLeadingCreatorTestMode());
+        // 验证测试按钮
+        btnCaptchaTest.setOnClickListener(v -> startCaptchaTestMode());
 
         // 停止按钮
         btnStop.setOnClickListener(v -> stopAutomation());
@@ -301,72 +296,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 🧪 测试模式：跳过权利卫士取证流程，直接打开抖音→观看历史→视频→作者主页→店铺账号→放大截图
+     * 🔐 验证测试模式：切换到抖音，点击"资质证照"，测试超级鹰验证码能否通过
+     * 使用前：手动把抖音停在"店铺详情"页面，然后回到本APK点击按钮
      */
-    private void startTestMode() {
-        if (!AutomationAccessibilityService.isServiceAvailable()) {
-            Toast.makeText(this, R.string.toast_accessibility_required, Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        // 读取输入框内容，解析视频关键词
-        String evidenceInfo = "";
-        if (etRemark != null && etRemark.getText() != null) {
-            evidenceInfo = etRemark.getText().toString().trim();
-        }
-
-        if (evidenceInfo.isEmpty()) {
-            Toast.makeText(this, "请先输入取证信息（用于匹配观看历史中的视频）", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        AutomationAccessibilityService service = AutomationAccessibilityService.getInstance();
-        if (service == null) {
-            Toast.makeText(this, "无障碍服务未启动", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        // 解析关键词和封面URL（和正常模式一样）
-        ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
-        if (parseResult.videoKeywords != null && !parseResult.videoKeywords.isEmpty()) {
-            service.setVideoKeywords(parseResult.videoKeywords);
-            Toast.makeText(this, "🧪 测试模式启动，关键词: " + parseResult.videoKeywords, Toast.LENGTH_LONG).show();
-        } else {
-            // 没解析到关键词，把整个输入当关键词
-            service.setVideoKeywords(evidenceInfo);
-            Toast.makeText(this, "🧪 测试模式启动，关键词: " + evidenceInfo, Toast.LENGTH_LONG).show();
-        }
-
-        // 🆕 设置封面URL（购物车取证创作灵感封面对比所需）
-        if (parseResult.coverImageUrl != null && !parseResult.coverImageUrl.isEmpty()) {
-            service.setCoverImageUrl(parseResult.coverImageUrl);
-            Log.d("MainActivity", "✅ [测试模式] 已设置封面URL: " + parseResult.coverImageUrl);
-        } else {
-            Log.d("MainActivity", "⚠️ [测试模式] 未在输入中找到封面URL，跳过封面对比");
-        }
-
-        // 🆕 设置视频时长
-        if (parseResult.videoDurationSeconds > 0) {
-            service.setVideoDurationSeconds(parseResult.videoDurationSeconds);
-            Log.d("MainActivity", "✅ [测试模式] 已设置视频时长: " + parseResult.videoDurationSeconds + "秒");
-        }
-
-        // 🔧 直接设置侵权人名称，确保 infringerName 正确（即使测试模式也要传）
-        service.setRemark(parseResult.remark);
-        service.setInfringerName(parseResult.infringerName);
-        service.setOriginalName(parseResult.originalName);
-        Log.d("MainActivity", "✅ [测试模式] 侵权人: '" + parseResult.infringerName + "' 原创: '" + parseResult.originalName + "'");
-
-        service.startTestMode();
-        isRunning = true;
-        updateStatus(STATUS_RUNNING);
-    }
-
-    /**
-     * 🎯 带货测试模式：直接从当前商品详情页执行受众→评价→内容→达人流程
-     * 使用前请手动在抖音停在商品详情页（选品带货页面）
-     */
-    private void startLeadingCreatorTestMode() {
+    private void startCaptchaTestMode() {
         if (!AutomationAccessibilityService.isServiceAvailable()) {
             Toast.makeText(this, R.string.toast_accessibility_required, Toast.LENGTH_LONG).show();
             return;
@@ -378,34 +311,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // 解析取证信息，提取封面URL和侵权人名称（受众→评价→内容→达人流程均需要）
-        String evidenceInfo = "";
-        if (etRemark != null && etRemark.getText() != null) {
-            evidenceInfo = etRemark.getText().toString().trim();
-        }
-        if (!evidenceInfo.isEmpty()) {
-            ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
-            // 设置侵权人名称（带货达人检测所需）
-            service.setRemark(parseResult.remark);
-            // 🔧 直接设置侵权人名称，绕过 setRemark 二次解析
-            service.setInfringerName(parseResult.infringerName);
-            service.setOriginalName(parseResult.originalName);
-            Log.d("MainActivity", "✅ [带货测试] 已设置备注（侵权人）: " + parseResult.remark);
-            Log.d("MainActivity", "✅ [带货测试] 直接侵权人名称: '" + parseResult.infringerName + "' 原创: '" + parseResult.originalName + "'");
-            // 设置封面URL（创作灵感封面对比所需）
-            if (parseResult.coverImageUrl != null && !parseResult.coverImageUrl.isEmpty()) {
-                service.setCoverImageUrl(parseResult.coverImageUrl);
-                Log.d("MainActivity", "✅ [带货测试] 已设置封面URL: " + parseResult.coverImageUrl);
-                Toast.makeText(this, "🎯 带货测试模式启动（封面Key+侵权人已设置）", Toast.LENGTH_LONG).show();
-            } else {
-                Log.d("MainActivity", "⚠️ [带货测试] 未在输入中找到封面URL，跳过封面对比");
-                Toast.makeText(this, "🎯 带货测试模式启动，请确保抖音已在商品详情页", Toast.LENGTH_LONG).show();
-            }
-        } else {
-            Toast.makeText(this, "🎯 带货测试模式启动，请确保抖音已在商品详情页", Toast.LENGTH_LONG).show();
-        }
-
-        service.startLeadingCreatorTestMode();
+        Toast.makeText(this, "🔐 验证测试启动，请确保抖音已在店铺详情页", Toast.LENGTH_LONG).show();
+        service.startCaptchaTestMode();
         isRunning = true;
         updateStatus(STATUS_RUNNING);
     }
