@@ -669,6 +669,68 @@ public class AutomationAccessibilityService extends AccessibilityService {
     }
 
     /**
+     * 🛒 带货测试模式：切换到抖音（保持在创作灵感界面）→ 点击"达人" → 切换近90日 → 查找侵权账号
+     * 使用前：手动把抖音停在"创作灵感"页面，然后回到本APK点击按钮
+     */
+    public void startCargoTestMode() {
+        logD("🛒 启动带货测试模式...");
+        isRunning = true;
+
+        new Thread(() -> {
+            try {
+                // Step1: 切换到抖音前台
+                logD("📱 [带货测试] Step1: 切换到抖音...");
+                switchToDouyin();
+
+                // 等待抖音到前台（最多8秒）
+                boolean douyinReady = false;
+                for (int i = 0; i < 8 && !douyinReady; i++) {
+                    if (!isRunning) { logD("🛑 停止任务"); return; }
+                    Thread.sleep(1000);
+                    android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+                    if (root != null) {
+                        CharSequence pkg = root.getPackageName();
+                        if (pkg != null && pkg.toString().contains("aweme")) {
+                            douyinReady = true;
+                            logD("✅ [带货测试] 抖音已到前台（第" + (i + 1) + "秒）");
+                        }
+                    }
+                }
+                if (!douyinReady) {
+                    logE("❌ [带货测试] 8秒内抖音未到前台，终止测试");
+                    return;
+                }
+
+                // Step2: 点击"达人"标签
+                if (!isRunning) { logD("🛑 停止任务"); return; }
+                logD("👆 [带货测试] Step2: 点击'达人'标签(934,277)...");
+                clickNavTab("达人", 934, 277);
+                Thread.sleep(1500);
+
+                // Step3: 执行带货达人检测（含近30日→近90日切换 + 查找侵权账号）
+                if (!isRunning) { logD("🛑 停止任务"); return; }
+                logD("🔍 [带货测试] Step3: 开始带货达人检测...");
+                try {
+                    checkLeadingCreators();
+                } catch (Exception e) {
+                    logE("[带货测试] 带货达人检测异常: " + e.getMessage());
+                }
+
+                logD("🎉 [带货测试] 带货测试模式完成！");
+
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                logD("🛑 带货测试模式被中断");
+            } catch (Exception e) {
+                logE("带货测试模式失败: " + e.getMessage());
+                e.printStackTrace();
+            } finally {
+                isRunning = false;
+            }
+        }).start();
+    }
+
+    /**
      * 延迟打开应用
      */
     private void delayedOpenApp() {
@@ -2776,13 +2838,16 @@ public class AutomationAccessibilityService extends AccessibilityService {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 logD("🛑 正常模式线程被中断，停止自动化");
+                isRunning = false; // 仅中断时在此重置
             } catch (Exception e) {
                 logE("抖音自动化失败: " + e.getMessage());
                 e.printStackTrace();
+                isRunning = false; // 仅异常时在此重置
             } finally {
-                isRunning = false;        // ★ 确保完成后状态归位，悬浮窗显示"已完成"
+                // ★ 注意：正常完成时 isRunning 由后台线程最终步骤（finally@3694）负责重置
+                // 此处只清理线程引用，不重置 isRunning，否则会提前中断后台数据采集流程
                 normalModeThread = null;
-                logD("🔒 normalModeThread 已结束，isRunning 重置为 false");
+                logD("🔒 normalModeThread 已结束（isRunning 由后台线程管理）");
             }
         });
         normalModeThread.start();
@@ -2912,27 +2977,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     public void onCompleted(android.accessibilityservice.GestureDescription gestureDescription) {
                         super.onCompleted(gestureDescription);
                         logD("✅ 滑动手势执行成功");
-
-                        // 🆕 滑动完成后等待1秒,然后截屏
-                        new Thread(() -> {
-                            try {
-                                Thread.sleep(1000); // 等待页面稳定
-                                logD("📸 准备截屏保存抖音设置页面...");
-                                takeScreenshotWithPrefix("抖音设置", new ScreenshotCallback() {
-                                    @Override
-                                    public void onSuccess() {
-                                        logD("✅ 抖音设置页面截屏成功");
-                                    }
-
-                                    @Override
-                                    public void onFailure() {
-                                        logE("❌ 抖音设置页面截屏失败");
-                                    }
-                                });
-                            } catch (Exception e) {
-                                logE("截屏失败: " + e.getMessage());
-                            }
-                        }).start();
+                        // 不需要截图，等待clickQualificationButton截取资质证照页面
                     }
 
                     @Override
@@ -3655,6 +3700,13 @@ public class AutomationAccessibilityService extends AccessibilityService {
             // 🆕 步骤: 检查购物车链接并截图（在进入作者主页前）
             checkAndCaptureShoppingCart();
 
+            // ★ 如果选品带货子流程已完成取证（带货达人流程结束，isRunning=false），
+            //   直接结束，不再执行作者主页、停止录屏等后续步骤
+            if (!isRunning) {
+                logD("✅ [主流程] 子流程已完成取证，跳过后续作者主页/停止录屏步骤");
+                return;
+            }
+
             // 🆕 步骤: 进入侵权作者主页
             navigateToAuthorProfile();
 
@@ -3702,6 +3754,9 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     bmp.recycle();
                 }
             }
+            // ★ 整个取证流程真正结束，重置运行标志（悬浮窗显示"已完成"）
+            isRunning = false;
+            logD("🔒 取证后台线程已结束，isRunning 重置为 false");
         }
     }
 
@@ -4517,21 +4572,26 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     logD("✅ [新流程] 已点击【进店】，等待店铺页面加载...");
 
                     // ─── 店内步骤：智能等待店铺页面加载 ───
-                    logD("⏱️ 智能等待店铺页面加载（OCR检测'全部商品'）...");
+                    // 不同店铺页布局不同，用多关键词覆盖：
+                    //   "全部商品"=部分店铺有此Tab；"综合"/"销量"/"上新"=商品排序Tab（几乎所有店铺都有）；"粉丝"=店铺粉丝数
+                    final String[] shopPageKeywords = {"全部商品", "综合", "销量", "上新", "粉丝"};
+                    logD("⏱️ 智能等待店铺页面加载（OCR多关键词检测）...");
                     boolean shopPageLoaded = false;
                     for (int waitCount = 0; waitCount < 5 && !shopPageLoaded; waitCount++) {
                         Thread.sleep(1000);
                         final boolean[] shopOcrDone = {false};
                         final boolean[] shopDetected = {false};
+                        final String[] shopDetectedKw = {null};
                         takeScreenshot(new ScreenshotCallback() {
                             @Override
                             public void onSuccess(android.graphics.Bitmap bitmap) {
                                 if (bitmap == null) { shopOcrDone[0] = true; return; }
                                 OcrHelper shopOcrInner = new OcrHelper(msg -> logD(msg));
-                                shopOcrInner.findTextPosition(bitmap, "全部商品", new OcrHelper.OcrCallback() {
+                                shopOcrInner.findAnyTextPosition(bitmap, shopPageKeywords, new OcrHelper.OcrAnyCallback() {
                                     @Override
-                                    public void onSuccess(OcrHelper.TextMatch match) {
+                                    public void onSuccess(String keyword) {
                                         shopDetected[0] = true;
+                                        shopDetectedKw[0] = keyword;
                                         shopOcrDone[0] = true;
                                         shopOcrInner.release();
                                         bitmap.recycle();
@@ -4552,11 +4612,16 @@ public class AutomationAccessibilityService extends AccessibilityService {
                         }
                         if (shopDetected[0]) {
                             shopPageLoaded = true;
-                            logD("✅ OCR检测到'全部商品'，确认已进入店铺页（第" + (waitCount + 1) + "秒）");
+                            logD("✅ OCR检测到[" + shopDetectedKw[0] + "]，确认已进入店铺页（第" + (waitCount + 1) + "秒）");
                         } else {
-                            logD("⌛ 第" + (waitCount + 1) + "次未检测到店铺页，重新点击【进店】坐标=("
-                                    + lastEnterX + "," + lastEnterY + ")...");
-                            clickByCoordinates(lastEnterX, lastEnterY);
+                            // 仅在第1次时重试点击【进店】；后续若已在店铺页内则不再重复点击（避免误触商品）
+                            if (waitCount == 0) {
+                                logD("⌛ 第" + (waitCount + 1) + "次未检测到店铺页，重新点击【进店】坐标=("
+                                        + lastEnterX + "," + lastEnterY + ")...");
+                                clickByCoordinates(lastEnterX, lastEnterY);
+                            } else {
+                                logD("⌛ 第" + (waitCount + 1) + "次未检测到店铺页，继续等待（不重复点击，避免误触商品）...");
+                            }
                         }
                     }
                     if (!shopPageLoaded) {
@@ -4574,37 +4639,114 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     });
                     Thread.sleep(700);
                     logD("✅ 店铺主页截图完成");
-                    // === 点击店铺信息卡片，进入店铺详情页 ===
-                    logD("🏪 通过无障碍树查找店铺名称节点（hk8），精准点击店铺详情...");
+                    // === 点击店铺名称，进入店铺账号详情页 ===
+                    // dump分析：店铺名称TextView在无障碍树里可见（hqh区域Y≈392~484），
+                    // 其父ViewGroup是clickable+visible，可直接用findAccessibilityNodeInfosByText定位
+                    logD("🏪 [店铺名称] 无障碍树查找店铺名称节点，精准点击账号详情...");
                     boolean storeCardClicked = false;
-                    android.view.accessibility.AccessibilityNodeInfo hk8Root = getRootInActiveWindow();
-                    if (hk8Root != null) {
-                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> hk8List =
-                            hk8Root.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/hk8");
-                        if (hk8List != null && !hk8List.isEmpty()) {
-                            android.view.accessibility.AccessibilityNodeInfo hk8Node = hk8List.get(0);
-                            for (int ci = 0; ci < hk8Node.getChildCount() && !storeCardClicked; ci++) {
-                                android.view.accessibility.AccessibilityNodeInfo child = hk8Node.getChild(ci);
-                                if (child != null && child.isClickable()) {
-                                    android.graphics.Rect childBounds = new android.graphics.Rect();
-                                    child.getBoundsInScreen(childBounds);
-                                    if (childBounds.centerY() > 265 && childBounds.centerY() < 500 && childBounds.height() > 80) {
-                                        logD("✅ 找到店铺名称可点击节点: " + childBounds + "，点击中心(" + childBounds.centerX() + "," + childBounds.centerY() + ")");
-                                        clickByCoordinates(childBounds.centerX(), childBounds.centerY());
+
+                    // 方法1（主力）：无障碍树按文字搜索店铺名称节点，找可点击父节点点击
+                    // dump验证：找"家加鲜餐饮具旗舰店" → ViewGroup[35,392]→[656,484] clickable visible
+                    if (infringerName != null && !infringerName.isEmpty()) {
+                        final String shopSearchKey = infringerName.length() >= 4
+                                ? infringerName.substring(0, 4) : infringerName;
+                        android.view.accessibility.AccessibilityNodeInfo a11yRoot = getRootInActiveWindow();
+                        if (a11yRoot != null) {
+                            java.util.List<android.view.accessibility.AccessibilityNodeInfo> nameNodes =
+                                    a11yRoot.findAccessibilityNodeInfosByText(shopSearchKey);
+                            if (nameNodes != null) {
+                                for (android.view.accessibility.AccessibilityNodeInfo nameNode : nameNodes) {
+                                    if (nameNode == null || storeCardClicked) continue;
+                                    android.graphics.Rect nb = new android.graphics.Rect();
+                                    nameNode.getBoundsInScreen(nb);
+                                    // 只处理Y在265~550之间且可见的节点（过滤掉顶部hsk里不可见的那个）
+                                    if (nameNode.isVisibleToUser() && nb.centerY() > 265 && nb.centerY() < 550) {
+                                        // 优先找可点击的父节点来点击
+                                        android.view.accessibility.AccessibilityNodeInfo clickTarget = nameNode;
+                                        android.view.accessibility.AccessibilityNodeInfo parent = nameNode.getParent();
+                                        while (parent != null) {
+                                            android.graphics.Rect pb = new android.graphics.Rect();
+                                            parent.getBoundsInScreen(pb);
+                                            if (parent.isClickable() && pb.centerY() > 265 && pb.centerY() < 550) {
+                                                clickTarget = parent;
+                                                break;
+                                            }
+                                            android.view.accessibility.AccessibilityNodeInfo grandParent = parent.getParent();
+                                            parent.recycle();
+                                            parent = grandParent;
+                                        }
+                                        android.graphics.Rect tb = new android.graphics.Rect();
+                                        clickTarget.getBoundsInScreen(tb);
+                                        logD("✅ [无障碍] 找到店铺名称[" + shopSearchKey + "] 节点"
+                                                + tb + " clickable=" + clickTarget.isClickable()
+                                                + "，点击中心(" + tb.centerX() + "," + tb.centerY() + ")");
+                                        clickByCoordinates(tb.centerX(), tb.centerY());
                                         storeCardClicked = true;
+                                    } else {
+                                        logD("⚠️ [无障碍] 找到[" + shopSearchKey + "] 但Y=" + nb.centerY()
+                                                + " visible=" + nameNode.isVisibleToUser() + "，跳过");
                                     }
-                                    child.recycle();
+                                    nameNode.recycle();
                                 }
                             }
-                            for (android.view.accessibility.AccessibilityNodeInfo n : hk8List) n.recycle();
-                        } else {
-                            logD("⚠️ 未找到hk8节点，将使用兜底坐标");
+                            a11yRoot.recycle();
                         }
-                        hk8Root.recycle();
                     }
+
+                    // 方法2（备用）：OCR识别店铺名称文字 → 直接点击（无障碍树失效时使用）
+                    if (!storeCardClicked && infringerName != null && !infringerName.isEmpty()) {
+                        logD("⚠️ 无障碍树未找到店铺名称，改用OCR识别...");
+                        final String shopSearchKey2 = infringerName.length() >= 4
+                                ? infringerName.substring(0, 4) : infringerName;
+                        final boolean[] nameOcrDone = {false};
+                        final int[] nameClickX = {-1};
+                        final int[] nameClickY = {-1};
+                        takeScreenshot(new ScreenshotCallback() {
+                            @Override
+                            public void onSuccess(android.graphics.Bitmap bitmap) {
+                                if (bitmap == null) { nameOcrDone[0] = true; return; }
+                                OcrHelper nameOcr = new OcrHelper(msg -> logD(msg));
+                                nameOcr.findTextPosition(bitmap, shopSearchKey2, new OcrHelper.OcrCallback() {
+                                    @Override
+                                    public void onSuccess(OcrHelper.TextMatch match) {
+                                        if (match.center.y > 265 && match.center.y < 550) {
+                                            nameClickX[0] = match.center.x;
+                                            nameClickY[0] = match.center.y;
+                                            logD("✅ [OCR] 找到店铺名称[" + shopSearchKey2 + "] 坐标=("
+                                                    + match.center.x + "," + match.center.y + ")");
+                                        } else {
+                                            logD("⚠️ [OCR] 找到[" + shopSearchKey2 + "] 但Y=" + match.center.y + "，忽略");
+                                        }
+                                        nameOcr.release();
+                                        bitmap.recycle();
+                                        nameOcrDone[0] = true;
+                                    }
+                                    @Override
+                                    public void onFailure(String error) {
+                                        logD("⚠️ [OCR] 未找到店铺名称[" + shopSearchKey2 + "]");
+                                        nameOcr.release();
+                                        bitmap.recycle();
+                                        nameOcrDone[0] = true;
+                                    }
+                                });
+                            }
+                            @Override public void onFailure() { nameOcrDone[0] = true; }
+                        });
+                        long nameOcrStart = System.currentTimeMillis();
+                        while (!nameOcrDone[0] && System.currentTimeMillis() - nameOcrStart < 3000) {
+                            Thread.sleep(100);
+                        }
+                        if (nameClickX[0] > 0) {
+                            logD("🖱️ [OCR] 点击店铺名称坐标(" + nameClickX[0] + "," + nameClickY[0] + ")");
+                            clickByCoordinates(nameClickX[0], nameClickY[0]);
+                            storeCardClicked = true;
+                        }
+                    }
+
+                    // 方法3（最终兜底）：固定坐标 — 根据dump，店铺名在Y≈438，X取350
                     if (!storeCardClicked) {
-                        logD("⚠️ 无障碍树未匹配到店铺名称节点，兜底坐标点击(515,386)");
-                        clickByCoordinates(515, 386);
+                        logD("⚠️ 所有方法失败，最终兜底坐标点击(350,438)");
+                        clickByCoordinates(350, 438);
                     }
                     logD("⏳ 等待店铺详情页（WebView）加载，未识别到则重复点击...");
                     final String[] shopDetailKeywords = {"店铺口碑", "资质证照", "店铺人气", "店铺详情"};
@@ -5423,8 +5565,11 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 logE("❌ 滚动" + MAX_SHOP_SCROLL + "次后OCR仍未找到【进店】，跳过截图3和店铺截图");
             }
 
-
-
+            // ★ 如果带货达人流程已完成取证（isRunning=false），直接返回，不再执行后续操作
+            if (!isRunning) {
+                logD("✅ [选品带货] 子流程已完成取证，跳过后续返回步骤，直接返回主流程");
+                return;
+            }
 
 
 
@@ -8251,6 +8396,175 @@ public class AutomationAccessibilityService extends AccessibilityService {
         }
 
         // ─────────────────────────────────────────────────────────────────
+        // 【新增】Step 0.5: 将"带货达人"时间筛选切换为"近90日"
+        //   ① OCR截图，查找页面上任意时间筛选按钮（近7日/近30日/7天/30天均兼容）
+        //   ② 点击找到的筛选按钮，打开弹窗，等待动画（1500ms）
+        //   ③ OCR截图，在弹窗中找"近90日"并点击
+        //   ④ OCR轮询确认筛选切换完成（最多等6秒）
+        // ─────────────────────────────────────────────────────────────────
+        if (isRunning) {
+            logD("🔧 [带货达人] 开始切换时间筛选 → 近90日...");
+
+            // ① OCR查找页面上的时间筛选按钮（兼容近7日/近30日/7天/30天）
+            final int[] filterBtnPos = {-1, -1};
+            final boolean[] filterOcrDone = {false};
+            takeScreenshot(new ScreenshotCallback() {
+                @Override
+                public void onSuccess(android.graphics.Bitmap bitmap) {
+                    if (bitmap == null) { filterOcrDone[0] = true; return; }
+                    OcrHelper filterOcr = new OcrHelper(msg -> logD(msg));
+                    filterOcr.findAnyTextPosition(bitmap,
+                            new String[]{"近30日", "近7日", "30天", "7天"},
+                            new OcrHelper.OcrAnyCallback() {
+                        @Override
+                        public void onSuccess(String matchedKeyword) {
+                            // 找到关键词后，取所有匹配中Y最小的（最靠上的筛选按钮）
+                            OcrHelper posOcr = new OcrHelper(msg -> logD(msg));
+                            posOcr.findAllTextPositions(bitmap, matchedKeyword, new OcrHelper.OcrMultiCallback() {
+                                @Override
+                                public void onSuccess(java.util.List<OcrHelper.TextMatch> matches) {
+                                    OcrHelper.TextMatch best = matches.get(0);
+                                    for (OcrHelper.TextMatch m : matches) {
+                                        if (m.center.y < best.center.y) best = m;
+                                    }
+                                    filterBtnPos[0] = best.center.x;
+                                    filterBtnPos[1] = best.center.y;
+                                    logD("✅ [带货达人] OCR找到筛选按钮'" + matchedKeyword + "' 坐标=(" + best.center.x + "," + best.center.y + ")");
+                                    posOcr.release();
+                                    filterOcr.release();
+                                    bitmap.recycle();
+                                    filterOcrDone[0] = true;
+                                }
+                                @Override
+                                public void onFailure(String error) {
+                                    logE("❌ [带货达人] findAllTextPositions失败: " + error);
+                                    posOcr.release();
+                                    filterOcr.release();
+                                    bitmap.recycle();
+                                    filterOcrDone[0] = true;
+                                }
+                            });
+                        }
+                        @Override
+                        public void onFailure(String error) {
+                            logE("❌ [带货达人] OCR未找到任何时间筛选按钮: " + error);
+                            filterOcr.release();
+                            bitmap.recycle();
+                            filterOcrDone[0] = true;
+                        }
+                    });
+                }
+                @Override public void onFailure() { filterOcrDone[0] = true; }
+            });
+            long filterWait = System.currentTimeMillis();
+            while (!filterOcrDone[0] && System.currentTimeMillis() - filterWait < 4000) {
+                if (!isRunning) return;
+                Thread.sleep(50);
+            }
+
+            // ② 点击筛选按钮，打开弹窗
+            if (filterBtnPos[0] >= 0) {
+                clickByCoordinates(filterBtnPos[0], filterBtnPos[1]);
+                logD("👆 [带货达人] 已点击时间筛选按钮，等待弹窗动画...");
+                Thread.sleep(1500);
+
+                // ③ OCR查找弹窗中的"近90日"选项
+                final int[] nd90Pos = {-1, -1};
+                final boolean[] nd90OcrDone = {false};
+                takeScreenshot(new ScreenshotCallback() {
+                    @Override
+                    public void onSuccess(android.graphics.Bitmap bitmap) {
+                        if (bitmap == null) { nd90OcrDone[0] = true; return; }
+                        OcrHelper nd90Ocr = new OcrHelper(msg -> logD(msg));
+                        nd90Ocr.findTextPosition(bitmap, "近90日", new OcrHelper.OcrCallback() {
+                            @Override
+                            public void onSuccess(OcrHelper.TextMatch match) {
+                                nd90Pos[0] = match.center.x;
+                                nd90Pos[1] = match.center.y;
+                                logD("✅ [带货达人] OCR找到'近90日' 坐标=(" + match.center.x + "," + match.center.y + ")");
+                                nd90Ocr.release();
+                                bitmap.recycle();
+                                nd90OcrDone[0] = true;
+                            }
+                            @Override
+                            public void onFailure(String error) {
+                                logE("❌ [带货达人] OCR未找到'近90日'：" + error);
+                                nd90Ocr.release();
+                                bitmap.recycle();
+                                nd90OcrDone[0] = true;
+                            }
+                        });
+                    }
+                    @Override public void onFailure() { nd90OcrDone[0] = true; }
+                });
+                long nd90Wait = System.currentTimeMillis();
+                while (!nd90OcrDone[0] && System.currentTimeMillis() - nd90Wait < 3000) {
+                    if (!isRunning) return;
+                    Thread.sleep(50);
+                }
+
+                // ④ 点击"近90日" → OCR找"确定"按钮并点击关闭弹窗
+                if (nd90Pos[0] >= 0) {
+                    clickByCoordinates(nd90Pos[0], nd90Pos[1]);
+                    logD("🖱️ [带货达人] 已点击'近90日'，等待500ms后查找'确定'按钮...");
+                    Thread.sleep(500);
+
+                    // OCR查找"确定"按钮
+                    final int[] confirmPos = {-1, -1};
+                    final boolean[] confirmOcrDone = {false};
+                    takeScreenshot(new ScreenshotCallback() {
+                        @Override
+                        public void onSuccess(android.graphics.Bitmap bitmap) {
+                            if (bitmap == null) { confirmOcrDone[0] = true; return; }
+                            OcrHelper confirmOcr = new OcrHelper(msg -> logD(msg));
+                            confirmOcr.findTextPosition(bitmap, "确定", new OcrHelper.OcrCallback() {
+                                @Override
+                                public void onSuccess(OcrHelper.TextMatch match) {
+                                    confirmPos[0] = match.center.x;
+                                    confirmPos[1] = match.center.y;
+                                    logD("✅ [带货达人] OCR找到'确定'按钮 坐标=(" + match.center.x + "," + match.center.y + ")");
+                                    confirmOcr.release();
+                                    bitmap.recycle();
+                                    confirmOcrDone[0] = true;
+                                }
+                                @Override
+                                public void onFailure(String error) {
+                                    logE("❌ [带货达人] OCR未找到'确定'按钮：" + error);
+                                    confirmOcr.release();
+                                    bitmap.recycle();
+                                    confirmOcrDone[0] = true;
+                                }
+                            });
+                        }
+                        @Override public void onFailure() { confirmOcrDone[0] = true; }
+                    });
+                    long confirmWait = System.currentTimeMillis();
+                    while (!confirmOcrDone[0] && System.currentTimeMillis() - confirmWait < 3000) {
+                        if (!isRunning) return;
+                        Thread.sleep(50);
+                    }
+
+                    // 点击"确定"关闭弹窗
+                    if (confirmPos[0] >= 0) {
+                        clickByCoordinates(confirmPos[0], confirmPos[1]);
+                        logD("✅ [带货达人] 已点击'确定'，筛选弹窗已关闭，等待页面刷新...");
+                        Thread.sleep(1500);
+                    } else {
+                        logE("⚠️ [带货达人] 未找到'确定'按钮，按返回键关闭弹窗");
+                        performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
+                        Thread.sleep(800);
+                    }
+                } else {
+                    logE("❌ [带货达人] 弹窗未找到'近90日'，按返回键关闭弹窗，保持原筛选继续");
+                    performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
+                    Thread.sleep(800);
+                }
+            } else {
+                logE("❌ [带货达人] 页面未找到任何时间筛选按钮，跳过筛选切换");
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────────
         // Step 1: 截图存档带货达人整体区域（无论是否有侵权账号，都先截图）
         // ─────────────────────────────────────────────────────────────────
         logD("📷 [带货达人] 截图带货达人整体区域...");
@@ -9182,6 +9496,8 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 generateEvidencePdf();
 
                 logD("🎉 [带货达人] 取证全流程完成！");
+                // ★ 立即置为 false，通知所有父流程停止继续执行
+                isRunning = false;
                 return;
             }
 

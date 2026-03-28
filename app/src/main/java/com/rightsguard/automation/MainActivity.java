@@ -25,6 +25,7 @@ public class MainActivity extends AppCompatActivity {
     private View viewStatusIndicator;
     private MaterialButton btnStart;
     private MaterialButton btnCaptchaTest;
+    private MaterialButton btnCargoTest;
     private MaterialButton btnStop;
     private MaterialButton btnViewLog;
     private ImageView ivSettings;
@@ -51,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
         viewStatusIndicator = findViewById(R.id.view_status_indicator);
         btnStart = findViewById(R.id.btn_start);
         btnCaptchaTest = findViewById(R.id.btn_captcha_test);
+        btnCargoTest = findViewById(R.id.btn_cargo_test);
         btnStop = findViewById(R.id.btn_stop);
         btnViewLog = findViewById(R.id.btn_view_log);
         ivSettings = findViewById(R.id.iv_settings);
@@ -66,6 +68,9 @@ public class MainActivity extends AppCompatActivity {
 
         // 验证测试按钮
         btnCaptchaTest.setOnClickListener(v -> startCaptchaTestMode());
+
+        // 带货测试按钮
+        btnCargoTest.setOnClickListener(v -> startCargoTestMode());
 
         // 停止按钮
         btnStop.setOnClickListener(v -> stopAutomation());
@@ -313,6 +318,46 @@ public class MainActivity extends AppCompatActivity {
 
         Toast.makeText(this, "🔐 验证测试启动，请确保抖音已在店铺详情页", Toast.LENGTH_LONG).show();
         service.startCaptchaTestMode();
+        isRunning = true;
+        updateStatus(STATUS_RUNNING);
+    }
+
+    /**
+     * 🛒 带货测试模式：切换到抖音（创作灵感界面）→ 点击"达人" → 切换近90日 → 查找侵权账号
+     * 使用前：手动把抖音停在"创作灵感"页面，输入框填写取证信息（用于提取侵权人账号名称）
+     */
+    private void startCargoTestMode() {
+        if (!AutomationAccessibilityService.isServiceAvailable()) {
+            Toast.makeText(this, R.string.toast_accessibility_required, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        AutomationAccessibilityService service = AutomationAccessibilityService.getInstance();
+        if (service == null) {
+            Toast.makeText(this, "无障碍服务未启动", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 从输入框提取侵权人名称（可选，不填则只截图不查人）
+        String evidenceInfo = "";
+        if (etRemark != null && etRemark.getText() != null) {
+            evidenceInfo = etRemark.getText().toString().trim();
+        }
+        if (!evidenceInfo.isEmpty()) {
+            ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
+            service.setInfringerName(parseResult.infringerName);
+            service.setOriginalName(parseResult.originalName);
+            service.setRemark(parseResult.remark);
+            Log.d("MainActivity", "✅ [带货测试] 侵权人: '" + parseResult.infringerName + "'");
+        } else {
+            // 未填写，清空侵权人名称，仅走截图流程
+            service.setInfringerName("");
+            service.setOriginalName("");
+            Log.d("MainActivity", "⚠️ [带货测试] 未填写取证信息，仅执行截图流程");
+        }
+
+        Toast.makeText(this, "🛒 带货测试启动，请确保抖音已在创作灵感页", Toast.LENGTH_LONG).show();
+        service.startCargoTestMode();
         isRunning = true;
         updateStatus(STATUS_RUNNING);
     }
