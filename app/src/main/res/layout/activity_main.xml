@@ -177,6 +177,45 @@
                             android:padding="16dp"
                             android:gravity="top" />
                     </com.google.android.material.textfield.TextInputLayout>
+
+                    <!-- 销量筛选阈值输入行 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="销量筛选阈值（留空不筛选）"
+                            android:textSize="13sp"
+                            android:textColor="@color/text_secondary" />
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:layout_width="140dp"
+                            android:layout_height="wrap_content"
+                            android:hint="例：1000"
+                            app:boxBackgroundMode="outline"
+                            app:boxStrokeColor="@color/primary_blue"
+                            app:boxCornerRadiusTopStart="8dp"
+                            app:boxCornerRadiusTopEnd="8dp"
+                            app:boxCornerRadiusBottomStart="8dp"
+                            app:boxCornerRadiusBottomEnd="8dp"
+                            app:hintTextColor="@color/text_secondary">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/et_sales_threshold"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:textSize="13sp"
+                                android:textColor="@color/text_primary"
+                                android:padding="12dp" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -216,6 +255,18 @@
                     android:id="@+id/btn_cargo_test"
                     style="@style/SecondaryButtonStyle"
                     android:text="🛒 带货测试"
+                    android:textSize="14sp"
+                    app:cornerRadius="16dp"
+                    android:layout_marginBottom="12dp"
+                    android:elevation="8dp"
+                    android:stateListAnimator="@null"
+                    android:translationZ="4dp" />
+
+                <!-- 销量测试按钮 -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_sales_test"
+                    style="@style/SecondaryButtonStyle"
+                    android:text="💰 销量测试"
                     android:textSize="14sp"
                     app:cornerRadius="16dp"
                     android:layout_marginBottom="12dp"

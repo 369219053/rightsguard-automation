@@ -55,6 +55,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private android.graphics.Bitmap referenceCoverBitmap = null; // 侵权视频参考封面（备用，保留）
     private String coverImageKey = null; // 🆕 侵权视频封面唯一Key（从用户输入的封面URL提取，支持jpeg_m_MD5格式和TOS格式，用于创作灵感精确对比）
     private String targetVideoPlayCount = ""; // 🆕 创作灵感中侵权视频的播放量，用于达人视频列表中匹配（如"368.55万"）
+    private int salesThreshold = -1; // 🆕 销量筛选阈值（-1=不筛选，>0=跳过销量<阈值的侵权视频，除非只有1个匹配）
 
     // 🧪 测试模式标志
     private boolean isTestMode = false; // 是否为测试模式(跳过权利卫士+录屏，直接打开抖音→历史→作者主页)
@@ -297,6 +298,14 @@ public class AutomationAccessibilityService extends AccessibilityService {
             this.coverImageKey = null;
             logD("⚠️ 无法从封面URL提取Key，跳过创作灵感对比。URL=" + url);
         }
+    }
+
+    /**
+     * 🆕 设置销量筛选阈值（-1或0表示不筛选）
+     */
+    public void setSalesThreshold(int value) {
+        this.salesThreshold = value;
+        logD("📝 销量筛选阈值设置为: " + (value > 0 ? value : "不筛选"));
     }
 
     /**
@@ -723,6 +732,60 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 logD("🛑 带货测试模式被中断");
             } catch (Exception e) {
                 logE("带货测试模式失败: " + e.getMessage());
+                e.printStackTrace();
+            } finally {
+                isRunning = false;
+            }
+        }).start();
+    }
+
+    /**
+     * 💰 销量测试模式：抖音已在创作灵感界面 → 直接进行封面Key对比+销量阈值筛选 → 取证
+     * 使用前：手动把抖音停在"创作灵感"页面，回到本APK填写取证信息和销量阈值后点击按钮
+     */
+    public void startSalesTestMode() {
+        logD("💰 启动销量测试模式...");
+        isRunning = true;
+
+        new Thread(() -> {
+            try {
+                // Step1: 切换到抖音前台
+                logD("📱 [销量测试] Step1: 切换到抖音...");
+                switchToDouyin();
+
+                // 等待抖音到前台（最多8秒）
+                boolean douyinReady = false;
+                for (int i = 0; i < 8 && !douyinReady; i++) {
+                    if (!isRunning) { logD("🛑 停止任务"); return; }
+                    Thread.sleep(1000);
+                    android.view.accessibility.AccessibilityNodeInfo root = getRootInActiveWindow();
+                    if (root != null) {
+                        CharSequence pkg = root.getPackageName();
+                        if (pkg != null && pkg.toString().contains("aweme")) {
+                            douyinReady = true;
+                            logD("✅ [销量测试] 抖音已到前台（第" + (i + 1) + "秒）");
+                        }
+                        root.recycle();
+                    }
+                }
+                if (!douyinReady) {
+                    logE("❌ [销量测试] 8秒内抖音未到前台，终止测试");
+                    return;
+                }
+
+                // Step2: 直接执行封面对比+销量筛选（抖音已在创作灵感页）
+                if (!isRunning) { logD("🛑 停止任务"); return; }
+                logD("🔍 [销量测试] Step2: 封面Key对比 + 销量阈值筛选...");
+                logD("📊 [销量测试] 当前封面Key: " + coverImageKey + "，销量阈值: " + (salesThreshold > 0 ? salesThreshold : "不筛选"));
+                compareInspirationCarousel(0);
+
+                logD("🎉 [销量测试] 销量测试模式完成！");
+
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                logD("🛑 销量测试模式被中断");
+            } catch (Exception e) {
+                logE("销量测试模式失败: " + e.getMessage());
                 e.printStackTrace();
             } finally {
                 isRunning = false;
@@ -7980,11 +8043,21 @@ public class AutomationAccessibilityService extends AccessibilityService {
             }
         }
 
+        // 🆕 提取每个匹配视频的销量（在root.recycle()之前，节点仍有效）
+        java.util.List<Integer> matchedSalesValues = new java.util.ArrayList<>();
+        for (android.graphics.Rect mb : matchedBounds) {
+            int centerX = (mb.left + mb.right) / 2;
+            String salesText = extractSalesNearX(root, centerX);
+            int salesVal = parseSalesText(salesText);
+            matchedSalesValues.add(salesVal);
+            logD("💰 [创作灵感] 匹配视频 X=" + centerX + " 销量文本: " + (salesText != null ? salesText : "未找到") + " → " + (salesVal >= 0 ? salesVal : "未知"));
+        }
+
         root.recycle(); // 回收根节点，坐标已提前保存到 matchedBounds
 
         logD("📊 无障碍树共扫描到 " + allKeys.size() + " 个Image节点");
         for (int i = 0; i < allKeys.size(); i++) {
-            logD("  " + (coverImageKey.equals(allKeys.get(i)) ? "✅" : "❌") + " 第" + (i + 1) + "个 Key: " + allKeys.get(i));
+            logD("  " + (coverImageKey != null && coverImageKey.equals(allKeys.get(i)) ? "✅" : "❌") + " 第" + (i + 1) + "个 Key: " + allKeys.get(i));
         }
 
         if (matchedBounds.isEmpty()) {
@@ -7992,7 +8065,35 @@ public class AutomationAccessibilityService extends AccessibilityService {
             return;
         }
 
-        logD("⚠️ 发现 " + matchedBounds.size() + " 个侵权视频节点，准备依次点击取证...");
+        // 🆕 销量筛选逻辑
+        if (salesThreshold > 0) {
+            if (matchedBounds.size() == 1) {
+                // 只有1个封面Key匹配 → 无论销量多少，直接取证（不能错过唯一证据）
+                int sv = matchedSalesValues.isEmpty() ? -1 : matchedSalesValues.get(0);
+                logD("⚡ [销量筛选] 只有1个封面Key匹配（销量=" + (sv >= 0 ? sv : "未知") + "），跳过销量筛选，直接取证");
+            } else {
+                // 多个匹配 → 过滤掉销量低于阈值的视频
+                java.util.List<android.graphics.Rect> filteredBounds = new java.util.ArrayList<>();
+                for (int i = 0; i < matchedBounds.size(); i++) {
+                    int sv = i < matchedSalesValues.size() ? matchedSalesValues.get(i) : -1;
+                    if (sv >= 0 && sv < salesThreshold) {
+                        logD("⏭️ [销量筛选] 跳过第" + (i + 1) + "个视频：销量=" + sv + " < 阈值=" + salesThreshold);
+                    } else {
+                        logD("✅ [销量筛选] 保留第" + (i + 1) + "个视频：销量=" + (sv >= 0 ? sv : "未知（视为通过）") + " 阈值=" + salesThreshold);
+                        filteredBounds.add(matchedBounds.get(i));
+                    }
+                }
+                matchedBounds = filteredBounds;
+                if (matchedBounds.isEmpty()) {
+                    logD("✅ [销量筛选] 所有匹配视频销量均不达标（阈值=" + salesThreshold + "），跳过取证");
+                    return;
+                }
+            }
+        } else {
+            logD("ℹ️ [销量筛选] 未设置阈值，不进行销量筛选");
+        }
+
+        logD("⚠️ 发现 " + matchedBounds.size() + " 个侵权视频节点（已通过销量筛选），准备依次点击取证...");
 
         // 依次点击所有匹配的视频节点（通过坐标，节点已回收所以只能用坐标）
         for (int idx = 0; idx < matchedBounds.size(); idx++) {
@@ -8848,6 +8949,85 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 collectCarouselPlayCounts(child, texts, xCenters);
                 child.recycle();
             }
+        }
+    }
+
+    /**
+     * 🆕 从创作灵感轮播图中提取离 targetCenterX 最近的"销量"文本（如"销量1万+"、"销量7500+"）。
+     */
+    private String extractSalesNearX(android.view.accessibility.AccessibilityNodeInfo node, int targetCenterX) {
+        java.util.List<String> texts = new java.util.ArrayList<>();
+        java.util.List<Integer> xCenters = new java.util.ArrayList<>();
+        collectCarouselSalesTexts(node, texts, xCenters);
+        if (texts.isEmpty()) return null;
+        int bestIdx = 0;
+        int bestDiff = Integer.MAX_VALUE;
+        for (int i = 0; i < xCenters.size(); i++) {
+            int diff = Math.abs(xCenters.get(i) - targetCenterX);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                bestIdx = i;
+            }
+        }
+        return bestDiff < 400 ? texts.get(bestIdx) : null;
+    }
+
+    /**
+     * 🆕 递归收集创作灵感轮播区域中以"销量"开头的TextView文本及其X中心。
+     */
+    private void collectCarouselSalesTexts(android.view.accessibility.AccessibilityNodeInfo node,
+                                           java.util.List<String> texts,
+                                           java.util.List<Integer> xCenters) {
+        if (node == null) return;
+        String className = node.getClassName() != null ? node.getClassName().toString() : "";
+        if ("android.widget.TextView".equals(className)) {
+            CharSequence text = node.getText();
+            if (text != null) {
+                String t = text.toString().trim();
+                if (t.startsWith("销量")) {
+                    android.graphics.Rect b = new android.graphics.Rect();
+                    node.getBoundsInScreen(b);
+                    if (b.width() > 0 && b.height() > 0) {
+                        texts.add(t);
+                        xCenters.add((b.left + b.right) / 2);
+                    }
+                }
+            }
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            android.view.accessibility.AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                collectCarouselSalesTexts(child, texts, xCenters);
+                child.recycle();
+            }
+        }
+    }
+
+    /**
+     * 🆕 将"销量XXXX+"或"销量X万+"格式的文本解析为整数。
+     * 例："销量1万+" → 10000，"销量7500+" → 7500，"销量1.5万+" → 15000
+     * 解析失败返回 -1。
+     */
+    private int parseSalesText(String salesText) {
+        if (salesText == null || salesText.isEmpty()) return -1;
+        // 去除"销量"前缀和"+"、"＋"后缀，取数字部分
+        String num = salesText.replace("销量", "").replaceAll("[+＋]", "").trim();
+        if (num.contains("万")) {
+            String[] parts = num.split("万");
+            try {
+                double val = Double.parseDouble(parts[0]);
+                return (int)(val * 10000);
+            } catch (NumberFormatException e) {
+                return -1;
+            }
+        }
+        try {
+            return Integer.parseInt(num);
+        } catch (NumberFormatException e) {
+            // 兜底：只取数字部分
+            String digits = num.replaceAll("[^0-9]", "");
+            if (digits.isEmpty()) return -1;
+            try { return Integer.parseInt(digits); } catch (NumberFormatException e2) { return -1; }
         }
     }
 

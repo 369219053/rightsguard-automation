@@ -12,6 +12,62 @@
 
 ## 🚀 版本历史
 
+### V5.5 (2026-03-30) 💰 创作灵感销量筛选 + 销量测试模式
+
+**✨ 核心更新 - 创作灵感封面对比新增销量阈值双重过滤机制**
+
+#### 🆕 新增功能
+
+**1. 销量筛选阈值（UI新增输入框）**
+
+- `activity_main.xml`：在取证信息卡片内新增"销量筛选阈值"水平输入行（`et_sales_threshold`，`inputType=number`）
+- 留空 = 不启用销量筛选，保持原有逻辑全量取证
+- 填写数字（如 `1000`）= 启用销量筛选，过滤低销量侵权视频
+
+**2. 销量筛选核心逻辑（双重条件）**
+
+```
+compareInspirationCarousel() 封面Key对比完成后：
+    若 salesThreshold > 0：
+        ├── 只有1个封面Key匹配 → 跳过销量检查，直接取证（唯一证据不能放弃）
+        └── 多个封面Key匹配 → 过滤销量 < 阈值的视频
+            └── 过滤后为空 → 打印日志，跳过取证
+    若 salesThreshold ≤ 0（留空）→ 不筛选，全部取证
+```
+
+**3. 销量文本解析 `parseSalesText()`**
+
+| 输入 | 输出 |
+|------|------|
+| `"销量1万+"` | `10000` |
+| `"销量1.5万+"` | `15000` |
+| `"销量7500+"` | `7500` |
+| 未识别格式 | `-1`（视为通过，避免漏取证） |
+
+**4. 💰 销量测试模式（新增按钮）**
+
+- `activity_main.xml`：在"🛒 带货测试"按钮后新增"💰 销量测试"按钮（`btn_sales_test`）
+- `MainActivity.java`：新增 `btnSalesTest` 字段、监听器绑定、`startSalesTestMode()` 方法
+- `AutomationAccessibilityService.java`：新增 `public void startSalesTestMode()` 方法
+
+```
+💰 销量测试流程：
+    ① 从APK输入框提取取证信息（封面URL + 侵权人名称）+ 销量阈值
+    ② 切换到抖音（等待最多8秒到前台，抖音已在创作灵感页）
+    ③ 直接调用 compareInspirationCarousel(0)
+        → 截整体截图 → 封面Key对比 → 销量筛选 → 取证
+```
+
+#### 📁 修改文件
+
+| 文件 | 修改内容 |
+|------|---------|
+| `app/src/main/res/layout/activity_main.xml` | 新增 `et_sales_threshold` 输入框、`btn_sales_test` 按钮 |
+| `app/src/main/java/com/rightsguard/automation/MainActivity.java` | 新增 `btnSalesTest` 字段、`parseSalesThresholdInput()`、`startSalesTestMode()` |
+| `app/src/main/java/com/rightsguard/automation/AutomationAccessibilityService.java` | 新增 `salesThreshold`、`setSalesThreshold()`、`parseSalesText()`、`extractSalesNearX()`、`collectCarouselSalesTexts()`、`startSalesTestMode()`；`compareInspirationCarousel()` 加入筛选逻辑 |
+
+---
+
 ### V5.4 (2026-03-28) 🛒 带货达人时间筛选OCR重构 + 确定按钮关闭弹窗
 
 **✨ 核心更新 - 带货测试模式完整流程优化**
