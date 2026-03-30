@@ -24,14 +24,12 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvStatusDetail;
     private View viewStatusIndicator;
     private MaterialButton btnStart;
-    private MaterialButton btnCaptchaTest;
-    private MaterialButton btnCargoTest;
-    private MaterialButton btnSalesTest; // 🆕 销量测试
+    private MaterialButton btnScreenshotTest; // 📸 第二张截图测试
     private MaterialButton btnStop;
     private MaterialButton btnViewLog;
     private ImageView ivSettings;
     private TextInputEditText etRemark;
-    private TextInputEditText etSalesThreshold; // 🆕 销量筛选阈值输入框
+    private TextInputEditText etSalesThreshold; // 销量筛选阈值输入框
 
     private boolean isRunning = false;
 
@@ -53,14 +51,12 @@ public class MainActivity extends AppCompatActivity {
         tvStatusDetail = findViewById(R.id.tv_status_detail);
         viewStatusIndicator = findViewById(R.id.view_status_indicator);
         btnStart = findViewById(R.id.btn_start);
-        btnCaptchaTest = findViewById(R.id.btn_captcha_test);
-        btnCargoTest = findViewById(R.id.btn_cargo_test);
-        btnSalesTest = findViewById(R.id.btn_sales_test); // 🆕
+        btnScreenshotTest = findViewById(R.id.btn_screenshot_test);
         btnStop = findViewById(R.id.btn_stop);
         btnViewLog = findViewById(R.id.btn_view_log);
         ivSettings = findViewById(R.id.iv_settings);
         etRemark = findViewById(R.id.et_remark);
-        etSalesThreshold = findViewById(R.id.et_sales_threshold); // 🆕
+        etSalesThreshold = findViewById(R.id.et_sales_threshold);
     }
 
     /**
@@ -70,14 +66,8 @@ public class MainActivity extends AppCompatActivity {
         // 开始按钮
         btnStart.setOnClickListener(v -> startAutomation());
 
-        // 验证测试按钮
-        btnCaptchaTest.setOnClickListener(v -> startCaptchaTestMode());
-
-        // 带货测试按钮
-        btnCargoTest.setOnClickListener(v -> startCargoTestMode());
-
-        // 销量测试按钮
-        btnSalesTest.setOnClickListener(v -> startSalesTestMode());
+        // 第二张截图测试按钮
+        btnScreenshotTest.setOnClickListener(v -> startScreenshotTestMode());
 
         // 停止按钮
         btnStop.setOnClickListener(v -> stopAutomation());
@@ -328,72 +318,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 🔐 验证测试模式：切换到抖音，点击"资质证照"，测试超级鹰验证码能否通过
-     * 使用前：手动把抖音停在"店铺详情"页面，然后回到本APK点击按钮
+     * 📸 第二张截图测试模式：
+     * 从正常模式第一步开始（切换抖音→等待启动→跳开屏广告→检测首页），
+     * 到点击完"我"按钮为止，全程详细日志，用于排查第二张截图错误问题。
      */
-    private void startCaptchaTestMode() {
-        if (!AutomationAccessibilityService.isServiceAvailable()) {
-            Toast.makeText(this, R.string.toast_accessibility_required, Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        AutomationAccessibilityService service = AutomationAccessibilityService.getInstance();
-        if (service == null) {
-            Toast.makeText(this, "无障碍服务未启动", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Toast.makeText(this, "🔐 验证测试启动，请确保抖音已在店铺详情页", Toast.LENGTH_LONG).show();
-        service.startCaptchaTestMode();
-        isRunning = true;
-        updateStatus(STATUS_RUNNING);
-    }
-
-    /**
-     * 🛒 带货测试模式：切换到抖音（创作灵感界面）→ 点击"达人" → 切换近90日 → 查找侵权账号
-     * 使用前：手动把抖音停在"创作灵感"页面，输入框填写取证信息（用于提取侵权人账号名称）
-     */
-    private void startCargoTestMode() {
-        if (!AutomationAccessibilityService.isServiceAvailable()) {
-            Toast.makeText(this, R.string.toast_accessibility_required, Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        AutomationAccessibilityService service = AutomationAccessibilityService.getInstance();
-        if (service == null) {
-            Toast.makeText(this, "无障碍服务未启动", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        // 从输入框提取侵权人名称（可选，不填则只截图不查人）
-        String evidenceInfo = "";
-        if (etRemark != null && etRemark.getText() != null) {
-            evidenceInfo = etRemark.getText().toString().trim();
-        }
-        if (!evidenceInfo.isEmpty()) {
-            ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
-            service.setInfringerName(parseResult.infringerName);
-            service.setOriginalName(parseResult.originalName);
-            service.setRemark(parseResult.remark);
-            Log.d("MainActivity", "✅ [带货测试] 侵权人: '" + parseResult.infringerName + "'");
-        } else {
-            // 未填写，清空侵权人名称，仅走截图流程
-            service.setInfringerName("");
-            service.setOriginalName("");
-            Log.d("MainActivity", "⚠️ [带货测试] 未填写取证信息，仅执行截图流程");
-        }
-
-        Toast.makeText(this, "🛒 带货测试启动，请确保抖音已在创作灵感页", Toast.LENGTH_LONG).show();
-        service.startCargoTestMode();
-        isRunning = true;
-        updateStatus(STATUS_RUNNING);
-    }
-
-    /**
-     * 💰 销量测试模式：切换到抖音（创作灵感界面）→ 封面Key对比 + 销量阈值筛选 → 取证
-     * 使用前：手动把抖音停在"创作灵感"页面，填写取证信息和销量阈值
-     */
-    private void startSalesTestMode() {
+    private void startScreenshotTestMode() {
         if (!AutomationAccessibilityService.isServiceAvailable()) {
             Toast.makeText(this, R.string.toast_accessibility_required, Toast.LENGTH_LONG).show();
             return;
@@ -404,34 +333,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // 解析取证信息（用于封面Key和侵权人名称）
-        String evidenceInfo = "";
-        if (etRemark != null && etRemark.getText() != null) {
-            evidenceInfo = etRemark.getText().toString().trim();
-        }
-        if (!evidenceInfo.isEmpty()) {
-            ParseResult parseResult = parseEvidenceInfo(evidenceInfo);
-            service.setInfringerName(parseResult.infringerName);
-            service.setOriginalName(parseResult.originalName);
-            service.setRemark(parseResult.remark);
-            if (parseResult.coverImageUrl != null && !parseResult.coverImageUrl.isEmpty()) {
-                service.setCoverImageUrl(parseResult.coverImageUrl);
-                Log.d("MainActivity", "✅ [销量测试] 封面URL: " + parseResult.coverImageUrl);
-            }
-            Log.d("MainActivity", "✅ [销量测试] 侵权人: '" + parseResult.infringerName + "'");
-        } else {
-            service.setInfringerName("");
-            service.setOriginalName("");
-            Log.d("MainActivity", "⚠️ [销量测试] 未填写取证信息");
-        }
-
-        // 设置销量阈值
-        int salesThresh = parseSalesThresholdInput();
-        service.setSalesThreshold(salesThresh);
-        Log.d("MainActivity", "✅ [销量测试] 销量阈值: " + (salesThresh > 0 ? salesThresh : "不筛选"));
-
-        Toast.makeText(this, "💰 销量测试启动，请确保抖音已在创作灵感页", Toast.LENGTH_LONG).show();
-        service.startSalesTestMode();
+        Toast.makeText(this, "📸 第二张截图测试启动，正在切换抖音...", Toast.LENGTH_LONG).show();
+        service.startScreenshotTestMode();
         isRunning = true;
         updateStatus(STATUS_RUNNING);
     }

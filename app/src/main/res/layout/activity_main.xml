@@ -238,35 +238,11 @@
                     android:stateListAnimator="@null"
                     android:translationZ="4dp" />
 
-                <!-- 验证测试按钮 -->
+                <!-- 第二张截图测试按钮 -->
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_captcha_test"
+                    android:id="@+id/btn_screenshot_test"
                     style="@style/SecondaryButtonStyle"
-                    android:text="🔐 验证测试"
-                    android:textSize="14sp"
-                    app:cornerRadius="16dp"
-                    android:layout_marginBottom="12dp"
-                    android:elevation="8dp"
-                    android:stateListAnimator="@null"
-                    android:translationZ="4dp" />
-
-                <!-- 带货测试按钮 -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_cargo_test"
-                    style="@style/SecondaryButtonStyle"
-                    android:text="🛒 带货测试"
-                    android:textSize="14sp"
-                    app:cornerRadius="16dp"
-                    android:layout_marginBottom="12dp"
-                    android:elevation="8dp"
-                    android:stateListAnimator="@null"
-                    android:translationZ="4dp" />
-
-                <!-- 销量测试按钮 -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_sales_test"
-                    style="@style/SecondaryButtonStyle"
-                    android:text="💰 销量测试"
+                    android:text="📸 第二张截图测试"
                     android:textSize="14sp"
                     app:cornerRadius="16dp"
                     android:layout_marginBottom="12dp"

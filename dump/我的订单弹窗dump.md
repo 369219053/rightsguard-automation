@@ -1,11 +1,11 @@
 # UI结构 Dump
 
-**生成时间**: 2026-03-27 12:05:09
+**生成时间**: 2026-03-30 09:47:15
 
 ---
 
 === UI结构 Dump (所有窗口) ===
-时间: 2026-03-27 12:05:08
+时间: 2026-03-30 09:47:15
 
 窗口总数: 5
 
@@ -38,46 +38,46 @@
 │     📐 **Bounds**: [0,0] → [1080,114] (1080x114)
 │   ├─ **[android.widget.TextView]** `enabled visible `
 │   │     🆔 **ID**: `com.android.systemui:id/clock`
-│   │     📝 **Text**: "12:05"
-│   │     💬 **Desc**: "12:05"
-│   │     📐 **Bounds**: [60,48] → [179,95] (119x47)
+│   │     📝 **Text**: "09:47"
+│   │     💬 **Desc**: "09:47"
+│   │     📐 **Bounds**: [60,48] → [186,95] (126x47)
 │   ├─ **[]** `enabled visible `
 │   │     💬 **Desc**: "共享或录制屏幕提醒通知："
-│   │     📐 **Bounds**: [179,46] → [214,97] (35x51)
+│   │     📐 **Bounds**: [186,46] → [221,97] (35x51)
 │   ├─ **[]** `enabled visible `
 │   │     💬 **Desc**: "权利卫士通知："
-│   │     📐 **Bounds**: [226,46] → [261,97] (35x51)
-│   ├─ **[]** `enabled visible `
-│   │     💬 **Desc**: "浏览器通知："
-│   │     📐 **Bounds**: [272,46] → [307,97] (35x51)
+│   │     📐 **Bounds**: [233,46] → [268,97] (35x51)
 │   ├─ **[]** `enabled visible `
 │   │     💬 **Desc**: "应用商店通知："
-│   │     📐 **Bounds**: [319,46] → [354,97] (35x51)
+│   │     📐 **Bounds**: [279,46] → [314,97] (35x51)
+│   ├─ **[]** `enabled visible `
+│   │     💬 **Desc**: "浏览器通知："
+│   │     📐 **Bounds**: [326,46] → [361,97] (35x51)
 │   ├─ **[]** `enabled visible `
 │   │     💬 **Desc**: "信息通知："
-│   │     📐 **Bounds**: [366,46] → [401,97] (35x51)
+│   │     📐 **Bounds**: [373,46] → [408,97] (35x51)
 │   ├─ **[]** `enabled visible `
 │   │     💬 **Desc**: "通话管理通知："
-│   │     📐 **Bounds**: [412,46] → [447,97] (35x51)
+│   │     📐 **Bounds**: [419,46] → [454,97] (35x51)
 │   ├─ **[]** `enabled visible `
 │   │     💬 **Desc**: "vivo账号通知："
-│   │     📐 **Bounds**: [433,46] → [468,97] (35x51)
+│   │     📐 **Bounds**: [440,46] → [475,97] (35x51)
 │   ├─ **[]** `enabled visible `
 │   │     💬 **Desc**: "手机管家通知："
-│   │     📐 **Bounds**: [433,46] → [468,97] (35x51)
+│   │     📐 **Bounds**: [440,46] → [475,97] (35x51)
 │   ├─ **[android.widget.LinearLayout]** `enabled visible `
 │   │     🆔 **ID**: `com.android.systemui:id/system_icons`
 │   │     📐 **Bounds**: [585,29] → [1020,114] (435x85)
 │   │   ├─ **[android.widget.LinearLayout]** `enabled visible `
 │   │   │     🆔 **ID**: `com.android.systemui:id/networkspeed_vertical`
-│   │   │     💬 **Desc**: "40.1KB/s"
+│   │   │     💬 **Desc**: "2.80MB/s"
 │   │   │     📐 **Bounds**: [826,52] → [883,91] (57x39)
 │   │   ├─ **[android.widget.FrameLayout]** `enabled visible `
 │   │   │     🆔 **ID**: `com.android.systemui:id/mobile_combo`
 │   │   │     💬 **Desc**: "中国移动 5G+ 信号强度四格，共四格"
 │   │   │     📐 **Bounds**: [892,33] → [948,111] (56x78)
 │   │   ├─ **[]** `enabled visible `
-│   │   │     💬 **Desc**: "电池电量为百分之 48。"
+│   │   │     💬 **Desc**: "电池电量为百分之 72。"
 │   │   │     📐 **Bounds**: [957,54] → [1020,90] (63x36)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🪟 窗口 #3
@@ -90,34 +90,34 @@
 包名: com.rightsguard.automation
 
 **[android.widget.FrameLayout]** `enabled visible `
-  📐 **Bounds**: [120,641] → [1080,923] (960x282)
+  📐 **Bounds**: [120,2064] → [1080,2346] (960x282)
 ├─ **[android.view.View]** `enabled visible `
 │     🆔 **ID**: `com.rightsguard.automation:id/view_drag_handle`
-│     📐 **Bounds**: [150,671] → [1050,701] (900x30)
+│     📐 **Bounds**: [150,2094] → [1050,2124] (900x30)
 ├─ **[android.widget.TextView]** `enabled visible `
 │     🆔 **ID**: `com.rightsguard.automation:id/tv_float_status`
 │     📝 **Text**: "空闲"
-│     📐 **Bounds**: [210,719] → [282,767] (72x48)
+│     📐 **Bounds**: [210,2142] → [282,2190] (72x48)
 ├─ **[android.widget.Button]** `clickable enabled visible focusable `
 │     🆔 **ID**: `com.rightsguard.automation:id/btn_float_start`
 │     📝 **Text**: "开始"
-│     📐 **Bounds**: [150,790] → [354,893] (204x103)
+│     📐 **Bounds**: [150,2213] → [354,2316] (204x103)
 ├─ **[android.widget.Button]** `clickable visible focusable `
 │     🆔 **ID**: `com.rightsguard.automation:id/btn_float_stop`
 │     📝 **Text**: "停止"
-│     📐 **Bounds**: [372,790] → [576,893] (204x103)
+│     📐 **Bounds**: [372,2213] → [576,2316] (204x103)
 ├─ **[android.widget.Button]** `clickable enabled visible focusable `
 │     🆔 **ID**: `com.rightsguard.automation:id/btn_float_test_coordinate`
 │     📝 **Text**: "📍"
-│     📐 **Bounds**: [594,787] → [750,893] (156x106)
+│     📐 **Bounds**: [594,2210] → [750,2316] (156x106)
 ├─ **[android.widget.Button]** `clickable enabled visible focusable `
 │     🆔 **ID**: `com.rightsguard.automation:id/btn_float_dump`
 │     📝 **Text**: "Dump"
-│     📐 **Bounds**: [768,792] → [924,893] (156x101)
+│     📐 **Bounds**: [768,2215] → [924,2316] (156x101)
 ├─ **[android.widget.Button]** `clickable enabled visible focusable `
 │     🆔 **ID**: `com.rightsguard.automation:id/btn_float_minimize`
 │     📝 **Text**: "—"
-│     📐 **Bounds**: [942,785] → [1050,893] (108x108)
+│     📐 **Bounds**: [942,2208] → [1050,2316] (108x108)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🪟 窗口 #4
 类型: 应用窗口
@@ -153,8 +153,8 @@
 ├─ **[android.widget.FrameLayout]** `enabled visible focusable `
 │     📐 **Bounds**: [0,114] → [1080,223] (1080x109)
 │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
-│   │     💬 **Desc**: "纳米海绵魔力擦"
-│   │     📐 **Bounds**: [219,128] → [499,197] (280x69)
+│   │     💬 **Desc**: "释迦"
+│   │     📐 **Bounds**: [219,128] → [299,197] (80x69)
 │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
 │   │     💬 **Desc**: "拍照搜同款 按钮"
 │   │     📐 **Bounds**: [701,114] → [770,212] (69x98)
@@ -165,7 +165,7 @@
 │   │     💬 **Desc**: "抢购"
 │   │     📐 **Bounds**: [993,117] → [1068,157] (75x40)
 │   ├─ **[android.widget.ImageView]** `enabled visible focusable `
-│   │     💬 **Desc**: "购物车 10 按钮"
+│   │     💬 **Desc**: "购物车 11 按钮"
 │   │     📐 **Bounds**: [976,128] → [1045,198] (69x70)
 ├─ **[androidx.recyclerview.widget.RecyclerView]** `enabled visible focusable `
 │     📐 **Bounds**: [0,223] → [1080,2346] (1080x2123)
@@ -181,11 +181,11 @@
 │   │   │   │     💬 **Desc**: "¥"
 │   │   │   │     📐 **Bounds**: [38,1290] → [61,1333] (23x43)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
-│   │   │   │     💬 **Desc**: "8"
-│   │   │   │     📐 **Bounds**: [64,1277] → [93,1336] (29x59)
+│   │   │   │     💬 **Desc**: "26"
+│   │   │   │     📐 **Bounds**: [64,1277] → [121,1336] (57x59)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
-│   │   │   │     💬 **Desc**: ".96"
-│   │   │   │     📐 **Bounds**: [93,1290] → [145,1333] (52x43)
+│   │   │   │     💬 **Desc**: ".9"
+│   │   │   │     📐 **Bounds**: [121,1290] → [152,1333] (31x43)
 │   ├─ **[android.widget.FrameLayout]** `enabled visible `
 │   │     📐 **Bounds**: [546,626] → [1068,1357] (522x731)
 │   │   ├─ **[android.widget.FrameLayout]** `enabled visible focusable `
@@ -194,11 +194,11 @@
 │   │   │   │     💬 **Desc**: "¥"
 │   │   │   │     📐 **Bounds**: [572,1290] → [595,1333] (23x43)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
-│   │   │   │     💬 **Desc**: "9"
-│   │   │   │     📐 **Bounds**: [598,1277] → [627,1336] (29x59)
+│   │   │   │     💬 **Desc**: "15"
+│   │   │   │     📐 **Bounds**: [598,1277] → [649,1336] (51x59)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
-│   │   │   │     💬 **Desc**: ".9"
-│   │   │   │     📐 **Bounds**: [627,1290] → [658,1333] (31x43)
+│   │   │   │     💬 **Desc**: ".8"
+│   │   │   │     📐 **Bounds**: [649,1290] → [680,1333] (31x43)
 │   ├─ **[android.widget.FrameLayout]** `enabled visible `
 │   │     📐 **Bounds**: [12,1369] → [534,2100] (522x731)
 │   │   ├─ **[android.widget.FrameLayout]** `enabled visible focusable `
@@ -207,8 +207,11 @@
 │   │   │   │     💬 **Desc**: "¥"
 │   │   │   │     📐 **Bounds**: [38,2033] → [61,2076] (23x43)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
-│   │   │   │     💬 **Desc**: "99"
-│   │   │   │     📐 **Bounds**: [64,2020] → [122,2079] (58x59)
+│   │   │   │     💬 **Desc**: "19"
+│   │   │   │     📐 **Bounds**: [64,2020] → [115,2079] (51x59)
+│   │   │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
+│   │   │   │     💬 **Desc**: ".9"
+│   │   │   │     📐 **Bounds**: [115,2033] → [146,2076] (31x43)
 │   ├─ **[android.widget.FrameLayout]** `enabled visible `
 │   │     📐 **Bounds**: [546,1369] → [1068,2100] (522x731)
 │   │   ├─ **[android.widget.FrameLayout]** `enabled visible focusable `
@@ -217,28 +220,40 @@
 │   │   │   │     💬 **Desc**: "¥"
 │   │   │   │     📐 **Bounds**: [572,2033] → [595,2076] (23x43)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
-│   │   │   │     💬 **Desc**: "39"
-│   │   │   │     📐 **Bounds**: [598,2020] → [655,2079] (57x59)
+│   │   │   │     💬 **Desc**: "9"
+│   │   │   │     📐 **Bounds**: [598,2020] → [627,2079] (29x59)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
-│   │   │   │     💬 **Desc**: ".9"
-│   │   │   │     📐 **Bounds**: [655,2033] → [686,2076] (31x43)
+│   │   │   │     💬 **Desc**: ".08"
+│   │   │   │     📐 **Bounds**: [627,2033] → [680,2076] (53x43)
+│   │   │   ├─ **[android.view.ViewGroup]** `enabled visible focusable `
+│   │   │   │     💬 **Desc**: "券后价"
+│   │   │   │     📐 **Bounds**: [686,2035] → [788,2075] (102x40)
 │   ├─ **[android.widget.FrameLayout]** `enabled visible `
 │   │     📐 **Bounds**: [12,2112] → [534,2346] (522x234)
 │   │   ├─ **[android.widget.FrameLayout]** `enabled visible focusable `
 │   │   │     📐 **Bounds**: [12,2112] → [534,2346] (522x234)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled focusable `
 │   │   │   │     💬 **Desc**: "¥"
-│   │   │   │     📐 **Bounds**: [38,2776] → [61,2346] (23x-430)
+│   │   │   │     📐 **Bounds**: [38,2950] → [61,2346] (23x-604)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled focusable `
-│   │   │   │     💬 **Desc**: "15"
-│   │   │   │     📐 **Bounds**: [64,2763] → [115,2346] (51x-417)
+│   │   │   │     💬 **Desc**: "79"
+│   │   │   │     📐 **Bounds**: [64,2937] → [120,2346] (56x-591)
 │   │   │   ├─ **[android.view.ViewGroup]** `enabled focusable `
 │   │   │   │     💬 **Desc**: ".8"
-│   │   │   │     📐 **Bounds**: [115,2776] → [146,2346] (31x-430)
+│   │   │   │     📐 **Bounds**: [120,2950] → [151,2346] (31x-604)
 │   ├─ **[android.widget.FrameLayout]** `enabled visible `
 │   │     📐 **Bounds**: [546,2112] → [1068,2346] (522x234)
 │   │   ├─ **[android.widget.FrameLayout]** `enabled visible focusable `
 │   │   │     📐 **Bounds**: [546,2112] → [1068,2346] (522x234)
+│   │   │   ├─ **[android.view.ViewGroup]** `enabled focusable `
+│   │   │   │     💬 **Desc**: "¥"
+│   │   │   │     📐 **Bounds**: [572,2776] → [595,2346] (23x-430)
+│   │   │   ├─ **[android.view.ViewGroup]** `enabled focusable `
+│   │   │   │     💬 **Desc**: "5"
+│   │   │   │     📐 **Bounds**: [598,2763] → [627,2346] (29x-417)
+│   │   │   ├─ **[android.view.ViewGroup]** `enabled focusable `
+│   │   │   │     💬 **Desc**: ".77"
+│   │   │   │     📐 **Bounds**: [627,2776] → [677,2346] (50x-430)
 ├─ **[android.widget.FrameLayout]** `enabled visible focusable `
 │     📐 **Bounds**: [0,0] → [1080,2346] (1080x2346)
 ├─ **[android.widget.FrameLayout]** `enabled focusable `

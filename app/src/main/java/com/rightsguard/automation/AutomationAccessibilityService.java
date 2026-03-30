@@ -66,6 +66,7 @@ public class AutomationAccessibilityService extends AccessibilityService {
     private boolean isRightsGuardEvidencePhase = false; // 是否处于权利卫士取证阶段(权利卫士打开抖音后)
     private boolean hasStartedDouyinAutomation = false; // 是否已开始抖音自动化
     private boolean hasClickedDouyinMe = false; // 是否已点击抖音"我"按钮
+    private boolean isScreenshotTestMode = false; // 📸 第二张截图测试模式：走完整流程，点击"我"后停止
     private boolean hasClickedDouyinMore = false; // 是否已点击抖音"更多"按钮
     private boolean hasClickedDouyinSettings = false; // 是否已点击抖音"设置"按钮
     private boolean hasScrolledToAboutSection = false; // 是否已滑动到"关于"部分
@@ -791,6 +792,24 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 isRunning = false;
             }
         }).start();
+    }
+
+    /**
+     * 📸 第二张截图测试模式
+     * 目的：排查从权利卫士跳转抖音后，第二张截图为何截到抖音首页的问题。
+     *
+     * 流程（与正常模式完全一致）：
+     *  1. 打开侵权链接（WebView）
+     *  2. 打开权利卫士（startAutomation 触发）
+     *  3. 权利卫士跳转抖音（onAccessibilityEvent 触发 startDouyinAutomation）
+     *  4. 跳广告 → 检测首页 → 点击"我"
+     *  ★ 点击完"我"后：打印页面状态日志，然后停止，不继续后续步骤
+     */
+    public void startScreenshotTestMode() {
+        logD("📸 [截图测试] 启动第二张截图测试模式...");
+        logD("📸 [截图测试] 走完整正常流程（打开侵权链接→权利卫士→抖音），点击'我'后停止");
+        isScreenshotTestMode = true; // ★ 设置标志，让 startDouyinAutomation 在点击'我'后停止
+        startAutomation();           // ★ 复用完整正常流程，不另起炉灶
     }
 
     /**
@@ -1709,23 +1728,25 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     logD("✅ 成功点击抖音容器");
                     hasSelectedDouyin = true;
 
-                    // 📸 截图取证：勾选抖音后的应用验真界面
-                    logD("📸 截取应用验真-勾选抖音取证截图...");
-                    takeScreenshotWithPrefix("权利卫士_勾选抖音", new ScreenshotCallback() {
-                        @Override public void onSuccess() { logD("✅ 勾选抖音截图保存成功"); }
-                        @Override public void onFailure() { logE("❌ 勾选抖音截图保存失败"); }
-                    });
-
-                    // 随机延迟1-3秒,然后点击"立即验证"
+                    // 在后台线程中截图（等待完成），再随机延迟点击"立即验证"
                     new Thread(() -> {
                         try {
-                            // 生成1000-3000ms的随机延迟
+                            // 📸 截图：勾选抖音的应用验真界面（同步等待完成，确保此时仍在权利卫士界面）
+                            logD("📸 截取勾选抖音取证截图（当前仍在权利卫士界面）...");
+                            final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+                            takeScreenshotWithPrefix("权利卫士_勾选抖音", new ScreenshotCallback() {
+                                @Override public void onSuccess() { logD("✅ 勾选抖音截图保存成功"); latch.countDown(); }
+                                @Override public void onFailure() { logE("❌ 勾选抖音截图保存失败"); latch.countDown(); }
+                            });
+                            latch.await(3, java.util.concurrent.TimeUnit.SECONDS);
+
+                            // 截图完成后，随机延迟1-3秒模拟人工操作，然后点击"立即验证"
                             int randomDelay = 1000 + new java.util.Random().nextInt(2000);
-                            logD("⏳ 等待 " + (randomDelay / 1000.0) + " 秒后点击'立即验证'...");
+                            logD("⏳ 截图完成，等待 " + (randomDelay / 1000.0) + " 秒后点击'立即验证'...");
                             Thread.sleep(randomDelay);
                             clickVerifyButton();
                         } catch (Exception e) {
-                            logE("点击立即验证失败: " + e.getMessage());
+                            logE("截图或点击立即验证失败: " + e.getMessage());
                         }
                     }).start();
                 } else {
@@ -1789,44 +1810,10 @@ public class AutomationAccessibilityService extends AccessibilityService {
      */
     private void clickVerifyButton() {
         try {
-            // 先截屏保存应用验真页面
-            logD("📸 准备截屏保存应用验真页面...");
+            // 两张截图已在调用方（点击抖音容器后）同步截取完毕，这里直接点击"立即验证"
+            logD("🖱️ 准备点击'立即验证'按钮...");
 
-            // 使用CountDownLatch等待截屏完成
-            final java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-            final boolean[] screenshotSuccess = {false};
-
-            takeScreenshotBeforeVerify(new ScreenshotCallback() {
-                @Override
-                public void onSuccess() {
-                    screenshotSuccess[0] = true;
-                    latch.countDown();
-                }
-
-                @Override
-                public void onFailure() {
-                    screenshotSuccess[0] = false;
-                    latch.countDown();
-                }
-            });
-
-            // 等待截屏完成,最多等待3秒
-            try {
-                boolean completed = latch.await(3, java.util.concurrent.TimeUnit.SECONDS);
-                if (completed) {
-                    if (screenshotSuccess[0]) {
-                        logD("✅ 截屏完成,准备点击'立即验证'");
-                    } else {
-                        logE("⚠️ 截屏失败,继续点击'立即验证'");
-                    }
-                } else {
-                    logE("⚠️ 截屏超时,继续点击'立即验证'");
-                }
-            } catch (InterruptedException e) {
-                logE("等待截屏被中断: " + e.getMessage());
-            }
-
-            // 再等待500ms确保界面稳定
+            // 等待500ms确保界面稳定
             Thread.sleep(500);
 
             android.view.accessibility.AccessibilityNodeInfo rootNode = getRootInActiveWindow();
@@ -2876,6 +2863,22 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 logD("⏱️ 等待'我'页面加载完成(1秒)...");
                 Thread.sleep(1000);
 
+                // ★ 截图测试模式：点击"我"后打印页面状态，然后停止
+                if (isScreenshotTestMode) {
+                    android.view.accessibility.AccessibilityNodeInfo testRoot = getRootInActiveWindow();
+                    if (testRoot != null) {
+                        logD("📸 [截图测试] 点击'我'后1秒 - 包名: " + testRoot.getPackageName()
+                            + "，windowCount=" + getWindows().size());
+                        testRoot.recycle();
+                    } else {
+                        logD("📸 [截图测试] 点击'我'后1秒 - getRootInActiveWindow() 返回 null");
+                    }
+                    logD("🎉 [截图测试] 测试完成！请查看以上日志排查第二张截图来源。");
+                    isScreenshotTestMode = false;
+                    isRunning = false;
+                    return;
+                }
+
                 // 步骤2: 点击"更多"按钮
                 logD("📱 步骤2: 点击'更多'按钮...");
                 randomDelay();
@@ -3757,21 +3760,29 @@ public class AutomationAccessibilityService extends AccessibilityService {
             captureCommentEvidence();
             // captureCommentEvidence() 内部已调用 closeDouyinComments()
 
-            // 🆕 步骤: 关闭评论区后立即分享视频链接给QQ（先分享再查小黄车）
-            shareMainVideoToQQ();
-
-            // 🆕 步骤: 检查购物车链接并截图（在进入作者主页前）
-            checkAndCaptureShoppingCart();
+            // 🆕 步骤: 评论完成后，进入侵权作者主页取证（店铺账号 + 三点菜单），取证后自动返回视频页
+            navigateToAuthorProfile();
 
             // ★ 如果选品带货子流程已完成取证（带货达人流程结束，isRunning=false），
-            //   直接结束，不再执行作者主页、停止录屏等后续步骤
+            //   直接结束，不再执行分享/购物车/停止录屏等后续步骤
             if (!isRunning) {
-                logD("✅ [主流程] 子流程已完成取证，跳过后续作者主页/停止录屏步骤");
+                logD("✅ [主流程] 子流程已完成取证，跳过后续分享/购物车/停止录屏步骤");
                 return;
             }
 
-            // 🆕 步骤: 进入侵权作者主页
-            navigateToAuthorProfile();
+            // 🆕 步骤: 作者主页取证完成，已返回视频页，分享视频链接给QQ
+            shareMainVideoToQQ();
+
+            // 🆕 步骤: 检查购物车链接并截图
+            checkAndCaptureShoppingCart();
+
+            // ★ 二次检查：checkAndCaptureShoppingCart 内部可能触发带货达人子流程，
+            //   子流程完成时会将 isRunning 置为 false 并自行调用停止录屏+PDF生成。
+            //   若此时 isRunning 已为 false，父流程必须立即退出，避免重复执行收尾步骤（ghost clicks）。
+            if (!isRunning) {
+                logD("✅ [主流程] 带货达人子流程已完成取证并收尾，跳过正常模式收尾步骤");
+                return;
+            }
 
             // ★ 正常模式收尾：全部取证完成 → 返回权利卫士 → 停止录屏 → 生成PDF
             logD("🏁 [正常模式] 所有取证步骤完成，开始收尾...");
@@ -5810,156 +5821,134 @@ public class AutomationAccessibilityService extends AccessibilityService {
             for (int sw = 0; sw < 50 && !authorPageDone[0]; sw++) Thread.sleep(100);
             Thread.sleep(300);
 
-            // ★ Step4: 检查作者昵称下方是否有【店铺账号】标签，有则点击并截图
-            // Dump确认：s+x(昵称)[408,376→738,464]，店铺账号(clickable)[408,464→1032,512]
-            logD("🔍 检查作者主页是否有【店铺账号】标签...");
+            // ★ Step4: 捕获作者主页取证（店铺账号/导购 + 右上角三点菜单）
+            logD("📋 开始捕获作者主页取证证据（店铺账号 + 三点菜单）...");
+            captureAuthorProfileEvidence();
+
+            // ★ Step5: 取证完成，返回视频播放页
+            logD("🔙 作者主页取证完成，返回视频播放页...");
+            performGlobalAction(GLOBAL_ACTION_BACK);
+            Thread.sleep(1500);
+
+        } catch (Exception e) {
+            logE("进入作者主页失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 在当前作者主页，截取店铺账号（或导购）取证截图，再点击右上角三个点截图取证。
+     * 调用时必须处于作者主页，方法执行完毕后仍留在作者主页。
+     * 适用场景：观看历史、创作灵感、带货达人三种流程。
+     */
+    private void captureAuthorProfileEvidence() {
+        try {
+            // ── Part 1: 检查店铺账号/导购标签 ──
+            // 抖音标签有多种叫法：店铺账号、店铺授权号、店员、职人
+            logD("🔍 [主页取证] 检查是否有【店铺账号/店铺授权号/店员/职人】标签...");
             android.view.accessibility.AccessibilityNodeInfo profileRoot = getRootInActiveWindow();
             if (profileRoot != null) {
                 android.view.accessibility.AccessibilityNodeInfo shopAccountNode = null;
 
-                // 优先通过Desc查找（"抖音组织认证：店铺账号"）
-                shopAccountNode = findNodeByDescContains(profileRoot, "店铺账号");
-
-                // 备用：通过文字查找（" 店铺账号"）
-                if (shopAccountNode == null) {
-                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> textNodes =
-                        profileRoot.findAccessibilityNodeInfosByText("店铺账号");
-                    if (textNodes != null && !textNodes.isEmpty()) {
-                        shopAccountNode = textNodes.get(0);
+                // 按优先级依次搜索所有已知店铺标签变体（Desc + Text 双重策略）
+                String[] shopLabelVariants = {"店铺账号", "店铺授权号", "店员", "职人"};
+                for (String variant : shopLabelVariants) {
+                    shopAccountNode = findNodeByDescContains(profileRoot, variant);
+                    if (shopAccountNode == null) {
+                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> textNodes =
+                            profileRoot.findAccessibilityNodeInfosByText(variant);
+                        if (textNodes != null && !textNodes.isEmpty()) {
+                            shopAccountNode = textNodes.get(0);
+                        }
+                    }
+                    if (shopAccountNode != null) {
+                        logD("✅ 检测到店铺标签变体: 【" + variant + "】");
+                        break;
                     }
                 }
 
                 if (shopAccountNode != null) {
-                    logD("✅ 检测到【店铺账号】标签，准备点击...");
-
-                    // 先尝试无障碍API直接点击
+                    logD("✅ 店铺标签已找到，准备点击...");
                     boolean shopClicked = shopAccountNode.performAction(
                         android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
-
                     if (!shopClicked) {
-                        // 兜底：坐标点击（Dump确认中心约 (720, 488)）
                         android.graphics.Rect bounds = new android.graphics.Rect();
                         shopAccountNode.getBoundsInScreen(bounds);
                         int cx = bounds.isEmpty() ? 720 : (bounds.left + bounds.right) / 2;
                         int cy = bounds.isEmpty() ? 488 : (bounds.top + bounds.bottom) / 2;
-                        android.graphics.Path tapPath = new android.graphics.Path();
-                        tapPath.moveTo(cx, cy);
-                        tapPath.lineTo(cx, cy);
-                        android.accessibilityservice.GestureDescription tapGesture =
-                            new android.accessibilityservice.GestureDescription.Builder()
-                                .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
-                                    tapPath, 0, 50))
-                                .build();
-                        dispatchGesture(tapGesture, null, null);
-                        logD("✅ 坐标点击【店铺账号】坐标=(" + cx + "," + cy + ")");
+                        clickByCoordinates(cx, cy);
+                        logD("✅ 坐标点击店铺标签坐标=(" + cx + "," + cy + ")");
                     } else {
-                        logD("✅ 无障碍API点击【店铺账号】成功");
+                        logD("✅ 无障碍API点击店铺标签成功");
                     }
                     shopAccountNode.recycle();
 
-                    // ── OCR智能等待店铺账号详情页加载（最多6秒）──
-                    // Dump确认：纯WebView，用OCR检测"认证说明"/"企业认证详情"/"企业名称"/"资质证照"
-                    logD("⏳ 等待店铺账号详情页加载（OCR识别）...");
-                    String[] shopAccountKeywords = {"认证说明", "企业认证详情", "企业名称", "资质证照"};
-                    boolean shopPageLoaded = false;
+                    // OCR智能等待店铺账号详情页加载（最多6秒）
+                    String[] shopKeywords = {"认证说明", "企业认证详情", "企业名称", "资质证照"};
+                    boolean shopLoaded = false;
                     for (int sec = 1; sec <= 6; sec++) {
                         Thread.sleep(1000);
                         final boolean[] hit = {false};
-                        final String[] hitWord = {""};
                         final boolean[] ocrDone = {false};
                         takeScreenshot(new ScreenshotCallback() {
-                            @Override
-                            public void onSuccess(android.graphics.Bitmap bitmap) {
+                            @Override public void onSuccess(android.graphics.Bitmap bitmap) {
                                 if (bitmap == null) { ocrDone[0] = true; return; }
-                                OcrHelper saOcr = new OcrHelper(message -> logD(message));
-                                saOcr.findAnyTextPosition(bitmap, shopAccountKeywords, new OcrHelper.OcrAnyCallback() {
-                                    @Override
-                                    public void onSuccess(String keyword) {
-                                        hit[0] = true;
-                                        hitWord[0] = keyword;
-                                        ocrDone[0] = true;
-                                        saOcr.release();
-                                        bitmap.recycle();
+                                OcrHelper ocr = new OcrHelper(msg -> logD(msg));
+                                ocr.findAnyTextPosition(bitmap, shopKeywords, new OcrHelper.OcrAnyCallback() {
+                                    @Override public void onSuccess(String kw) {
+                                        hit[0] = true; ocrDone[0] = true; ocr.release(); bitmap.recycle();
                                     }
-                                    @Override
-                                    public void onFailure(String error) {
-                                        ocrDone[0] = true;
-                                        saOcr.release();
-                                        bitmap.recycle();
+                                    @Override public void onFailure(String err) {
+                                        ocrDone[0] = true; ocr.release(); bitmap.recycle();
                                     }
                                 });
                             }
                             @Override public void onFailure() { ocrDone[0] = true; }
                         });
-                        // 等待OCR回调完成（最多2秒）
                         for (int w = 0; w < 20 && !ocrDone[0]; w++) Thread.sleep(100);
-                        if (hit[0]) {
-                            logD("✅ 店铺账号详情页已加载，检测到[" + hitWord[0] + "]（第" + sec + "秒），准备截图");
-                            shopPageLoaded = true;
-                            break;
-                        } else {
-                            logD("⌛ 第" + sec + "秒：店铺账号详情页未就绪，继续等待...");
-                        }
+                        if (hit[0]) { logD("✅ 店铺账号详情页已加载（第" + sec + "秒）"); shopLoaded = true; break; }
                     }
-                    if (!shopPageLoaded) {
-                        logD("⚠️ 等待6秒后仍未检测到页面特征，强制截图");
-                    }
+                    if (!shopLoaded) logD("⚠️ 未检测到店铺账号页面特征，强制截图");
 
-                    // ── 截图取证 ──
+                    // 截图取证
                     logD("📸 截取店铺账号详情页取证截图...");
                     final boolean[] shopDone = {false};
                     takeScreenshotWithPrefix("店铺账号取证", new ScreenshotCallback() {
-                        @Override
-                        public void onSuccess(android.graphics.Bitmap bitmap) {
-                            logD("✅ 店铺账号详情页截图保存成功");
-                            if (bitmap != null) bitmap.recycle();
-                            shopDone[0] = true;
+                        @Override public void onSuccess(android.graphics.Bitmap bmp) {
+                            logD("✅ 店铺账号截图保存成功");
+                            if (bmp != null) bmp.recycle(); shopDone[0] = true;
                         }
-                        @Override
-                        public void onFailure() {
-                            logE("❌ 店铺账号详情页截图保存失败");
-                            shopDone[0] = true;
-                        }
+                        @Override public void onFailure() { logE("❌ 店铺账号截图保存失败"); shopDone[0] = true; }
                     });
-                    // 等待截图+裁剪完成（最多4秒）
                     long shopStart = System.currentTimeMillis();
-                    while (!shopDone[0] && System.currentTimeMillis() - shopStart < 4000) {
-                        Thread.sleep(100);
-                    }
-                    Thread.sleep(300);
+                    while (!shopDone[0] && System.currentTimeMillis() - shopStart < 4000) Thread.sleep(100);
+
+                    // 返回作者主页前，先关闭可能存在的悬浮广告小窗（否则BACK只关闭广告，无法返回主页）
+                    dismissSmallFloatingAdIfPresent();
+                    logD("🔙 店铺账号截图完成，返回作者主页...");
+                    performGlobalAction(GLOBAL_ACTION_BACK);
+                    Thread.sleep(1500);
 
                 } else {
-                    // ── 没有【店铺账号】→ 尝试点击【导购.xxx地区】标签 ──
-                    logD("ℹ️ 作者主页无【店铺账号】标签，尝试查找【导购】标签...");
+                    // ── 没有【店铺账号】→ 尝试点击【导购】标签 ──
+                    logD("ℹ️ 无【店铺账号】标签，尝试查找【导购】标签...");
                     android.view.accessibility.AccessibilityNodeInfo guideNode = null;
 
-                    // 策略1：通过ID查找（dump确认ID: com.ss.android.ugc.aweme:id/g5g）
-                    // 同时要求文字以"[label]"开头，避免误匹配昵称中包含"导购"二字的作者
                     java.util.List<android.view.accessibility.AccessibilityNodeInfo> g5gNodes =
                         profileRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/g5g");
-                    if (g5gNodes != null && !g5gNodes.isEmpty()) {
+                    if (g5gNodes != null) {
                         for (android.view.accessibility.AccessibilityNodeInfo n : g5gNodes) {
                             String txt = n.getText() != null ? n.getText().toString() : "";
-                            // dump确认：标签文字格式为"[label] 导购·xxx"，以"[label]"开头
-                            if (txt.startsWith("[label]") && txt.contains("导购")) {
-                                guideNode = n;
-                                break;
-                            }
+                            if (txt.startsWith("[label]") && txt.contains("导购")) { guideNode = n; break; }
                             n.recycle();
                         }
                     }
-
-                    // 策略2：通过文字精确匹配"[label]"前缀（兜底）
                     if (guideNode == null) {
-                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> guideByText =
+                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> byText =
                             profileRoot.findAccessibilityNodeInfosByText("[label]");
-                        if (guideByText != null) {
-                            for (android.view.accessibility.AccessibilityNodeInfo n : guideByText) {
+                        if (byText != null) {
+                            for (android.view.accessibility.AccessibilityNodeInfo n : byText) {
                                 String txt = n.getText() != null ? n.getText().toString() : "";
-                                if (txt.startsWith("[label]") && txt.contains("导购")) {
-                                    guideNode = n;
-                                    break;
-                                }
+                                if (txt.startsWith("[label]") && txt.contains("导购")) { guideNode = n; break; }
                                 n.recycle();
                             }
                         }
@@ -5967,64 +5956,35 @@ public class AutomationAccessibilityService extends AccessibilityService {
 
                     if (guideNode != null) {
                         logD("✅ 检测到【导购】标签，准备点击...");
-
-                        // 获取坐标（dump确认中心约 (250, 852)）
-                        android.graphics.Rect guideBounds = new android.graphics.Rect();
-                        guideNode.getBoundsInScreen(guideBounds);
-                        int gcx = guideBounds.isEmpty() ? 250 : (guideBounds.left + guideBounds.right) / 2;
-                        int gcy = guideBounds.isEmpty() ? 852 : (guideBounds.top + guideBounds.bottom) / 2;
-
-                        // 先尝试无障碍API点击
-                        boolean guideClicked = guideNode.performAction(
-                            android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK);
-
-                        if (!guideClicked) {
-                            // 兜底：坐标点击
-                            android.graphics.Path guidePath = new android.graphics.Path();
-                            guidePath.moveTo(gcx, gcy);
-                            guidePath.lineTo(gcx, gcy);
-                            android.accessibilityservice.GestureDescription guideGesture =
-                                new android.accessibilityservice.GestureDescription.Builder()
-                                    .addStroke(new android.accessibilityservice.GestureDescription.StrokeDescription(
-                                        guidePath, 0, 50))
-                                    .build();
-                            dispatchGesture(guideGesture, null, null);
+                        android.graphics.Rect gb = new android.graphics.Rect();
+                        guideNode.getBoundsInScreen(gb);
+                        int gcx = gb.isEmpty() ? 250 : (gb.left + gb.right) / 2;
+                        int gcy = gb.isEmpty() ? 852 : (gb.top + gb.bottom) / 2;
+                        if (!guideNode.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) {
+                            clickByCoordinates(gcx, gcy);
                             logD("✅ 坐标点击【导购】坐标=(" + gcx + "," + gcy + ")");
                         } else {
                             logD("✅ 无障碍API点击【导购】成功");
                         }
                         guideNode.recycle();
-
-                        // 等待页面加载（2秒）
                         Thread.sleep(2000);
 
-                        // 截图取证
-                        logD("📸 截取导购页面取证截图...");
                         final boolean[] guideDone = {false};
                         takeScreenshotWithPrefix("导购取证", new ScreenshotCallback() {
-                            @Override
-                            public void onSuccess(android.graphics.Bitmap bitmap) {
-                                logD("✅ 导购页面截图保存成功");
-                                if (bitmap != null) bitmap.recycle();
-                                guideDone[0] = true;
+                            @Override public void onSuccess(android.graphics.Bitmap bmp) {
+                                logD("✅ 导购截图保存成功");
+                                if (bmp != null) bmp.recycle(); guideDone[0] = true;
                             }
-                            @Override
-                            public void onFailure() {
-                                logE("❌ 导购页面截图保存失败");
-                                guideDone[0] = true;
-                            }
+                            @Override public void onFailure() { logE("❌ 导购截图保存失败"); guideDone[0] = true; }
                         });
-                        // 等待截图完成（最多4秒）
                         long guideStart = System.currentTimeMillis();
-                        while (!guideDone[0] && System.currentTimeMillis() - guideStart < 4000) {
-                            Thread.sleep(100);
-                        }
+                        while (!guideDone[0] && System.currentTimeMillis() - guideStart < 4000) Thread.sleep(100);
 
-                        // 返回作者主页
+                        // 返回作者主页前，先关闭可能存在的悬浮广告小窗
+                        dismissSmallFloatingAdIfPresent();
                         logD("🔙 导购截图完成，返回作者主页...");
                         performGlobalAction(GLOBAL_ACTION_BACK);
-                        Thread.sleep(1000);
-
+                        Thread.sleep(1500);
                     } else {
                         logD("ℹ️ 作者主页无【店铺账号】也无【导购】标签，跳过");
                     }
@@ -6032,8 +5992,67 @@ public class AutomationAccessibilityService extends AccessibilityService {
                 profileRoot.recycle();
             }
 
+            // ── Part 2: 点击右上角三个点菜单截图取证 ──
+            // Dump确认：作者主页三个点按钮 Bounds=[936,144]→[1032,240]，中心约(984,192)
+            // ⚠️ 注意：不在这里调用 dismissSmallFloatingAdIfPresent()！
+            //    原因：若广告弹窗存在，该方法会发送 BACK 键关闭广告，但同时会把
+            //    作者主页也关掉，导致后续点击 (984,192) 打到视频列表的购物车按钮，
+            //    从而跳转到首页并截到错误画面。
+            //    正确做法：BACK 从店铺页返回主页时 dismiss 已处理了广告，
+            //    这里只需确认当前确实在作者主页后再点击三个点。
+
+            // 验证当前页面是否为作者主页（检测"关注"按钮 v17 或 "粉丝"文本）
+            logD("🔍 [主页取证] 验证当前是否在作者主页...");
+            boolean onProfilePage = false;
+            for (int chk = 0; chk < 10 && !onProfilePage; chk++) {
+                Thread.sleep(300);
+                android.view.accessibility.AccessibilityNodeInfo chkRoot = getRootInActiveWindow();
+                if (chkRoot != null) {
+                    // 检测 v17（"关注" 按钮，作者主页特有）
+                    java.util.List<android.view.accessibility.AccessibilityNodeInfo> v17Nodes =
+                        chkRoot.findAccessibilityNodeInfosByViewId("com.ss.android.ugc.aweme:id/v17");
+                    if (v17Nodes != null && !v17Nodes.isEmpty()) {
+                        onProfilePage = true;
+                        for (android.view.accessibility.AccessibilityNodeInfo n : v17Nodes) n.recycle();
+                    }
+                    // 备用：检测"粉丝"文字
+                    if (!onProfilePage) {
+                        java.util.List<android.view.accessibility.AccessibilityNodeInfo> fanNodes =
+                            chkRoot.findAccessibilityNodeInfosByText("粉丝");
+                        if (fanNodes != null && !fanNodes.isEmpty()) {
+                            onProfilePage = true;
+                            for (android.view.accessibility.AccessibilityNodeInfo n : fanNodes) n.recycle();
+                        }
+                    }
+                    chkRoot.recycle();
+                }
+            }
+            if (!onProfilePage) {
+                logD("⚠️ [主页取证] 未检测到作者主页特征，跳过三点菜单截图（避免点错位置）");
+            } else {
+                logD("✅ [主页取证] 已确认在作者主页，点击右上角三个点菜单...");
+                clickByCoordinates(984, 192);
+                Thread.sleep(1500); // 等待菜单弹出动画
+
+                final boolean[] dotsDone = {false};
+                takeScreenshotWithPrefix("作者主页三点菜单取证", new ScreenshotCallback() {
+                    @Override public void onSuccess(android.graphics.Bitmap bmp) {
+                        logD("✅ 三点菜单截图保存成功");
+                        if (bmp != null) bmp.recycle(); dotsDone[0] = true;
+                    }
+                    @Override public void onFailure() { logE("❌ 三点菜单截图保存失败"); dotsDone[0] = true; }
+                });
+                long dotsStart = System.currentTimeMillis();
+                while (!dotsDone[0] && System.currentTimeMillis() - dotsStart < 4000) Thread.sleep(100);
+
+                // 关闭菜单，返回作者主页（按返回键关闭弹窗）
+                logD("🔙 三点菜单截图完成，关闭菜单返回作者主页...");
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(1000);
+            } // end else (onProfilePage)
+
         } catch (Exception e) {
-            logE("进入作者主页失败: " + e.getMessage());
+            logE("captureAuthorProfileEvidence 失败: " + e.getMessage());
         }
     }
 
@@ -6612,6 +6631,45 @@ public class AutomationAccessibilityService extends AccessibilityService {
             logD("✅ [订单弹窗] 未检测到弹窗，继续正常流程");
         } catch (Exception e) {
             logD("⚠️ [订单弹窗] 检测弹窗异常: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 检测并关闭抖音悬浮广告小窗口（如作者主页/店铺页上方偶现的小浮窗）
+     * 识别方式：遍历所有窗口，找到属于抖音且宽度 < 200px 的小型窗口 → 按返回键关闭
+     * Dump 确认：悬浮广告 Window Bounds=[510,1150]→[570,1309]，60×159 像素
+     */
+    private void dismissSmallFloatingAdIfPresent() throws InterruptedException {
+        logD("🔍 [悬浮广告] 检测是否有抖音悬浮广告小窗...");
+        try {
+            java.util.List<android.view.accessibility.AccessibilityWindowInfo> windows = getWindows();
+            if (windows == null || windows.isEmpty()) {
+                logD("ℹ️ [悬浮广告] 无法获取窗口列表，跳过检测");
+                return;
+            }
+            for (android.view.accessibility.AccessibilityWindowInfo win : windows) {
+                android.graphics.Rect bounds = new android.graphics.Rect();
+                win.getBoundsInScreen(bounds);
+                // 小型窗口判断：宽 < 200px 且 高 < 300px 且尺寸有效
+                if (bounds.width() < 200 && bounds.height() < 300 && bounds.width() > 0 && bounds.height() > 0) {
+                    android.view.accessibility.AccessibilityNodeInfo winRoot = win.getRoot();
+                    if (winRoot != null) {
+                        String pkg = winRoot.getPackageName() != null ? winRoot.getPackageName().toString() : "";
+                        winRoot.recycle();
+                        // 确认是抖音窗口（包名含 aweme 或 ugc）
+                        if (pkg.contains("aweme") || pkg.contains("ugc")) {
+                            logD("✅ [悬浮广告] 检测到抖音悬浮广告小窗！Bounds=" + bounds + "，按返回键关闭...");
+                            performGlobalAction(GLOBAL_ACTION_BACK);
+                            Thread.sleep(1000);
+                            logD("✅ [悬浮广告] 悬浮广告已关闭，继续正常流程");
+                            return;
+                        }
+                    }
+                }
+            }
+            logD("ℹ️ [悬浮广告] 未检测到悬浮广告小窗，继续正常流程");
+        } catch (Exception e) {
+            logD("⚠️ [悬浮广告] 检测失败: " + e.getMessage());
         }
     }
 
@@ -8213,9 +8271,19 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     logD("✅ 视频" + captureVideoIdx + "播放完毕，已截图3张取证");
                 }
 
-                // ③ 视频播放完毕，在当前视频页分享链接到QQ【我的电脑】，然后返回抖音视频页
+                // ③ 视频播放完毕，进入作者主页取证（店铺账号 + 三点菜单），取证后自动返回视频页
                 if (isRunning) {
-                    logD("📤 侵权视频" + captureVideoIdx + "已看完，在视频页分享链接到QQ...");
+                    logD("👤 侵权视频" + captureVideoIdx + "已看完，进入作者主页取证...");
+                    try {
+                        navigateToAuthorProfile();
+                    } catch (Exception e) {
+                        logE("❌ 侵权视频" + captureVideoIdx + "作者主页取证失败: " + e.getMessage());
+                    }
+                }
+
+                // ④ 返回视频页后，分享链接到QQ【我的电脑】
+                if (isRunning) {
+                    logD("📤 侵权视频" + captureVideoIdx + "作者主页取证完成，分享链接到QQ...");
                     try {
                         shareCurrentInspirationVideoToQQ(captureVideoIdx);
                     } catch (Exception e) {
@@ -9638,11 +9706,32 @@ public class AutomationAccessibilityService extends AccessibilityService {
                     Thread.sleep(2000);
                 }
 
-                // Step E: 在达人主页查找蓝V认证标签并取证
+                // Step E: 在达人主页查找蓝V/店铺账号标签并取证（点击后截图详情页）
                 navigateToBlueVCertification();
 
-                // Step F: 蓝V取证完成，返回权利卫士停止录屏
-                logD("✅ [带货达人] 蓝V取证完成，准备返回权利卫士停止录屏...");
+                // Step E2: 蓝V/店铺详情页截图完成后，返回达人主页，再截图三点菜单
+                logD("🔙 [带货达人] 蓝V取证截图完成，返回达人主页...");
+                performGlobalAction(GLOBAL_ACTION_BACK);
+                Thread.sleep(1500);
+
+                // 点击右上角三个点菜单（Dump确认：Bounds=[936,144]→[1032,240]，中心≈(984,192)）
+                logD("📸 [带货达人] 点击右上角三个点菜单截图取证...");
+                clickByCoordinates(984, 192);
+                Thread.sleep(1500); // 等待菜单弹出动画
+
+                final boolean[] dotsDoneD = {false};
+                takeScreenshotWithPrefix("带货达人_作者主页_三点菜单取证", new ScreenshotCallback() {
+                    @Override public void onSuccess(android.graphics.Bitmap bmp) {
+                        logD("✅ [带货达人] 三点菜单截图已保存");
+                        if (bmp != null) bmp.recycle(); dotsDoneD[0] = true;
+                    }
+                    @Override public void onFailure() { logE("❌ [带货达人] 三点菜单截图失败"); dotsDoneD[0] = true; }
+                });
+                long dotsStartD = System.currentTimeMillis();
+                while (!dotsDoneD[0] && System.currentTimeMillis() - dotsStartD < 4000) Thread.sleep(100);
+
+                // Step F: 全部取证完成，返回权利卫士停止录屏
+                logD("✅ [带货达人] 全部取证完成，准备返回权利卫士停止录屏...");
 
                 // F1: 按HOME键退到桌面
                 Thread.sleep(500);
